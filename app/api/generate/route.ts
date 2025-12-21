@@ -83,29 +83,57 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "未找到对应商品类型的 Prompt 模板" }, { status: 500 })
     }
     console.log("开始调用 n8n");
+    
     // 3) 调用 n8n Webhook（发送所有图片）
     const webhookUrl = process.env.N8N_WEBHOOK_URL || "http://localhost:5678/webhook/nano-banana-yunwu"
+    
+    const requestBody = {
+      product_name: productName,
+      product_type: ProductTypePromptKey[productType],
+      prompt_template: promptRecord.promptTemplate,
+      images: imageBase64Array, // 发送所有图片的 Base64 数组
+      image_count: imageBase64Array.length, // 图片数量
+    }
+    
+    console.log("📤 发送到 n8n 的数据:")
+    console.log("  - 商品名称:", productName)
+    console.log("  - 商品类型:", ProductTypePromptKey[productType])
+    console.log("  - 图片数量:", imageBase64Array.length)
+    console.log("  - Prompt 长度:", promptRecord.promptTemplate.length, "字符")
+    console.log("  - 第一张图片 Base64 长度:", imageBase64Array[0]?.length || 0, "字符")
+    
     const n8nRes = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        product_name: productName,
-        product_type: ProductTypePromptKey[productType],
-        prompt_template: promptRecord.promptTemplate,
-        images: imageBase64Array, // 发送所有图片的 Base64 数组
-        image_count: imageBase64Array.length, // 图片数量
-      }),
+      body: JSON.stringify(requestBody),
     })
 
     console.log("n8n 调用完成");
-    console.log(n8nRes);
-    console.log(n8nRes.ok);
+    console.log("状态码:", n8nRes.status);
+    console.log("状态文本:", n8nRes.statusText);
+    
     if (!n8nRes.ok) {
-      const txt = await n8nRes.text().catch(() => "")
+      const errorText = await n8nRes.text().catch(() => "无法读取错误信息")
+      console.error("❌ n8n 错误详情:", errorText)
+      
+      // 尝试解析 JSON 错误
+      let errorDetail = errorText
+      try {
+        const errorJson = JSON.parse(errorText)
+        errorDetail = JSON.stringify(errorJson, null, 2)
+        console.error("❌ n8n 错误 JSON:", errorJson)
+      } catch {
+        console.error("❌ n8n 错误文本:", errorText)
+      }
+      
       // 失败即更新为失败状态
       await prisma.generation.update({ where: { id: pending.id }, data: { status: "FAILED" } })
       return NextResponse.json(
-        { error: `n8n 调用失败: ${n8nRes.status} ${n8nRes.statusText}`, details: txt },
+        { 
+          error: `n8n 调用失败: ${n8nRes.status} ${n8nRes.statusText}`, 
+          details: errorDetail,
+          hint: "请检查 n8n 工作流配置和日志"
+        },
         { status: 502 },
       )
     }
