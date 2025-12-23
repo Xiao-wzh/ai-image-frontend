@@ -1,11 +1,13 @@
 "use client"
 
+import { useState } from "react"
 import { useSession } from "next-auth/react"
-import { Sparkles, Upload, BarChart3, ShoppingCart, User } from "lucide-react"
+import { Sparkles, Upload, BarChart3, ShoppingCart, User, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "./ui/button"
+import { PricingModal } from "./pricing-modal"
 
 const navItems = [
   { icon: Upload, label: "上传分发", active: false },
@@ -16,6 +18,7 @@ const navItems = [
 
 export function Sidebar() {
   const { data: session, status } = useSession()
+  const [isPricingModalOpen, setIsPricingModalOpen] = useState(false)
 
   // 获取头像 fallback 文字
   const getFallbackText = () => {
@@ -32,6 +35,7 @@ export function Sidebar() {
   }
 
   return (
+    <>
     <aside className="w-[240px] bg-slate-900/50 backdrop-blur-xl border-r border-white/5 flex flex-col">
       {/* Logo */}
       <div className="p-6 border-b border-white/5">
@@ -98,7 +102,18 @@ export function Sidebar() {
                 </div>
               </div>
               <div className="space-y-2">
-                <div className="text-xs text-slate-400">剩余积分</div>
+                <div className="flex items-center justify-between">
+                  <div className="text-xs text-slate-400">剩余积分</div>
+                  <Button
+                    onClick={() => setIsPricingModalOpen(true)}
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6 rounded-lg hover:bg-white/10 text-slate-400 hover:text-purple-400 transition-colors"
+                    title="充值"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </div>
                 <div className="text-2xl font-bold gradient-text-alt">
                   {session.user.credits || 0}
                 </div>
@@ -123,5 +138,12 @@ export function Sidebar() {
         </div>
       </div>
     </aside>
+
+    {/* Pricing Modal */}
+    <PricingModal
+      isOpen={isPricingModalOpen}
+      onClose={() => setIsPricingModalOpen(false)}
+    />
+    </>
   )
 }

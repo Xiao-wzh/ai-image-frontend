@@ -57,9 +57,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return {
             id: user.id,
             email: user.email,
-            name: user.name,
-            username: user.username,
-            image: user.image,
+            name: user.name ?? undefined,
+            username: user.username ?? undefined,
+            image: user.image ?? undefined,
             credits: user.credits,
           }
         } catch (error) {
