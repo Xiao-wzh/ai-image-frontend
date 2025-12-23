@@ -16,8 +16,16 @@ import { toast } from "sonner"
 import { ImageUploadZone } from "./image-upload-zone"
 import { GenerationLoading } from "./generation-loading"
 import { GenerationResult } from "./generation-result"
+import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
 
-export function UploadZone() {
+interface UploadZoneProps {
+  isAuthenticated?: boolean
+}
+
+export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
+  const router = useRouter()
+  const { data: session } = useSession()
   /* ──────────────── state ──────────────── */
   const [productName, setProductName] = useState("")
   const [productType, setProductType] = useState<ProductTypeKey | "">("")
@@ -40,6 +48,13 @@ export function UploadZone() {
 
   /* ──────────────── submit ──────────────── */
   const onSubmit = useCallback(async () => {
+    // 检查登录状态
+    if (!isAuthenticated) {
+      toast.info("请先登录以使用生成功能")
+      router.push("/login")
+      return
+    }
+
     if (!productName.trim()) {
       toast.error("请填写商品名称")
       return
@@ -80,7 +95,7 @@ export function UploadZone() {
     } finally {
       setIsSubmitting(false)
     }
-  }, [productName, productType, files])
+  }, [productName, productType, files, isAuthenticated, router])
 
   const handleTryAnother = useCallback(() => {
     setGeneratedImage(null)
@@ -106,13 +121,17 @@ export function UploadZone() {
               上传图片并选择风格，让 AI 为您生成专业主图
             </p>
           </div>
-          <motion.div
-            whileHover={{ scale: 1.05 }}
-            className="glass rounded-xl px-4 py-2"
-          >
-            <div className="text-xs text-slate-400 mb-1">剩余额度</div>
-            <div className="text-xl font-bold gradient-text-alt">635</div>
-          </motion.div>
+          {session?.user && (
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              className="glass rounded-xl px-4 py-2"
+            >
+              <div className="text-xs text-slate-400 mb-1">剩余积分</div>
+              <div className="text-xl font-bold gradient-text-alt">
+                {session.user.credits || 0}
+              </div>
+            </motion.div>
+          )}
         </motion.div>
 
         {/* Form */}
@@ -187,11 +206,37 @@ export function UploadZone() {
                 />
               </motion.div>
 
-              {/* Generate Button */}
+              {/* Pricing Info */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
+                className="glass rounded-xl p-4 border border-white/10"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-400">生成价格</span>
+                    <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-xs font-bold border border-red-500/30">
+                      75% OFF
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-500 line-through">800</span>
+                    <span className="text-2xl font-bold gradient-text">199</span>
+                    <span className="text-sm text-slate-400">积分</span>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" />
+                  一次生成即得 9 张精选商品图
+                </p>
+              </motion.div>
+
+              {/* Generate Button */}
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
               >
                 <Button
                   onClick={onSubmit}
@@ -206,7 +251,7 @@ export function UploadZone() {
                   />
                   <span className="relative flex items-center justify-center gap-2">
                     <Sparkles className="w-5 h-5" />
-                    生成图像（消耗 5 点）
+                    生成图像
                   </span>
                 </Button>
               </motion.div>

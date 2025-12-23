@@ -1,7 +1,11 @@
 "use client"
 
+import { useSession } from "next-auth/react"
 import { Sparkles, Upload, BarChart3, ShoppingCart, User } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "./ui/button"
 
 const navItems = [
   { icon: Upload, label: "上传分发", active: false },
@@ -11,6 +15,22 @@ const navItems = [
 ]
 
 export function Sidebar() {
+  const { data: session, status } = useSession()
+
+  // 获取头像 fallback 文字
+  const getFallbackText = () => {
+    if (session?.user?.username) {
+      return session.user.username.slice(0, 2).toUpperCase()
+    }
+    if (session?.user?.name) {
+      return session.user.name.slice(0, 2).toUpperCase()
+    }
+    if (session?.user?.email) {
+      return session.user.email.slice(0, 2).toUpperCase()
+    }
+    return "U"
+  }
+
   return (
     <aside className="w-[240px] bg-slate-900/50 backdrop-blur-xl border-r border-white/5 flex flex-col">
       {/* Logo */}
@@ -46,23 +66,60 @@ export function Sidebar() {
       {/* User Info */}
       <div className="p-4 border-t border-white/5">
         <div className="glass rounded-xl p-4">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
-              <User className="w-5 h-5 text-white" />
+          {status === "loading" ? (
+            /* Loading State */
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <Skeleton className="w-10 h-10 rounded-full bg-white/10" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-20 bg-white/10" />
+                  <Skeleton className="h-3 w-16 bg-white/10" />
+                </div>
+              </div>
+              <Skeleton className="h-8 w-full bg-white/10" />
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-white truncate">演示用户</div>
-              <div className="text-xs text-slate-500">普通版</div>
+          ) : session?.user ? (
+            /* Logged In State */
+            <>
+              <div className="flex items-center gap-3 mb-4">
+                <Avatar className="w-10 h-10 ring-2 ring-white/10">
+                  <AvatarImage src={session.user.image || undefined} />
+                  <AvatarFallback className="bg-gradient-to-br from-cyan-500 to-blue-600 text-white font-semibold">
+                    {getFallbackText()}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-semibold text-white truncate">
+                    {session.user.username || session.user.name || "用户"}
+                  </div>
+                  <div className="text-xs text-slate-500 truncate">
+                    {session.user.email}
+                  </div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <div className="text-xs text-slate-400">剩余积分</div>
+                <div className="text-2xl font-bold gradient-text-alt">
+                  {session.user.credits || 0}
+                </div>
+              </div>
+            </>
+          ) : (
+            /* Not Logged In State */
+            <div className="text-center py-4">
+              <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-3">
+                <User className="w-5 h-5 text-slate-400" />
+              </div>
+              <div className="text-sm text-slate-400 mb-3">未登录</div>
+              <Button
+                onClick={() => {}}
+                className="w-full text-xs bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
+                size="sm"
+              >
+                登录/注册
+              </Button>
             </div>
-          </div>
-          <div className="space-y-2">
-            <div className="text-xs text-slate-400">剩余额度</div>
-            <div className="text-2xl font-bold gradient-text-alt">635</div>
-          </div>
-          <button className="mt-4 w-full text-xs text-slate-400 hover:text-slate-300 transition-colors flex items-center justify-center gap-1 py-2">
-            <span>⚙️</span>
-            <span>退出登录</span>
-          </button>
+          )}
         </div>
       </div>
     </aside>

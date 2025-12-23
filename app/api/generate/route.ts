@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
 import { ProductType, ProductTypePromptKey, ProductTypeKey } from "@/lib/constants"
 
@@ -31,6 +32,26 @@ function extractImageFiles(fd: FormData): File[] {
 export async function POST(req: NextRequest) {
   let generationId: string | null = null
   try {
+    // 获取用户 ID（如果已登录）
+    const session = await auth()
+    const userId = session?.user?.id || null
+    
+    // 检查用户积分（需要 199 积分）
+    const GENERATION_COST = 199
+    if (userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { credits: true },
+      })
+      
+      if (!user || user.credits < GENERATION_COST) {
+        return NextResponse.json(
+          { error: `余额不足（需要 ${GENERATION_COST} 积分），请充值` },
+          { status: 402 }
+        )
+      }
+    }
+    
     const form = await req.formData()
 
     const productName = String(form.get("productName") ?? "").trim()
@@ -61,6 +82,7 @@ export async function POST(req: NextRequest) {
     // 1) 创建待处理记录（存储第一张图片的 Base64）
     const pending = await prisma.generation.create({
       data: {
+        userId: userId || null, // 保存用户 ID（支持匿名）
         productName,
         productType,
         originalImage: imageBase64Array[0], // 数据库只存第一张作为代表
@@ -68,6 +90,13 @@ export async function POST(req: NextRequest) {
       },
     })
     generationId = pending.id
+    
+    console.log("📝 创建生成记录:", {
+      id: pending.id,
+      userId: userId || "匿名",
+      productName,
+      productType,
+    })
 
     
     
@@ -156,14 +185,28 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 3) 更新记录为已完成
-    const updated = await prisma.generation.update({
-      where: { id: pending.id },
-      data: {
-        generatedImage: generatedImageUrl,
-        status: "COMPLETED",
-      },
-    })
+    // 3) 更新记录为已完成并扣除积分
+    const [updated] = await prisma.$transaction([
+      prisma.generation.update({
+        where: { id: pending.id },
+        data: {
+          generatedImage: generatedImageUrl,
+          status: "COMPLETED",
+        },
+      }),
+      userId ? prisma.user.update({
+        where: { id: userId },
+        data: {
+          credits: {
+            decrement: GENERATION_COST,
+          },
+        },
+      }) : Promise.resolve(),
+    ])
+
+    if (userId) {
+      console.log(`💰 扣除积分: ${GENERATION_COST} for ${userId}`)
+    }
 
     // 4) 返回生成结果
     return NextResponse.json({

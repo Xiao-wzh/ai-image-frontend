@@ -4,6 +4,7 @@ import { Plus_Jakarta_Sans } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "sonner"
 import { ThemeProvider } from "next-themes"
+import { SessionProvider } from "@/components/session-provider"
 import "./globals.css"
 
 const plusJakartaSans = Plus_Jakarta_Sans({ 
@@ -43,11 +44,13 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body className={`${plusJakartaSans.variable} font-sans antialiased`}>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-          {children}
-          <Toaster richColors closeButton position="top-center" />
-          <Analytics />
-        </ThemeProvider>
+        <SessionProvider>
+          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+            {children}
+            <Toaster richColors closeButton position="top-center" />
+            <Analytics />
+          </ThemeProvider>
+        </SessionProvider>
       </body>
     </html>
   )
