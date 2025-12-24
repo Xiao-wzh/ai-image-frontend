@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
     // 2) 查询 Prompt 模板
     console.log("查询商品类型：" + productType + " 的 Prompt 模板");
     
-    const promptRecord = await prisma.productTypePrompt.findUnique({ where: { productType } })
+    const promptRecord = await prisma.ProductTypePrompt.findUnique({ where: { productType } })
     console.log("查询到的 Prompt 模板：" + promptRecord?.promptTemplate);
     
     // 若未配置 Prompt，返回错误
@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3) 更新记录为已完成并扣除积分
-    const transactions: any[] = [
+    const [updated] = await prisma.$transaction([
       prisma.generation.update({
         where: { id: pending.id },
         data: {
@@ -194,23 +194,15 @@ export async function POST(req: NextRequest) {
           status: "COMPLETED",
         },
       }),
-    ]
-
-    if (userId) {
-      transactions.push(
-        prisma.user.update({
-          where: { id: userId },
-          data: {
-            credits: {
-              decrement: GENERATION_COST,
-            },
+      userId ? prisma.user.update({
+        where: { id: userId },
+        data: {
+          credits: {
+            decrement: GENERATION_COST,
           },
-        })
-      )
-    }
-
-    const results = await prisma.$transaction(transactions)
-    const updated = results[0]
+        },
+      }) : Promise.resolve(),
+    ])
 
     if (userId) {
       console.log(`💰 扣除积分: ${GENERATION_COST} for ${userId}`)

@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles, Loader2, Grid3x3 } from "lucide-react"
+import { Sparkles, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -226,13 +226,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                     <span className="text-sm text-slate-400">积分</span>
                   </div>
                 </div>
-                <p className="text-xs text-slate-500 flex items-center gap-1.5">
-                  <Grid3x3 className="w-4 h-4 text-slate-400" />
-                  <span>一次生成即得</span>
-                  <span className="text-yellow-400 font-bold text-sm">9</span>
-                  <span>张</span>
-                  <span className="text-purple-400 font-semibold">精选</span>
-                  <span>商品图</span>
+                <p className="text-xs text-slate-500 flex items-center gap-1">
+                  <Sparkles className="w-3 h-3" />
+                  一次生成即得 9 张精选商品图
                 </p>
               </motion.div>
 

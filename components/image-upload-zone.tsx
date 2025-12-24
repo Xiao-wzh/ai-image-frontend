@@ -112,14 +112,14 @@ export function ImageUploadZone({
                 <motion.div
                   className="absolute inset-0 rounded-2xl"
                   initial={{ opacity: 0 }}
-                  animate={{
-                    opacity: 1,
-                    backgroundPosition: ["0% 0%", "200% 0%"],
-                  }}
+                  animate={{ opacity: 1 }}
                   style={{
                     background:
                       "linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.3), transparent)",
                     backgroundSize: "200% 100%",
+                  }}
+                  animate={{
+                    backgroundPosition: ["0% 0%", "200% 0%"],
                   }}
                   transition={{
                     duration: 1.5,
@@ -187,23 +187,12 @@ export function ImageUploadZone({
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8 }}
-                    transition={{
+                    transition={{ 
                       layout: { type: "spring", stiffness: 300, damping: 30 },
                       opacity: { duration: 0.2 },
                       scale: { duration: 0.2 }
                     }}
-                    {...(() => {
-                      const {
-                        onDrag,
-                        onDragEnd,
-                        onDragStart,
-                        onAnimationStart,
-                        onAnimationEnd,
-                        onAnimationIteration,
-                        ...rest
-                      } = getRootProps()
-                      return rest
-                    })()}
+                    {...getRootProps()}
                     className="aspect-square rounded-xl border-2 border-dashed border-white/20 bg-white/5 hover:bg-white/10 hover:border-blue-500/50 transition-colors flex items-center justify-center cursor-pointer group backdrop-blur-sm"
                   >
                     <input {...getInputProps()} />

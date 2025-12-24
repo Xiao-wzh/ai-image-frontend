@@ -64,7 +64,7 @@ export function CustomPrismaAdapter(): Adapter {
           token_type: account.token_type,
           scope: account.scope,
           id_token: account.id_token,
-          session_state: account.session_state as string | null | undefined,
+          session_state: account.session_state,
         },
       })
     },
