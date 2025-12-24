@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles, Loader2 } from "lucide-react"
+import { Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -19,13 +19,16 @@ import { GenerationResult } from "./generation-result"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
 
+const GENERATION_COST = 199
+
 interface UploadZoneProps {
   isAuthenticated?: boolean
 }
 
 export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const router = useRouter()
-  const { data: session } = useSession()
+  const { data: session, update } = useSession()
+
   /* ──────────────── state ──────────────── */
   const [productName, setProductName] = useState("")
   const [productType, setProductType] = useState<ProductTypeKey | "">("")
@@ -36,19 +39,18 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const [previewImage, setPreviewImage] = useState<string | null>(null)
 
   /* ──────────────── file management ──────────────── */
-  const handleFilesChange = useCallback((newFiles: File[]) => {
-    // Clean up old URLs
-    previewUrls.forEach((url) => URL.revokeObjectURL(url))
-
-    // Generate new preview URLs
-    const urls = newFiles.map((file) => URL.createObjectURL(file))
-    setFiles(newFiles)
-    setPreviewUrls(urls)
-  }, [previewUrls])
+  const handleFilesChange = useCallback(
+    (newFiles: File[]) => {
+      previewUrls.forEach((url) => URL.revokeObjectURL(url))
+      const urls = newFiles.map((file) => URL.createObjectURL(file))
+      setFiles(newFiles)
+      setPreviewUrls(urls)
+    },
+    [previewUrls],
+  )
 
   /* ──────────────── submit ──────────────── */
   const onSubmit = useCallback(async () => {
-    // 检查登录状态
     if (!isAuthenticated) {
       toast.info("请先登录以使用生成功能")
       router.push("/login")
@@ -67,6 +69,15 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
       toast.error("请至少上传 1 张图片")
       return
     }
+    
+    const currentCredits = session?.user?.credits ?? 0
+    if (currentCredits < GENERATION_COST) {
+      toast.error(`余额不足（需要 ${GENERATION_COST} 积分），请充值`)
+      return
+    }
+
+    
+    
 
     try {
       setIsSubmitting(true)
@@ -76,26 +87,57 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
       fd.append("productName", productName.trim())
       fd.append("productType", productType)
       files.forEach((f) => fd.append("images", f))
-
+      console.log(currentCredits, GENERATION_COST);
+    
+    // 1. 乐观更新 UI
+    await update({
+      ...session,
+      user: {
+        ...session?.user,
+        credits: currentCredits - GENERATION_COST,
+      },
+    })
+    console.log("刷新成功");
       const res = await fetch("/api/generate", { method: "POST", body: fd })
+      const data = await res.json().catch(() => ({}))
+
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}))
-        throw new Error(err?.error || `请求失败: ${res.status}`)
+        throw new Error(data?.error || `请求失败: ${res.status}`)
       }
 
-      const data = await res.json()
-      if (!data.generatedImage) {
+      const imageUrl = data.generatedImage || data.imageUrl
+      if (!imageUrl) {
         toast.warning("生成成功但未返回图片数据")
       } else {
-        setGeneratedImage(data.generatedImage)
+        setGeneratedImage(imageUrl)
         toast.success("生成完成")
+      }
+
+      // 2. 用后端返回的真实余额同步 UI
+      if (typeof data.remainingCredits === "number") {
+        await update({
+          ...session,
+          user: {
+            ...(session?.user || {}),
+            credits: data.remainingCredits,
+          },
+        })
       }
     } catch (e: any) {
       toast.error(e?.message || "生成失败")
+
+      // 3. 失败回滚乐观更新
+      await update({
+        ...session,
+        user: {
+          ...(session?.user || {}),
+          credits: currentCredits, // 恢复到操作前的值
+        },
+      })
     } finally {
       setIsSubmitting(false)
     }
-  }, [productName, productType, files, isAuthenticated, router])
+  }, [productName, productType, files, isAuthenticated, router, update, session])
 
   const handleTryAnother = useCallback(() => {
     setGeneratedImage(null)
@@ -105,7 +147,6 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     setProductType("")
   }, [])
 
-  /* ──────────────── render ──────────────── */
   return (
     <>
       <div className="space-y-8">
@@ -122,13 +163,10 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
             </p>
           </div>
           {session?.user && (
-            <motion.div
-              whileHover={{ scale: 1.05 }}
-              className="glass rounded-xl px-4 py-2"
-            >
+            <motion.div whileHover={{ scale: 1.05 }} className="glass rounded-xl px-4 py-2">
               <div className="text-xs text-slate-400 mb-1">剩余积分</div>
               <div className="text-xl font-bold gradient-text-alt">
-                {session.user.credits || 0}
+                {session.user.credits ?? 0}
               </div>
             </motion.div>
           )}
@@ -151,9 +189,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.1 }}
                 >
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    商品名称
-                  </label>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">商品名称</label>
                   <input
                     type="text"
                     value={productName}
@@ -168,13 +204,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.2 }}
                 >
-                  <label className="block text-sm font-medium text-slate-300 mb-2">
-                    商品类型
-                  </label>
-                  <Select
-                    value={productType}
-                    onValueChange={(v) => setProductType(v as ProductTypeKey)}
-                  >
+                  <label className="block text-sm font-medium text-slate-300 mb-2">商品类型</label>
+                  <Select value={productType} onValueChange={(v) => setProductType(v as ProductTypeKey)}>
                     <SelectTrigger className="w-full h-11 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all backdrop-blur-sm text-white">
                       <SelectValue placeholder="选择类型" />
                     </SelectTrigger>
@@ -195,15 +226,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 }}
               >
-                <label className="block text-sm font-medium text-slate-300 mb-3">
-                  上传商品图片
-                </label>
-                <ImageUploadZone
-                  files={files}
-                  previewUrls={previewUrls}
-                  onFilesChange={handleFilesChange}
-                  maxFiles={8}
-                />
+                <label className="block text-sm font-medium text-slate-300 mb-3">上传商品图片</label>
+                <ImageUploadZone files={files} previewUrls={previewUrls} onFilesChange={handleFilesChange} maxFiles={8} />
               </motion.div>
 
               {/* Pricing Info */}
@@ -216,9 +240,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-slate-400">生成价格</span>
-                    <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-xs font-bold border border-red-500/30">
-                      75% OFF
-                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-xs font-bold border border-red-500/30">75% OFF</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-slate-500 line-through">800</span>
@@ -257,10 +279,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
               </motion.div>
             </motion.div>
           ) : isSubmitting ? (
-            /* Loading State */
             <GenerationLoading key="loading" />
           ) : generatedImage ? (
-            /* Result State */
             <GenerationResult
               key="result"
               imageUrl={generatedImage}
@@ -294,14 +314,12 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                 alt="预览"
                 className="max-w-full max-h-[90vh] object-contain rounded-2xl shadow-2xl"
               />
-              <motion.button
-                whileHover={{ scale: 1.1, rotate: 90 }}
-                whileTap={{ scale: 0.9 }}
+              <button
                 onClick={() => setPreviewImage(null)}
-                className="absolute -top-4 -right-4 w-12 h-12 rounded-full bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center hover:bg-white/20 transition-colors shadow-lg"
+                className="absolute -top-4 -right-4 w-10 h-10 rounded-full bg-white shadow-lg flex items-center justify-center hover:bg-gray-100 transition-colors"
               >
-                <span className="text-white text-2xl">×</span>
-              </motion.button>
+                <span className="text-gray-700 text-2xl">×</span>
+              </button>
             </motion.div>
           </motion.div>
         )}

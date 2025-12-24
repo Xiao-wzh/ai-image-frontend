@@ -5,6 +5,7 @@ import { ProductType, ProductTypePromptKey, ProductTypeKey } from "@/lib/constan
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+const GENERATION_COST = 199
 
 function bufferToBase64(buf: ArrayBuffer) {
   return Buffer.from(buf).toString("base64")
@@ -13,60 +14,81 @@ function bufferToBase64(buf: ArrayBuffer) {
 // 提取多个图片文件（支持 images[] 字段）
 function extractImageFiles(fd: FormData): File[] {
   const arr: File[] = []
-  
+
   // 1. 优先获取 images 字段（多文件）
   const images = fd.getAll("images")
   images.forEach((v) => {
     if (v instanceof File) arr.push(v)
   })
-  
+
   // 2. 兼容单文件字段 image / file
   const single = fd.get("image") || fd.get("file")
   if (single instanceof File && !arr.includes(single)) {
     arr.push(single)
   }
-  
+
   return arr
 }
 
 export async function POST(req: NextRequest) {
   let generationId: string | null = null
+
+  // 预扣费成功后，如果后续失败需要退款
+  let preDeducted = false
+  let remainingCreditsAfterDeduct: number | null = null
+
   try {
-    // 获取用户 ID（如果已登录）
+    // 必须登录
     const session = await auth()
     const userId = session?.user?.id || null
-    
-    // 检查用户积分（需要 199 积分）
-    const GENERATION_COST = 199
-    if (userId) {
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { credits: true },
-      })
-      
-      if (!user || user.credits < GENERATION_COST) {
-        return NextResponse.json(
-          { error: `余额不足（需要 ${GENERATION_COST} 积分），请充值` },
-          { status: 402 }
-        )
-      }
+    if (!userId) {
+      return NextResponse.json({ error: "请先登录" }, { status: 401 })
     }
-    
+
+    // 先扣费（并发安全）：只有余额足够才会扣成功
+    const deductResult = await prisma.user.updateMany({
+      where: {
+        id: userId,
+        credits: { gte: GENERATION_COST },
+      },
+      data: {
+        credits: { decrement: GENERATION_COST },
+      },
+    })
+
+    if (deductResult.count === 0) {
+      return NextResponse.json(
+        { error: `余额不足（需要 ${GENERATION_COST} 积分），请充值` },
+        { status: 402 },
+      )
+    }
+
+    preDeducted = true
+
+    const balanceRow = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { credits: true },
+    })
+    remainingCreditsAfterDeduct = balanceRow?.credits ?? 0
+
+    // 解析表单
     const form = await req.formData()
 
     const productName = String(form.get("productName") ?? "").trim()
     const rawType = String(form.get("productType") ?? "").trim()
-    
+
+    if (!productName) {
+      return NextResponse.json({ error: "请填写商品名称" }, { status: 400 })
+    }
+
     // 校验商品类型是否合法
     if (!Object.values(ProductType).includes(rawType as ProductTypeKey)) {
       return NextResponse.json({ error: "无效的商品类型" }, { status: 400 })
     }
+
     const productType = rawType as ProductTypeKey
     const imageFiles = extractImageFiles(form)
 
-    if (!productName || !productType) {
-      return NextResponse.json({ error: "productName 与 productType 为必填" }, { status: 400 })
-    }
     if (imageFiles.length === 0) {
       return NextResponse.json({ error: "未检测到上传的图片文件" }, { status: 400 })
     }
@@ -76,155 +98,132 @@ export async function POST(req: NextRequest) {
       imageFiles.map(async (file) => {
         const arrayBuf = await file.arrayBuffer()
         return bufferToBase64(arrayBuf)
-      })
+      }),
     )
 
-    // 1) 创建待处理记录（存储第一张图片的 Base64）
+    // 1) 创建 PENDING 记录（存储第一张图片）
     const pending = await prisma.generation.create({
       data: {
-        userId: userId || null, // 保存用户 ID（支持匿名）
+        userId,
         productName,
         productType,
-        originalImage: imageBase64Array[0], // 数据库只存第一张作为代表
+        originalImage: imageBase64Array[0],
         status: "PENDING",
       },
     })
     generationId = pending.id
-    
+
     console.log("📝 创建生成记录:", {
       id: pending.id,
-      userId: userId || "匿名",
+      userId,
       productName,
       productType,
+      cost: GENERATION_COST,
+      remainingCredits: remainingCreditsAfterDeduct,
     })
 
-    
-    
-    // 2) 查询 Prompt 模板
-    console.log("查询商品类型：" + productType + " 的 Prompt 模板");
-    
-    const promptRecord = await prisma.ProductTypePrompt.findUnique({ where: { productType } })
-    console.log("查询到的 Prompt 模板：" + promptRecord?.promptTemplate);
-    
-    // 若未配置 Prompt，返回错误
+
+    // 2) 查询 Prompt 模板（注意：model 是小驼峰）
+    const promptRecord = await prisma.productTypePrompt.findUnique({ where: { productType } })
     if (!promptRecord) {
       await prisma.generation.update({ where: { id: pending.id }, data: { status: "FAILED" } })
-      return NextResponse.json({ error: "未找到对应商品类型的 Prompt 模板" }, { status: 500 })
+      throw new Error("未找到对应商品类型的 Prompt 模板")
     }
-    console.log("开始调用 n8n");
-    
-    // 3) 调用 n8n Webhook（发送所有图片）
+
+    // 3) 调用 n8n Webhook
     const webhookUrl = process.env.N8N_WEBHOOK_URL || "http://localhost:5678/webhook/nano-banana-yunwu"
-    
+
     const requestBody = {
       product_name: productName,
       product_type: ProductTypePromptKey[productType],
       prompt_template: promptRecord.promptTemplate,
-      images: imageBase64Array, // 发送所有图片的 Base64 数组
-      image_count: imageBase64Array.length, // 图片数量
+      images: imageBase64Array,
+      image_count: imageBase64Array.length,
     }
-    
-    console.log("📤 发送到 n8n 的数据:")
-    console.log("  - 商品名称:", productName)
-    console.log("  - 商品类型:", ProductTypePromptKey[productType])
-    console.log("  - 图片数量:", imageBase64Array.length)
-    console.log("  - Prompt 长度:", promptRecord.promptTemplate.length, "字符")
-    console.log("  - 第一张图片 Base64 长度:", imageBase64Array[0]?.length || 0, "字符")
-    
+
+    console.log("📤 发送到 n8n:", {
+      product_name: productName,
+      product_type: ProductTypePromptKey[productType],
+      image_count: imageBase64Array.length,
+      prompt_len: promptRecord.promptTemplate.length,
+    })
+
     const n8nRes = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(requestBody),
     })
 
-    console.log("n8n 调用完成");
-    console.log("状态码:", n8nRes.status);
-    console.log("状态文本:", n8nRes.statusText);
-    
     if (!n8nRes.ok) {
-      const errorText = await n8nRes.text().catch(() => "无法读取错误信息")
-      console.error("❌ n8n 错误详情:", errorText)
-      
-      // 尝试解析 JSON 错误
-      let errorDetail = errorText
-      try {
-        const errorJson = JSON.parse(errorText)
-        errorDetail = JSON.stringify(errorJson, null, 2)
-        console.error("❌ n8n 错误 JSON:", errorJson)
-      } catch {
-        console.error("❌ n8n 错误文本:", errorText)
-      }
-      
-      // 失败即更新为失败状态
-      await prisma.generation.update({ where: { id: pending.id }, data: { status: "FAILED" } })
-      return NextResponse.json(
-        { 
-          error: `n8n 调用失败: ${n8nRes.status} ${n8nRes.statusText}`, 
-          details: errorDetail,
-          hint: "请检查 n8n 工作流配置和日志"
-        },
-        { status: 502 },
-      )
+      const errorText = await n8nRes.text().catch(() => "")
+      console.error("❌ n8n 返回错误:", n8nRes.status, n8nRes.statusText, errorText)
+      throw new Error(`n8n 调用失败: ${n8nRes.status} ${n8nRes.statusText}`)
     }
 
     const n8nJson = (await n8nRes.json().catch(() => ({}))) as Record<string, unknown>
-    console.log(n8nJson);
-    console.log(typeof n8nJson["generated_image_url"]);
-    console.log(typeof n8nJson["data"]);
-    // 提取 n8n 返回的图片 URL（公网地址）
+
     const generatedImageUrl =
       (typeof n8nJson["generated_image_url"] === "string" && (n8nJson["generated_image_url"] as string)) ||
       (typeof n8nJson["data"] === "string" && (n8nJson["data"] as string)) ||
       null
 
     if (!generatedImageUrl) {
-      await prisma.generation.update({ where: { id: pending.id }, data: { status: "FAILED" } })
-      return NextResponse.json(
-        { error: "n8n 响应未包含生成图片的 URL", debug: n8nJson },
-        { status: 502 },
-      )
+      throw new Error("n8n 响应未包含生成图片的 URL")
     }
 
-    // 3) 更新记录为已完成并扣除积分
-    const [updated] = await prisma.$transaction([
-      prisma.generation.update({
-        where: { id: pending.id },
-        data: {
-          generatedImage: generatedImageUrl,
-          status: "COMPLETED",
-        },
-      }),
-      userId ? prisma.user.update({
-        where: { id: userId },
-        data: {
-          credits: {
-            decrement: GENERATION_COST,
-          },
-        },
-      }) : Promise.resolve(),
-    ])
+    // 4) 更新记录为 COMPLETED
+    const updated = await prisma.generation.update({
+      where: { id: pending.id },
+      data: {
+        generatedImage: generatedImageUrl,
+        status: "COMPLETED",
+      },
+    })
 
-    if (userId) {
-      console.log(`💰 扣除积分: ${GENERATION_COST} for ${userId}`)
-    }
-
-    // 4) 返回生成结果
+    // 5) 返回生成结果 + 最新余额
     return NextResponse.json({
+      success: true,
       id: updated.id,
       status: updated.status,
-      generatedImage: updated.generatedImage,
+      imageUrl: updated.generatedImage,
+      generatedImage: updated.generatedImage, // 兼容前端旧字段
+      remainingCredits: remainingCreditsAfterDeduct,
+      cost: GENERATION_COST,
       productName: updated.productName,
       productType: updated.productType,
       createdAt: updated.createdAt,
     })
   } catch (err: any) {
     const message = err?.message || String(err)
+
+    // 标记生成失败
     if (generationId) {
       try {
         await prisma.generation.update({ where: { id: generationId }, data: { status: "FAILED" } })
       } catch {}
     }
-    return NextResponse.json({ error: "服务器错误", message }, { status: 500 })
+
+    // 失败退款（仅当已经预扣费）
+    if (preDeducted) {
+      try {
+        const session = await auth()
+        const userId = session?.user?.id
+        if (userId) {
+          const refunded = await prisma.user.update({
+            where: { id: userId },
+            data: { credits: { increment: GENERATION_COST } },
+            select: { credits: true },
+          })
+          console.log("💸 生成失败，已退款:", { userId, refund: GENERATION_COST, credits: refunded.credits })
+        }
+      } catch (refundErr) {
+        console.error("❌ 退款失败:", refundErr)
+      }
+    }
+
+    return NextResponse.json(
+      { error: "生成失败，积分已退回", message },
+      { status: 500 },
+    )
   }
 }
-

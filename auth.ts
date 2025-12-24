@@ -242,11 +242,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return token
     },
     async session({ session, token }) {
-      // 将 token 中的信息传递到 session
       if (token && session.user) {
         session.user.id = token.id as string
         session.user.username = token.username as string
-        session.user.credits = token.credits as number
+
+        // 关键：从数据库重新获取最新的积分，确保数据同步
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { credits: true },
+        })
+
+        session.user.credits = dbUser?.credits ?? 0
       }
       return session
     },
