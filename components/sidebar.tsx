@@ -2,22 +2,29 @@
 
 import { useState } from "react"
 import { useSession } from "next-auth/react"
-import { Sparkles, Upload, BarChart3, ShoppingCart, User, Plus } from "lucide-react"
+import { usePathname, useRouter } from "next/navigation"
+import { Sparkles, Upload, BarChart3, ShoppingCart, User, Plus, Images } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "./ui/button"
 import { PricingModal } from "./pricing-modal"
 
-const navItems = [
-  { icon: Upload, label: "上传分发", active: false },
-  { icon: Sparkles, label: "AI 生图", active: true },
-  { icon: BarChart3, label: "套餐额度", active: false },
-  { icon: ShoppingCart, label: "购买套餐", active: false },
+type NavItem = {
+  icon: any
+  label: string
+  href: string
+}
+
+const navItems: NavItem[] = [
+  { icon: Sparkles, label: "AI 生图", href: "/" },
+  { icon: Images, label: "我的作品", href: "/history" },
 ]
 
 export function Sidebar() {
   const { data: session, status } = useSession()
+  const pathname = usePathname()
+  const router = useRouter()
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false)
 
   // 获取头像 fallback 文字
@@ -51,20 +58,26 @@ export function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1">
-        {navItems.map((item) => (
-          <button
-            key={item.label}
-            className={cn(
-              "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium",
-              item.active
-                ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg glow-blue"
-                : "text-slate-400 hover:text-white hover:bg-white/5",
-            )}
-          >
-            <item.icon className="w-4 h-4" />
-            <span>{item.label}</span>
-          </button>
-        ))}
+        {navItems.map((item) => {
+          const isActive = pathname === item.href || 
+            (item.href === "/" ? pathname === "/" : pathname?.startsWith(item.href))
+
+          return (
+            <button
+              key={item.label}
+              onClick={() => router.push(item.href)}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium",
+                isActive
+                  ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg glow-blue"
+                  : "text-slate-400 hover:text-white hover:bg-white/5",
+              )}
+            >
+              <item.icon className="w-4 h-4" />
+              <span>{item.label}</span>
+            </button>
+          )
+        })}
       </nav>
 
       {/* User Info */}

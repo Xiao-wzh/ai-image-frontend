@@ -35,7 +35,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const [files, setFiles] = useState<File[]>([])
   const [previewUrls, setPreviewUrls] = useState<string[]>([])
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null)
+  const [generatedImages, setGeneratedImages] = useState<string[]>([])
+  const [fullImageUrl, setFullImageUrl] = useState<string | null>(null)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
 
   /* ──────────────── file management ──────────────── */
@@ -81,7 +82,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
 
     try {
       setIsSubmitting(true)
-      setGeneratedImage(null)
+      setGeneratedImages([])
+      setFullImageUrl(null)
 
       const fd = new FormData()
       fd.append("productName", productName.trim())
@@ -105,11 +107,11 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
         throw new Error(data?.error || `请求失败: ${res.status}`)
       }
 
-      const imageUrl = data.generatedImage || data.imageUrl
-      if (!imageUrl) {
+      if (!data.generatedImages || data.generatedImages.length === 0) {
         toast.warning("生成成功但未返回图片数据")
       } else {
-        setGeneratedImage(imageUrl)
+        setGeneratedImages(data.generatedImages)
+        setFullImageUrl(data.fullImageUrl || null)
         toast.success("生成完成")
       }
 
@@ -140,7 +142,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   }, [productName, productType, files, isAuthenticated, router, update, session])
 
   const handleTryAnother = useCallback(() => {
-    setGeneratedImage(null)
+    setGeneratedImages([])
+    setFullImageUrl(null)
     setFiles([])
     setPreviewUrls([])
     setProductName("")
@@ -174,7 +177,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
 
         {/* Form */}
         <AnimatePresence mode="wait">
-          {!isSubmitting && !generatedImage ? (
+          {!isSubmitting && generatedImages.length === 0 ? (
             <motion.div
               key="form"
               initial={{ opacity: 0 }}
@@ -280,12 +283,14 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
             </motion.div>
           ) : isSubmitting ? (
             <GenerationLoading key="loading" />
-          ) : generatedImage ? (
+          ) : generatedImages.length > 0 ? (
             <GenerationResult
               key="result"
-              imageUrl={generatedImage}
+              generatedImages={generatedImages}
+              fullImageUrl={fullImageUrl}
+              productName={productName}
               onTryAnother={handleTryAnother}
-              onPreview={() => setPreviewImage(generatedImage)}
+              onPreview={(url: string) => setPreviewImage(url)}
             />
           ) : null}
         </AnimatePresence>

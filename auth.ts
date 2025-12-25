@@ -57,9 +57,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return {
             id: user.id,
             email: user.email,
-            name: user.name,
-            username: user.username,
-            image: user.image,
+            name: user.name ?? undefined,
+            username: user.username ?? undefined,
+            image: user.image ?? undefined,
             credits: user.credits,
           }
         } catch (error) {
@@ -235,7 +235,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       // 首次登录时，将用户信息添加到 token
       if (user) {
-        token.id = user.id
+        token.id = user.id!
         token.username = user.username
         token.credits = user.credits
       }

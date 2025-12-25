@@ -41,7 +41,7 @@ export function ImageGrid() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {(isLoading ? Array.from({ length: 4 }) : mockGenerations).map((item, i) => (
+        {(isLoading ? Array.from({ length: 4 }) : mockGenerations).map((item: any, i) => (
           <Card
             key={item?.id || i}
             className="group relative overflow-hidden bg-white/5 border border-white/10 hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/20 transition-all duration-300 rounded-xl backdrop-blur-sm"

@@ -1,152 +1,149 @@
-# AI 图像生成器前端 (Next.js)
+# AI 图像生成器（Next.js 16 + Prisma）
 
-> 作者: **@xiaoWu**  
-> 基于 Next.js 16 / Tailwind CSS 4 / Prisma 7 / Shadcn UI 的全栈示例项目
+一个用于「商品图/电商图」批量生成的 Web 控制台：上传图片 + 选择商品类型 → 调用 n8n 工作流 → 返回九宫格结果，并支持一键打包下载。
 
-本仓库是一个 **AI 图像生成控制台** 的前端及轻量后端实现：
+## 功能特性
 
-- 上传任意图片或以文本提示生成图片
-- 图片将转换为 Base64 发送至 n8n Webhook，调用后端 AI 服务
-- 使用 **Prisma + PostgreSQL** 持久化生成记录
-- 支持明暗主题、响应式布局
+- 登录/注册/邮箱验证码（NextAuth v5 + Prisma Adapter）
+- 积分扣费与失败自动退款（默认每次生成扣 199 积分）
+- 上传多张图片，后端转 Base64 发送至 n8n Webhook
+- 返回九宫格图片数组 `images`，前端支持预览与 ZIP 打包下载（见 `components/generation-result.tsx`）
+- Prisma + PostgreSQL 持久化生成记录
+- Tailwind CSS + Shadcn UI + Framer Motion 动效
 
 ---
 
 ## 技术栈
 
-| 分类            | 说明 |
-|----------------|------|
-| 前端框架       | [Next.js](https://nextjs.org/) App Router (16.x) |
-| UI 组件        | [Shadcn UI](https://ui.shadcn.com/) + [Radix UI](https://www.radix-ui.com/) |
-| 样式           | [Tailwind CSS 4](https://tailwindcss.com/) + CSS 变量 |
-| 状态管理       | React 19 原生 Hook |
-| 后端 / API     | Next.js Route Handler (`app/api/*`) |
-| 数据库         | PostgreSQL + [Prisma ORM 7](https://www.prisma.io/) (Driver Adapter 直连) |
-| 任务编排       | [n8n](https://n8n.io/) Webhook 集成 |
-| 部署推荐       | Vercel / Docker / 任意 Node 20 环境 |
+| 分类 | 说明 |
+|---|---|
+| 前端框架 | Next.js 16（App Router）+ React 19 |
+| UI | Shadcn UI + Radix UI + Lucide Icons |
+| 样式 | Tailwind CSS 4 |
+| 动效 | Framer Motion |
+| 认证 | NextAuth.js v5（beta）+ Prisma Adapter |
+| 数据库 | PostgreSQL + Prisma ORM 7（@prisma/adapter-pg） |
+| API | Next.js Route Handlers（`app/api/*`） |
+| 工作流 | n8n Webhook 集成 |
+| 运行环境 | Node.js 20+ |
 
 ---
 
 ## 快速开始
 
-> 请确保本地已安装 **Node.js ≥ 20**, **npm ≥ 9**，并运行一套 **PostgreSQL** 服务。
+> 需要：Node.js ≥ 20、PostgreSQL。
 
 ```bash
-# 1. 克隆项目
-$ git clone <repo-url> && cd ai-image-frontend
+# 1) 安装依赖
+npm install
 
-# 2. 安装依赖
-$ npm install
+# 2) 配置环境变量（创建 .env 或 .env.local）
+# 见下方“环境变量”
 
-# 3. 复制并修改环境变量
-$ cp .env.example .env       # 或手动创建 .env
-#   - DATABASE_URL  修改为你的 Postgres 连接串
-#   - N8N_WEBHOOK_URL 修改为你的 n8n Webhook 地址
+# 3) 初始化数据库
+npx prisma db push
+# 或：npx prisma migrate dev
 
-# 4. 初始化数据库 (仅首次)
-$ npx prisma db push         # 快速同步
-# 或生成迁移文件
-$ npx prisma migrate dev --name init
+# 4) （可选）初始化商品类型 Prompt 模板
+node scripts/init-prompts.ts
 
-# 5. 启动开发服务器
-$ npm run dev
-
-# 打开浏览器访问 http://localhost:3000
+# 5) 启动开发服务器
+npm run dev
 ```
 
-### 常用脚本
-
-| 命令                 | 作用 |
-|----------------------|------|
-| `npm run dev`        | 开启本地开发 (热更新) |
-| `npm run build`      | 生产构建 (Turbopack) |
-| `npm run start`      | 启动生产环境本地预览 |
-| `npm run lint`       | 代码质量检查 (ESLint) |
-| `npx prisma studio`  | 图形化浏览数据库 |
+浏览器访问：`http://localhost:3000`
 
 ---
 
-## 环境变量说明
+## 环境变量
 
-```
-# PostgreSQL 连接 (Prisma 7 使用 Driver Adapter)
+本仓库当前未提供 `.env.example`，请自行创建 **.env** 或 **.env.local**：
+
+```bash
+# PostgreSQL 连接串
 DATABASE_URL="postgresql://用户名:密码@localhost:5432/ai_image?schema=public"
 
-# n8n Webhook 地址 (需根据实际流程调整)
-N8N_WEBHOOK_URL="http://localhost:5678/webhook/nano-banana-yunwu"
-```
+# n8n Webhook 地址（由你的 n8n 工作流提供）
+N8N_WEBHOOK_URL="http://localhost:5678/webhook/your-flow"
 
-将其放入 **.env** 或 **.env.local** 文件中即可。
+# NextAuth（按需配置）
+# NEXTAUTH_URL="http://localhost:3000"
+# AUTH_SECRET="..."
+
+# 若使用邮件验证码/找回等功能（按你的实现/部署环境配置）
+# EMAIL_SERVER_HOST=
+# EMAIL_SERVER_PORT=
+# EMAIL_SERVER_USER=
+# EMAIL_SERVER_PASSWORD=
+# EMAIL_FROM=
+```
 
 ---
 
-## 项目结构
+## 生成接口约定（n8n 返回格式）
 
+后端接口：`POST /api/generate`（`multipart/form-data`）
+
+- 请求字段（关键）：
+  - `productName`: 商品名称
+  - `productType`: 商品类型（需与数据库中的 Prompt 模板匹配）
+  - `images`: 可多张图片
+
+n8n Webhook 期望返回：
+
+```json
+{
+  "images": ["https://.../1.png", "https://.../2.png"],
+  "full_image_url": "https://.../full.png"
+}
 ```
+
+> 目前后端会读取 `images`（必填），`full_image_url` 或 `generated_image_url`（可选）。
+
+---
+
+## 常用命令
+
+| 命令 | 作用 |
+|---|---|
+| `npm run dev` | 本地开发（热更新） |
+| `npm run build` | 生产构建 |
+| `npm run start` | 本地启动生产版本 |
+| `npm run lint` | ESLint 检查 |
+| `npx prisma studio` | 数据库可视化管理 |
+
+---
+
+## 项目结构（简）
+
+```text
 .
-├─ app               # Next.js App Router 目录
-│  ├─ api/generate   # 图像生成 API (上传文件 → n8n → Prisma)
-│  ├─ layout.tsx     # 全局布局 & Toaster
-│  └─ page.tsx       # 主 Dashboard 页面
-├─ components        # 业务与 UI 组件
-│  ├─ sidebar.tsx
-│  ├─ upload-zone.tsx
+├─ app/
+│  ├─ api/
+│  │  ├─ generate/route.ts        # 生成：扣费→调用n8n→写库→失败退款
+│  │  ├─ download-images/route.ts # 下载：后端拉取图片以绕过 CORS
+│  │  └─ auth/*                   # 注册/验证码/NextAuth
+│  ├─ login/page.tsx
+│  └─ page.tsx
+├─ components/
+│  ├─ generation-result.tsx       # 结果展示 + ZIP 下载
 │  └─ ...
-├─ lib
-│  └─ prisma.ts      # Prisma 客户端 (Driver Adapter)
-├─ prisma
-│  ├─ schema.prisma  # Prisma 数据模型 (Generation)
-│  └─ prisma.config.ts
-├─ public            # 静态资源
-└─ README.md
+├─ prisma/
+│  ├─ schema.prisma
+│  └─ migrations/
+└─ scripts/
+   └─ init-prompts.ts
 ```
 
 ---
 
-## 生成流程简述
+## 部署提示
 
-1. 用户在浏览器上传图片 (或文本提示) → `/api/generate`
-2. 服务器端：
-   - 将文件转为 Base64
-   - 在 **Generation** 表创建状态为 `PENDING` 的记录
-3. 服务器调用 **n8n Webhook**
-4. n8n 调用 AI 服务生成图片后，返回 `generated_image_url`
-5. 后端更新记录为 `COMPLETED` 并返回 URL
-6. 前端 Toast 提示并展示生成结果
-
----
-
-## 部署
-
-### Vercel
-
-1. 在 Vercel 控制台导入仓库
-2. 设置环境变量 `DATABASE_URL`、`N8N_WEBHOOK_URL`
-3. 选择 **Node 20** & `npm run build` / `npm run start`
-
-### Docker
-
-```bash
-docker build -t ai-image-frontend .
-
-docker run -d -p 3000:3000 \
-  -e DATABASE_URL=postgresql://user:pass@host:5432/db?schema=public \
-  -e N8N_WEBHOOK_URL=http://n8n:5678/webhook/xxx \
-  ai-image-frontend
-```
-
----
-
-## 常见问题 FAQ
-
-| 问题 | 解决方案 |
-|------|-----------|
-| 502: n8n 响应未包含 URL | 检查 n8n 流程输出字段名应为 `generated_image_url` 或 `data` |
-| Prisma P1012 错误 | 确保 `schema.prisma` 中 **datasource** 无 `url` 字段，连接串放到 `prisma.config.ts` |
-| 图片过大上传失败 | 调整 `upload-zone.tsx` 或后端文件大小限制 |
+- **Vercel**：配置 `DATABASE_URL`、`N8N_WEBHOOK_URL` 等环境变量即可。
+- **Docker**：确保容器可访问 PostgreSQL 与 n8n；并正确配置环境变量。
 
 ---
 
 ## License
 
-本项目仅供学习与交流，禁止商用，如需商用请联系作者获得授权。
+本项目仅供学习与交流使用。

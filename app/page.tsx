@@ -5,7 +5,6 @@ import { useSession, signOut } from "next-auth/react"
 import { motion } from "framer-motion"
 import { Sidebar } from "@/components/sidebar"
 import { UploadZone } from "@/components/upload-zone"
-import { ImageGrid } from "@/components/image-grid"
 import { RegisterModal } from "@/components/register-modal"
 import { UserAccountNav } from "@/components/user-account-nav"
 import { Button } from "@/components/ui/button"
@@ -66,7 +65,7 @@ export default function DashboardPage() {
                 transition={{ duration: 0.6 }}
                 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight"
               >
-                <span className="gradient-text">AI 智能绘图</span>
+                <span className="gradient-text">X</span>
               </motion.h1>
               <motion.p
                 initial={{ opacity: 0, y: -10 }}
@@ -74,7 +73,7 @@ export default function DashboardPage() {
                 transition={{ duration: 0.6, delay: 0.1 }}
                 className="text-xl text-slate-400 max-w-2xl mx-auto"
               >
-                利用最先进的 Gemini 模型创造视觉奇迹，让创意无限延伸
+                AI 智能绘图
               </motion.p>
             </div>
 
@@ -91,12 +90,7 @@ export default function DashboardPage() {
             </motion.div>
           </div>
 
-          {/* Image Grid Section */}
-          <div className="px-8 pb-8">
-            <div className="max-w-5xl mx-auto">
-              <ImageGrid />
-            </div>
-          </div>
+          {/* History moved to /history */}
         </main>
       </div>
 

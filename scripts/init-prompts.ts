@@ -2,6 +2,7 @@
  * 手动初始化 ProductTypePrompt 数据
  * 运行方式: npx tsx scripts/init-prompts.ts
  */
+import "dotenv/config"
 import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import pg from "pg"

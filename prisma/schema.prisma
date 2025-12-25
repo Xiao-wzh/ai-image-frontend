@@ -78,14 +78,15 @@ model VerificationCode {
 
 // 我们的业务模型
 model Generation {
-  id             String   @id @default(uuid()) @db.Uuid
-  userId         String?                              /// NextAuth 用户 ID（可选，支持匿名生成）
-  productName    String
-  productType    String
-  originalImage  String   @db.Text
-  generatedImage String?  @db.Text
-  status         String   @default("PENDING")
-  createdAt      DateTime @default(now())
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String?
+  productName     String
+  productType     String
+  originalImage   String   @db.Text
+  generatedImage  String?  @db.Text /// 存储完整的、未裁剪的原图 URL
+  generatedImages String[] /// 存储九宫格切片图片 URL 数组
+  status          String   @default("PENDING")
+  createdAt       DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
