@@ -11,13 +11,14 @@ import {
   SelectContent,
   SelectItem,
 } from "@/components/ui/select"
-import { ProductType, ProductTypeLabel, ProductTypeKey } from "@/lib/constants"
+import { ProductTypeLabel, ProductTypeKey } from "@/lib/constants"
 import { toast } from "sonner"
 import { ImageUploadZone } from "./image-upload-zone"
 import { GenerationLoading } from "./generation-loading"
 import { GenerationResult } from "./generation-result"
 import { useRouter } from "next/navigation"
 import { useSession } from "next-auth/react"
+import { useLoginModal } from "@/hooks/use-login-modal"
 
 const GENERATION_COST = 199
 
@@ -28,6 +29,7 @@ interface UploadZoneProps {
 export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const router = useRouter()
   const { data: session, update } = useSession()
+  const loginModal = useLoginModal()
 
   /* ──────────────── state ──────────────── */
   const [productName, setProductName] = useState("")
@@ -54,7 +56,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const onSubmit = useCallback(async () => {
     if (!isAuthenticated) {
       toast.info("请先登录以使用生成功能")
-      router.push("/login")
+      loginModal.open()
       return
     }
 

@@ -90,7 +90,7 @@ export function UserAccountNav({ user }: UserAccountNavProps) {
         {/* Logout */}
         <DropdownMenuItem
           className="text-red-400 focus:text-red-300 focus:bg-red-500/10 cursor-pointer"
-          onClick={() => signOut({ callbackUrl: "/login" })}
+          onClick={() => signOut({ redirect: false })}
         >
           <LogOut className="mr-2 h-4 w-4" />
           <span>退出登录</span>

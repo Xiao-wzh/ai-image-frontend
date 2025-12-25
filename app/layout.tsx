@@ -5,6 +5,8 @@ import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "sonner"
 import { ThemeProvider } from "next-themes"
 import { SessionProvider } from "@/components/session-provider"
+import { LoginModalProviderClient } from "@/components/login-modal-provider"
+import { LoginModalRoot } from "@/components/login-modal-root"
 import "./globals.css"
 
 const plusJakartaSans = Plus_Jakarta_Sans({ 
@@ -45,11 +47,14 @@ export default function RootLayout({
     <html lang="zh-CN" suppressHydrationWarning>
       <body className={`${plusJakartaSans.variable} font-sans antialiased`}>
         <SessionProvider>
-          <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
+          <LoginModalProviderClient>
+            <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
             {children}
+            <LoginModalRoot />
             <Toaster richColors closeButton position="top-center" />
             <Analytics />
-          </ThemeProvider>
+            </ThemeProvider>
+          </LoginModalProviderClient>
         </SessionProvider>
       </body>
     </html>

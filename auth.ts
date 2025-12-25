@@ -86,7 +86,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         const transport = createTransport(provider.server)
         
         try {
-          const result = await transport.sendMail({
+          await transport.sendMail({
             to: email,
             from: provider.from,
             subject: `登录您的 AI 绘图账号`,
@@ -224,7 +224,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   pages: {
-    signIn: "/login",
     verifyRequest: "/verify-request",
   },
   session: {

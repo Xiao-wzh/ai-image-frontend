@@ -4,8 +4,10 @@ import { motion } from "framer-motion"
 import { Mail, Sparkles } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
+import { useLoginModal } from "@/hooks/use-login-modal"
 
 export default function VerifyRequestPage() {
+  const loginModal = useLoginModal()
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-950 p-4">
       {/* Background gradient orbs */}
@@ -83,14 +85,13 @@ export default function VerifyRequestPage() {
             </Button>
           </Link>
 
-          <Link href="/login" className="block">
-            <Button
-              variant="ghost"
-              className="w-full text-slate-400 hover:text-white transition-colors"
-            >
-              重新发送邮件
-            </Button>
-          </Link>
+          <Button
+            variant="ghost"
+            className="w-full text-slate-400 hover:text-white transition-colors"
+            onClick={() => loginModal.open()}
+          >
+            重新发送邮件
+          </Button>
         </motion.div>
 
         {/* Footer */}
