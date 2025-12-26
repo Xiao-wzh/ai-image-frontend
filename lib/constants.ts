@@ -17,8 +17,8 @@ export const ProductTypeLabel: Record<ProductTypeKey, string> = {
 
 // 3. 发送给 n8n / Prompt 查表时使用的中文关键字
 export const ProductTypePromptKey: Record<ProductTypeKey, string> = {
-  [ProductType.MENSWEAR]: "男装",
-  [ProductType.BEDDING]: "寝具",
-  [ProductType.SEXY_SPECIES]: "Sexyspecies",
+  [ProductType.MENSWEAR]: "MENSWEAR",
+  [ProductType.BEDDING]: "BEDDING",
+  [ProductType.SEXY_SPECIES]: "SEXY_SPECIES",
 };
 

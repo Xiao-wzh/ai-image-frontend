@@ -15,13 +15,16 @@ model User {
   emailVerified DateTime?
   password      String?                            /// 加密后的密码
   image         String?                            /// 头像 URL
-  credits       Int       @default(500)            /// 积分余额（1元=100积分，默认500送2次）
+  credits       Int       @default(0)              /// 付费/常规积分（用户购买获得）
+  bonusCredits  Int       @default(500)            /// 赠送积分（默认赠送 500=可生成2次）
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  accounts      Account[]
-  sessions      Session[]
-  generations   Generation[]
+  accounts        Account[]
+  sessions        Session[]
+  generations     Generation[]
+  creditRecords   CreditRecord[]
+  redemptionCodes RedemptionCode[] @relation("UserRedemptionCodes")
 }
 
 model Account {
@@ -65,15 +68,47 @@ model VerificationToken {
 
 /// 邮箱验证码表（用于注册/登录验证）
 model VerificationCode {
-  id      String   @id @default(uuid()) @db.Uuid
-  email   String                                   /// 邮箱地址
-  code    String                                   /// 6位验证码
-  expires DateTime                                 /// 过期时间
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String                                   /// 邮箱地址
+  code      String                                   /// 6位验证码
+  expires   DateTime                                 /// 过期时间
   createdAt DateTime @default(now())
 
   @@unique([email, code])
   @@index([email])
   @@index([expires])
+}
+
+/// 积分流水记录（用户可见的总变动：正数=入账，负数=消耗）
+model CreditRecord {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String
+  amount      Int
+  type        String
+  description String
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+/// 卡密/兑换码
+model RedemptionCode {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  credits   Int
+  bonus     Int
+  status    String   @default("UNUSED")
+  usedBy    String?
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  user User? @relation("UserRedemptionCodes", fields: [usedBy], references: [id], onDelete: SetNull)
+
+  @@index([code])
+  @@index([status])
+  @@index([usedBy])
 }
 
 // 我们的业务模型

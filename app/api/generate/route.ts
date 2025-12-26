@@ -4,7 +4,6 @@ import prisma from "@/lib/prisma"
 import { ProductType, ProductTypePromptKey, ProductTypeKey } from "@/lib/constants"
 import "dotenv/config"
 
-
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
@@ -31,39 +30,20 @@ export async function POST(req: NextRequest) {
   let generationId: string | null = null
   let preDeducted = false
 
+  // 记录本次实际扣减的两类积分，用于失败精确退款
+  let deductedBonus = 0
+  let deductedPaid = 0
+
   const session = await auth()
   const userId = session?.user?.id || null
   if (!userId) {
     return NextResponse.json({ error: "请先登录" }, { status: 401 })
   }
 
+  let productNameForRecord = ""
+
   try {
-    // 1. 预扣费 (原子操作)
-    const deductResult = await prisma.user.updateMany({
-      where: {
-        id: userId,
-        credits: { gte: GENERATION_COST },
-      },
-      data: {
-        credits: { decrement: GENERATION_COST },
-      },
-    })
-
-    if (deductResult.count === 0) {
-      return NextResponse.json(
-        { error: `余额不足 (需要 ${GENERATION_COST} 积分)，请充值` },
-        { status: 402 }
-      )
-    }
-    preDeducted = true
-
-    const balanceRow = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { credits: true },
-    })
-    const remainingCreditsAfterDeduct = balanceRow?.credits ?? 0
-
-    // 2. 解析表单
+    // 0) 先解析表单（用于写流水：生成图片: [Product Name]）
     const form = await req.formData()
     const productName = String(form.get("productName") ?? "").trim()
     const rawType = String(form.get("productType") ?? "").trim()
@@ -71,6 +51,8 @@ export async function POST(req: NextRequest) {
     if (!Object.values(ProductType).includes(rawType as ProductTypeKey)) {
       throw new Error("无效的商品类型")
     }
+    productNameForRecord = productName
+
     const productType = rawType as ProductTypeKey
     const imageFiles = extractImageFiles(form)
     if (imageFiles.length === 0) throw new Error("未检测到上传的图片文件")
@@ -79,10 +61,75 @@ export async function POST(req: NextRequest) {
       imageFiles.map(async (file) => {
         const arrayBuf = await file.arrayBuffer()
         return bufferToBase64(arrayBuf)
-      })
+      }),
     )
 
-    // 3. 创建 PENDING 记录
+    // 1) 原子扣费（并发安全） + 写入扣费流水
+    // 采用 PostgreSQL 行级锁：SELECT ... FOR UPDATE
+    // 在同一事务内：读取余额 -> 计算扣减（bonus优先）-> 扣减 -> 写入流水（amount=-cost）
+    const deductResult = await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ credits: number; bonusCredits: number }>>
+        `SELECT "credits", "bonusCredits" FROM "User" WHERE "id" = ${userId} FOR UPDATE`
+
+      if (rows.length === 0) {
+        return { ok: false as const, status: 404 as const, error: "用户不存在" }
+      }
+
+      const credits = rows[0].credits ?? 0
+      const bonusCredits = rows[0].bonusCredits ?? 0
+      const total = credits + bonusCredits
+
+      if (total < GENERATION_COST) {
+        return {
+          ok: false as const,
+          status: 402 as const,
+          error: `余额不足 (需要 ${GENERATION_COST} 积分，当前 ${total})，请充值`,
+        }
+      }
+
+      const deductBonus = Math.min(bonusCredits, GENERATION_COST)
+      const deductPaid = GENERATION_COST - deductBonus
+
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          bonusCredits: deductBonus > 0 ? { decrement: deductBonus } : undefined,
+          credits: deductPaid > 0 ? { decrement: deductPaid } : undefined,
+        },
+      })
+
+      // 用户可见流水只记录总变动
+      await tx.creditRecord.create({
+        data: {
+          userId,
+          amount: -GENERATION_COST,
+          type: "CONSUME",
+          description: `生成图片: ${productName}`,
+        },
+      })
+
+      return { ok: true as const, deductBonus, deductPaid }
+    })
+
+    if (!deductResult.ok) {
+      return NextResponse.json({ error: deductResult.error }, { status: deductResult.status })
+    }
+
+    preDeducted = true
+    deductedBonus = deductResult.deductBonus
+    deductedPaid = deductResult.deductPaid
+
+    // 2) 扣费后读一次余额用于返回
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { credits: true, bonusCredits: true },
+    })
+
+    const creditsNow = updatedUser?.credits ?? 0
+    const bonusNow = updatedUser?.bonusCredits ?? 0
+    const totalNow = creditsNow + bonusNow
+
+    // 3) 创建 PENDING 记录
     const pending = await prisma.generation.create({
       data: {
         userId,
@@ -94,11 +141,11 @@ export async function POST(req: NextRequest) {
     })
     generationId = pending.id
 
-    // 4. 查询 Prompt
+    // 4) 查询 Prompt
     const promptRecord = await prisma.productTypePrompt.findUnique({ where: { productType } })
     if (!promptRecord) throw new Error("未找到对应商品类型的 Prompt 模板")
 
-    // 5. 调用 n8n Webhook
+    // 5) 调用 n8n Webhook
     const webhookUrl = process.env.N8N_WEBHOOK_URL
     if (!webhookUrl) throw new Error("N8N_WEBHOOK_URL 未配置")
 
@@ -121,15 +168,18 @@ export async function POST(req: NextRequest) {
 
     const n8nJson = await n8nRes.json()
 
-    // 6. 解析 n8n 响应
+    // 6) 解析 n8n 响应
     const generatedImages = n8nJson.images as string[]
-    const fullImageUrl = (n8nJson.full_image_url as string) || (n8nJson.generated_image_url as string) || null
+    const fullImageUrl =
+      (n8nJson.full_image_url as string) ||
+      (n8nJson.generated_image_url as string) ||
+      null
 
     if (!Array.isArray(generatedImages) || generatedImages.length === 0) {
       throw new Error("n8n 响应未包含九宫格图片数组 (images)")
     }
 
-    // 7. 更新记录为 COMPLETED
+    // 7) 更新记录为 COMPLETED
     const updated = await prisma.generation.update({
       where: { id: pending.id },
       data: {
@@ -139,15 +189,15 @@ export async function POST(req: NextRequest) {
       },
     })
 
-    // 8. 返回成功响应
+    // 8) 返回成功响应
     return NextResponse.json({
       success: true,
       id: updated.id,
       generatedImages: updated.generatedImages,
-      // fullImageUrl: updated.generatedImage,
-      remainingCredits: remainingCreditsAfterDeduct,
+      credits: creditsNow,
+      bonusCredits: bonusNow,
+      totalCredits: totalNow,
     })
-
   } catch (err: any) {
     const message = err?.message || String(err)
     console.error("❌ 生成 API 错误:", message)
@@ -159,24 +209,39 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
-    // 失败退款
+    // 失败退款（按扣费来源精确退回）+ 写入退款流水
     if (preDeducted) {
       try {
         if (userId) {
-          await prisma.user.update({
-            where: { id: userId },
-            data: { credits: { increment: GENERATION_COST } },
+          const updateData: any = {}
+          if (deductedBonus > 0) updateData.bonusCredits = { increment: deductedBonus }
+          if (deductedPaid > 0) updateData.credits = { increment: deductedPaid }
+
+          await prisma.$transaction(async (tx) => {
+            await tx.user.update({
+              where: { id: userId },
+              data: updateData,
+            })
+
+            await tx.creditRecord.create({
+              data: {
+                userId,
+                amount: GENERATION_COST,
+                type: "REFUND",
+                description: "生成失败退款",
+              },
+            })
           })
-          console.log(`💸 生成失败，已退款: ${GENERATION_COST} 积分给用户 ${userId}`)
+
+          console.log(
+            `💸 生成失败，已退款：bonus=${deductedBonus}，paid=${deductedPaid} 给用户 ${userId}`,
+          )
         }
       } catch (refundErr) {
         console.error("❌ 退款失败:", refundErr)
       }
     }
 
-    return NextResponse.json(
-      { error: "生成失败，积分已退回", message },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: "生成失败，积分已退回", message }, { status: 500 })
   }
 }

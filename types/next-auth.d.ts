@@ -7,12 +7,14 @@ declare module "next-auth" {
       id: string
       username?: string
       credits?: number
+      bonusCredits?: number
     } & DefaultSession["user"]
   }
 
   interface User {
     username?: string
     credits?: number
+    bonusCredits?: number
   }
 }
 
@@ -21,5 +23,6 @@ declare module "next-auth/jwt" {
     id: string
     username?: string
     credits?: number
+    bonusCredits?: number
   }
 }

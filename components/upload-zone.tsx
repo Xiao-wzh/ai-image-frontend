@@ -74,7 +74,10 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     }
     
     const currentCredits = session?.user?.credits ?? 0
-    if (currentCredits < GENERATION_COST) {
+    const currentBonusCredits = session?.user?.bonusCredits ?? 0
+    const currentTotalCredits = currentCredits + currentBonusCredits
+
+    if (currentTotalCredits < GENERATION_COST) {
       toast.error(`余额不足（需要 ${GENERATION_COST} 积分），请充值`)
       return
     }
@@ -93,12 +96,16 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
       files.forEach((f) => fd.append("images", f))
       console.log(currentCredits, GENERATION_COST);
     
-    // 1. 乐观更新 UI
+    // 1. 乐观更新 UI（优先扣 bonusCredits，再扣 credits）
+    const deductBonus = Math.min(currentBonusCredits, GENERATION_COST)
+    const deductPaid = GENERATION_COST - deductBonus
+
     await update({
       ...session,
       user: {
         ...session?.user,
-        credits: currentCredits - GENERATION_COST,
+        bonusCredits: currentBonusCredits - deductBonus,
+        credits: currentCredits - deductPaid,
       },
     })
     console.log("刷新成功");
@@ -118,12 +125,16 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
       }
 
       // 2. 用后端返回的真实余额同步 UI
-      if (typeof data.remainingCredits === "number") {
+      if (
+        typeof data.credits === "number" &&
+        typeof data.bonusCredits === "number"
+      ) {
         await update({
           ...session,
           user: {
             ...(session?.user || {}),
-            credits: data.remainingCredits,
+            credits: data.credits,
+            bonusCredits: data.bonusCredits,
           },
         })
       }
@@ -136,6 +147,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
         user: {
           ...(session?.user || {}),
           credits: currentCredits, // 恢复到操作前的值
+          bonusCredits: currentBonusCredits,
         },
       })
     } finally {
@@ -171,7 +183,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
             <motion.div whileHover={{ scale: 1.05 }} className="glass rounded-xl px-4 py-2">
               <div className="text-xs text-slate-400 mb-1">剩余积分</div>
               <div className="text-xl font-bold gradient-text-alt">
-                {session.user.credits ?? 0}
+                {(session.user.credits ?? 0) + (session.user.bonusCredits ?? 0)}
               </div>
             </motion.div>
           )}
