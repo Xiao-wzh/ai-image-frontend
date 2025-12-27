@@ -1,30 +1,99 @@
 /**
  * Prisma Seed Script
- * 初始化 ProductTypePrompt 表三条默认数据
+ * 初始化 Platform + ProductTypePrompt（数据库驱动平台层级）
  */
 import prisma from "../lib/prisma"
-// 强制使用 Driver Adapter 的共享实例，避免 seed 过程中初始化参数为空报错
 import { ProductType } from "../lib/constants"
 
 async function main() {
+  // 1) 创建平台（若存在则更新）
+  const platforms = [
+    { key: "SHOPEE", label: "虾皮 (Shopee)", isActive: true, sortOrder: 10 },
+    { key: "AMAZON", label: "亚马逊 (Amazon)", isActive: true, sortOrder: 20 },
+    { key: "TIKTOK", label: "TikTok", isActive: true, sortOrder: 30 },
+    { key: "GENERAL", label: "通用 (General)", isActive: true, sortOrder: 1000 },
+  ]
+
+  for (const p of platforms) {
+    await prisma.platform.upsert({
+      where: { key: p.key },
+      create: p,
+      update: {
+        label: p.label,
+        isActive: p.isActive,
+        sortOrder: p.sortOrder,
+      },
+    })
+  }
+
+  const platformMap = await prisma.platform.findMany({
+    select: { id: true, key: true },
+  })
+  const byKey = new Map(platformMap.map((p) => [p.key, p.id]))
+
+  const shopeeId = byKey.get("SHOPEE")!
+  const amazonId = byKey.get("AMAZON")!
+  const tiktokId = byKey.get("TIKTOK")!
+  const generalId = byKey.get("GENERAL")!
+
+  // 2) 清空系统 prompts（保留用户私有：userId != null）
+  await prisma.productTypePrompt.deleteMany({ where: { userId: null } })
+
+  // 3) 创建 prompts（系统默认：userId = null）
   await prisma.productTypePrompt.createMany({
     data: [
+      // Shopee
       {
+        userId: null,
+        platformId: shopeeId,
+        legacyPlatform: "SHOPEE",
         productType: ProductType.MENSWEAR,
-        promptTemplate: `生成1張2400×2400像素的9宮格商品主圖（每格精確800×800像素，無白邊、無水印、無額外文字），風格必須符合台灣蝦皮男裝類目最常見的高轉換率主圖設計，包括：\n• 乾淨專業的電商排版\n• 高級感標題條（紅色 / 橘色 / 深藍等高對比色）\n• 圓形或方形優勢 icon\n• 綠勾 ✓ / 紅叉 ✗ 對比\n• 清晰規格表\n• 整體視覺簡約大氣、不雜亂\n\n**商品名稱：\${productName}**\n\n**關鍵要求（最高優先級：文字清晰度）**：\n• 所有文字放大 10 倍依然清晰，嚴禁亂碼、模糊、假字\n• 使用最粗最黑的繁體中文無襯線字體（微軟正黑體 / 思源黑體 / Noto Sans TC Black 等，Bold / Heavy 以上）\n• 強制放大字距與行距 ≥1.5 倍\n• 所有文字必須有 2–4px 白或黑描邊（外陰影 / 外發光）\n• 若模型有風險，自動切換「超大字距＋超粗字體＋強描邊」模式\n• 標題條字體放大 ≥20%，置中顯示\n\n**圖片與內容要求**：\n1️⃣ 色調與燈光需依上傳男裝實拍圖自動調整（清涼 / 冬季 / 商務等），不得強制固定色系\n2️⃣ 商品外觀、顏色、logo、車線、版型、布料、模特姿勢 **100% 與實拍一致，不得修圖或美化**\n3️⃣ 自動生成 9 宮格內容：\n• 格1：正面主視覺＋大標題條＋季節/核心賣點\n• 格2：面料特寫＋小優勢標籤\n• 格3：多色展示＋3–4 圓形 icon\n• 格4：穿著情境（側身/後背/拉伸）\n• 格5：細節工藝特寫\n• 格6：升級賣點＋圖示\n• 格7：對比圖（他牌 × / 本品 ✓）\n• 格8：多場景穿搭\n• 格9：完整規格表\n\n4️⃣ 全部使用繁體中文\n5️⃣ 賣點真實合理，不誇張\n6️⃣ **最終僅輸出 1 張 2400×2400 九宮格大圖**`,
+        description: "男装",
+        promptTemplate: `（Shopee 男装）为 \${productName} 生成高转化九宫格电商主图，文字清晰、排版干净，符合虾皮风格。`,
       },
       {
+        userId: null,
+        platformId: shopeeId,
+        legacyPlatform: "SHOPEE",
         productType: ProductType.BEDDING,
-        promptTemplate: `生成1張2400×2400像素的9宮格商品主圖（每格精確800×800像素，無白邊、無水印、無額外文字）\n\n需明確控制以下視覺元素：\n• 9 格排版布局與比例\n• 字體（字型 / 大小 / 粗細 / 顏色 / 描邊 / 陰影）\n• 標題條（橘紅 / 紅色底）\n• icon 風格、綠 ✓ 紅 ✗、圓形標籤\n• 米白底＋暖光燈光氛圍\n• 行距、對齊、邊框、分隔線樣式\n\n**商品名稱：\${productName}**\n\n**文字清晰度最高優先**（規則同男裝）：\n• 超清晰繁體中文、粗黑字體、放大字距行距\n• 全文字 2–4px 描邊\n• 標題放大 ≥20%\n\n**圖片與內容要求**：\n• 商品外觀、顏色、logo、角度、光影 **100% 與實拍一致，不得修圖**\n• 排版與視覺風格 **必須完全複製參考圖（大豆被）**\n\n**9 格內容結構**：\n• 格1：主視覺＋大標題＋賣點標籤\n• 格2：材質/成分特寫\n• 格3：堆疊圖＋圓形 icon\n• 格4：使用/觸感情境\n• 格5：功能特寫＋說明\n• 格6：升級賣點\n• 格7：對比圖（× / ✓）\n• 格8：多場景使用\n• 格9：完整規格表\n\n• 所有文字樣式需與參考圖完全一致\n• 賣點合理、不造假\n• **最終只輸出 1 張九宮格大圖**`,
+        description: "寝具",
+        promptTemplate: `（Shopee 寝具）为 \${productName} 生成九宫格主图，强调材质与卖点，风格符合虾皮。`,
       },
+
+      // Amazon
       {
-        productType: ProductType.SEXY_SPECIES,
-        promptTemplate: `生成1張2400×2400像素的9宮格商品主圖（每格精確800×800像素，無白邊、無水印、無額外文字）\n\n**固定品牌視覺風格**：\n• 粗黑描邊超大標題字\n• 黃色 / 粉色手寫體重點標註\n• 箭頭＋黃底圓圈/橢圓\n• 多色小圖排列\n• 紅 × 綠 ✓ 對比\n• 規格表框線\n• 淺灰背景＋乾淨燈光\n• SEXYSPECIES logo（小字）\n\n**商品名稱：\${productName}**\n\n**文字清晰度最高優先**：\n• 放大 10 倍仍清晰\n• 粗黑繁體中文字體（Bold↑）\n• 字距/行距 ≥1.5 倍\n• 3–5px 強描邊\n\n**圖片要求**：\n• 褲子外觀、拼色、布料、腰頭、車線、logo **100% 與實拍一致，不得修圖**\n• 所有排版、字體、標註方式 **完全等同參考圖（圖1）**\n\n**9 格內容**：\n• 格1：主視覺＋背身小圖＋色卡＋粗黑標題＋圓形標籤\n• 格2：材質特寫\n• 格3：堆疊圖＋icon\n• 格4：使用情境\n• 格5：功能特寫\n• 格6：升級賣點\n• 格7：對比圖（× / ✓）\n• 格8：場景圖＋icon\n• 格9：完整規格表\n\n• 全部繁體中文\n• 賣點真實合理\n• **最終只輸出 1 張 2400×2400 九宮格大圖**`,
+        userId: null,
+        platformId: amazonId,
+        legacyPlatform: "AMAZON",
+        productType: ProductType.MENSWEAR,
+        description: "男装",
+        promptTemplate: `（Amazon 男装）为 \${productName} 生成更偏品牌化与规范化的电商主图布局，减少花哨元素，突出参数与卖点。`,
+      },
+
+      // TikTok：留空用于测试空状态（如要加一个，把下面注释去掉）
+      // {
+      //   userId: null,
+      //   platformId: tiktokId,
+      //   legacyPlatform: "TIKTOK",
+      //   productType: ProductType.MENSWEAR,
+      //   description: "男装",
+      //   promptTemplate: `（TikTok 男装）为 \${productName} 生成适合短视频带货的高对比九宫格主图，标题更抓眼。`,
+      // },
+
+      // GENERAL（兜底）
+      {
+        userId: null,
+        platformId: generalId,
+        legacyPlatform: "GENERAL",
+        productType: ProductType.MENSWEAR,
+        description: "男装",
+        promptTemplate: `（通用兜底）为 \${productName} 生成通用电商九宫格主图，文字清晰、排版干净、卖点真实。`,
       },
     ],
     skipDuplicates: true,
   })
-  console.log("✅ ProductTypePrompt 基础数据已初始化")
+
+  console.log("✅ Platform + ProductTypePrompt 种子数据已初始化")
 }
 
 main()
@@ -35,4 +104,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect()
   })
-

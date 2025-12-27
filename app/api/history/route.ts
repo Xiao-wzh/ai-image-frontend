@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
           productName: true,
           productType: true,
           generatedImages: true,
-          generatedImage: true,
+          // generatedImage: true, // 不返回拼接原图字段
           createdAt: true,
         },
       }),

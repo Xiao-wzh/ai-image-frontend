@@ -11,7 +11,7 @@ export type HistoryItem = {
   productName: string
   productType: string
   generatedImages: string[]
-  generatedImage: string | null
+  generatedImage?: string | null
   createdAt: string | Date
 }
 

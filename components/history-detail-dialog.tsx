@@ -3,24 +3,16 @@
 import { useEffect, useMemo, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import JSZip from "jszip"
-import {
-  Download,
-  Grid,
-  Image as ImageIcon,
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-  ZoomIn,
-} from "lucide-react"
+import { Download, Grid, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
 
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import type { HistoryItem } from "@/components/history-card"
+
+function sanitizeFilename(name: string) {
+  return name.replace(/[\\/:*?"<>|]/g, "-")
+}
 
 export function HistoryDetailDialog({
   open,
@@ -34,23 +26,8 @@ export function HistoryDetailDialog({
   initialIndex: number
 }) {
   const [index, setIndex] = useState(initialIndex)
-  const [viewMode, setViewMode] = useState<"grid" | "full">("grid")
+  const [viewMode] = useState<"grid" | "full">("grid")
   const [isDownloading, setIsDownloading] = useState(false)
-  const [previewImage, setPreviewImage] = useState<string | null>(null)
-  const [isDownloadingSingle, setIsDownloadingSingle] = useState(false)
-
-  async function handleDownload(url: string, filename: string) {
-    const res = await fetch(url)
-    if (!res.ok) throw new Error(`下载失败: ${res.status}`)
-    const blob = await res.blob()
-    const link = document.createElement("a")
-    link.href = URL.createObjectURL(blob)
-    link.download = filename
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(link.href)
-  }
 
   useEffect(() => {
     if (open) setIndex(initialIndex)
@@ -58,23 +35,12 @@ export function HistoryDetailDialog({
 
   const item = items[index]
   const generatedImages = item?.generatedImages ?? []
-  const fullImageUrl = item?.generatedImage ?? null
   const productName = item?.productName ?? "generated-images"
 
   const canPrev = index > 0
   const canNext = index < items.length - 1
 
   const title = useMemo(() => item?.productName || "作品详情", [item])
-
-  async function handleDownloadSingle(url: string) {
-    setIsDownloadingSingle(true)
-    try {
-      const name = `${productName || "image"}-${Date.now()}.png`
-      await handleDownload(url, name)
-    } finally {
-      setIsDownloadingSingle(false)
-    }
-  }
 
   const handleDownloadAll = async () => {
     if (!generatedImages.length) return
@@ -134,73 +100,21 @@ export function HistoryDetailDialog({
     }
   }
 
+  // 单张下载：通过后端代理 GET /api/download-images?url=... 规避浏览器 CORS 导致的 Failed to fetch
+  const downloadOne = (imgUrl: string, idx: number) => {
+    const filename = sanitizeFilename(`${productName || "image"}-${idx + 1}.png`)
+    const href = `/api/download-images?url=${encodeURIComponent(imgUrl)}&filename=${encodeURIComponent(filename)}`
+
+    const a = document.createElement("a")
+    a.href = href
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      {/* Image Preview Overlay */}
-      <AnimatePresence>
-        {previewImage && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/95">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-              className="relative w-full max-w-6xl max-h-[90vh]"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src={previewImage} 
-                alt="Preview" 
-                className="max-w-full max-h-[80vh] md:max-h-[85vh] object-contain"
-              />
-              
-              {/* Close Button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setPreviewImage(null)
-                }}
-                className="absolute -top-12 right-0 p-2 text-white/70 hover:text-white transition-colors"
-                aria-label="Close preview"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18"></line>
-                  <line x1="6" y1="6" x2="18" y2="18"></line>
-                </svg>
-              </button>
-              
-              {/* Download Button */}
-              <button
-                onClick={async (e) => {
-                  e.stopPropagation()
-                  await handleDownloadSingle(previewImage)
-                }}
-                disabled={isDownloadingSingle}
-                className="absolute top-0 right-0 translate-y-[-3.25rem] flex items-center gap-2 px-4 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors disabled:opacity-50"
-              >
-                {isDownloadingSingle ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    下载中...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    下载图片
-                  </>
-                )}
-              </button>
-            </motion.div>
-            
-            {/* Click outside to close */}
-            <div 
-              className="absolute inset-0 -z-10"
-              onClick={() => setPreviewImage(null)}
-            />
-          </div>
-        )}
-      </AnimatePresence>
-
       <DialogContent className="max-w-6xl w-[95vw] h-[90vh] p-0 flex flex-col gap-0 bg-slate-950/95 border-white/10 overflow-hidden">
         {/* Header（预留右侧 X 按钮空间，避免重叠） */}
         <div className="flex items-center justify-between p-4 border-b border-white/10 pr-12 shrink-0">
@@ -240,36 +154,30 @@ export function HistoryDetailDialog({
               生成完成
             </div>
 
-            {fullImageUrl && (
-              <div className="flex items-center gap-2 p-1 rounded-xl bg-white/5 border border-white/10">
-                <Button
-                  size="sm"
-                  onClick={() => setViewMode("grid")}
-                  className={cn(
-                    "h-8 rounded-lg text-xs",
-                    viewMode === "grid"
-                      ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
-                      : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  <Grid className="w-4 h-4 mr-2" />
-                  九宫格视图
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => setViewMode("full")}
-                  className={cn(
-                    "h-8 rounded-lg text-xs",
-                    viewMode === "full"
-                      ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
-                      : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  <ImageIcon className="w-4 h-4 mr-2" />
-                  拼接原图
-                </Button>
-              </div>
-            )}
+            {/* 保留“九宫格视图”按钮（为未来拼接原图通道预留位置） */}
+            <div className="flex items-center gap-2 p-1 rounded-xl bg-white/5 border border-white/10">
+              <Button
+                size="sm"
+                onClick={() => {}}
+                className={cn(
+                  "h-8 rounded-lg text-xs",
+                  viewMode === "grid"
+                    ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
+                    : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white",
+                )}
+              >
+                <Grid className="w-4 h-4 mr-2" />
+                九宫格视图
+              </Button>
+
+              {/* 未来要开放拼接原图时，把下面按钮恢复并接回 viewMode 切换即可 */}
+              {/*
+              <Button size="sm" onClick={() => setViewMode("full")} className={...}>
+                <ImageIcon className="w-4 h-4 mr-2" />
+                拼接原图
+              </Button>
+              */}
+            </div>
           </div>
 
           <AnimatePresence mode="wait">
@@ -280,50 +188,30 @@ export function HistoryDetailDialog({
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.25 }}
             >
-              {viewMode === "grid" ? (
-                <div className="grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2">
-                  {generatedImages.map((img, i) => (
-                    <motion.div
-                      key={i}
-                      className="relative aspect-square group overflow-hidden rounded-lg"
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      transition={{ duration: 0.2, delay: i * 0.03 }}
-                      whileHover={{ scale: 1.03 }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={img} alt={`Generated ${i + 1}`} className="w-full h-full object-cover cursor-zoom-in" />
-                      <div
-                        className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                        onClick={() => setPreviewImage(img)}
-                      >
-                        <ZoomIn className="w-8 h-8 text-white" />
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
-              ) : (
-                <motion.div
-                  className="relative group rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 flex items-center justify-center"
-                  whileHover={{ scale: 1.01 }}
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={fullImageUrl || ""}
-                    alt="Generated Full"
-                    className="max-w-full max-h-[70vh] object-contain cursor-zoom-in"
-                  />
-                  <div
-                    className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                    onClick={() => setPreviewImage(fullImageUrl || "")}
+              {/* 当前仅展示九宫格 */}
+              <div className="grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2">
+                {generatedImages.map((img, i) => (
+                  <motion.button
+                    key={i}
+                    type="button"
+                    className="relative aspect-square group overflow-hidden rounded-lg cursor-pointer"
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.2, delay: i * 0.03 }}
+                    whileHover={{ scale: 1.03 }}
+                    onClick={() => downloadOne(img, i)}
+                    title="点击下载"
                   >
-                    <ZoomIn className="w-8 h-8 text-white" />
-                  </div>
-                </motion.div>
-              )}
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img} alt={`Generated ${i + 1}`} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <Download className="w-8 h-8 text-white drop-shadow-md" />
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
             </motion.div>
           </AnimatePresence>
-
         </div>
 
         {/* Footer */}
@@ -346,4 +234,3 @@ export function HistoryDetailDialog({
     </Dialog>
   )
 }
-

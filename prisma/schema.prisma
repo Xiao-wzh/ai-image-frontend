@@ -25,6 +25,8 @@ model User {
   generations     Generation[]
   creditRecords   CreditRecord[]
   redemptionCodes RedemptionCode[] @relation("UserRedemptionCodes")
+
+  productTypePrompts ProductTypePrompt[]
 }
 
 model Account {
@@ -111,6 +113,21 @@ model RedemptionCode {
   @@index([usedBy])
 }
 
+/// 平台（数据库驱动）
+model Platform {
+  id        String   @id @default(uuid()) @db.Uuid
+  key       String   @unique
+  label     String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  prompts ProductTypePrompt[]
+
+  @@index([isActive, sortOrder])
+}
+
 // 我们的业务模型
 model Generation {
   id              String   @id @default(uuid()) @db.Uuid
@@ -129,10 +146,26 @@ model Generation {
 /// 商品类型与提示词模板映射表
 model ProductTypePrompt {
   id             String   @id @default(uuid()) @db.Uuid
-  productType    String   @unique                     /// 商品类型（如：男装、通用...）
-  promptTemplate String   @db.Text                    /// 对应 Midjourney / SDXL 提示词模板
-  description    String?                              /// 文字描述（可选）
-  isActive       Boolean  @default(true)              /// 是否启用
+
+  // 关联平台（数据库驱动）
+  platformId     String   @db.Uuid
+  platform       Platform @relation(fields: [platformId], references: [id], onDelete: Cascade)
+
+  // 权限维度：UserId (空=所有人可用/系统默认，有值=该用户私有)
+  userId         String?
+  user           User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // 业务维度：具体类别 Key (MENSWEAR, BEDDING)
+  productType    String
+
+  // 内容
+  promptTemplate String   @db.Text
+  description    String?
+
+  isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  @@index([platformId, productType])
+  @@index([userId])
 }

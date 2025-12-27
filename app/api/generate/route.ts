@@ -47,6 +47,12 @@ export async function POST(req: NextRequest) {
     const form = await req.formData()
     const productName = String(form.get("productName") ?? "").trim()
     const rawType = String(form.get("productType") ?? "").trim()
+
+    // 新增：平台参数（数据库驱动，前端传 platformKey，默认 SHOPEE）
+    const platformKey = String(form.get("platformKey") ?? form.get("platform") ?? "SHOPEE")
+      .trim()
+      .toUpperCase()
+
     if (!productName) throw new Error("请填写商品名称")
     if (!Object.values(ProductType).includes(rawType as ProductTypeKey)) {
       throw new Error("无效的商品类型")
@@ -141,9 +147,53 @@ export async function POST(req: NextRequest) {
     })
     generationId = pending.id
 
-    // 4) 查询 Prompt
-    const promptRecord = await prisma.productTypePrompt.findUnique({ where: { productType } })
-    if (!promptRecord) throw new Error("未找到对应商品类型的 Prompt 模板")
+    // 4) 查询 Prompt（数据库平台关联 + GENERAL 兜底）
+    // 优先级：
+    // 1) 当前平台 + 用户私有(userId)
+    // 2) 当前平台 + 系统(userId=null)
+    // 3) GENERAL 平台 + 系统(userId=null)
+
+    const promptRecord =
+      (await prisma.productTypePrompt.findFirst({
+        where: {
+          isActive: true,
+          productType,
+          userId,
+          platform: {
+            key: platformKey,
+          },
+        },
+        include: { platform: true },
+        orderBy: { updatedAt: "desc" },
+      })) ||
+      (await prisma.productTypePrompt.findFirst({
+        where: {
+          isActive: true,
+          productType,
+          userId: null,
+          platform: {
+            key: platformKey,
+          },
+        },
+        include: { platform: true },
+        orderBy: { updatedAt: "desc" },
+      })) ||
+      (await prisma.productTypePrompt.findFirst({
+        where: {
+          isActive: true,
+          productType,
+          userId: null,
+          platform: {
+            key: "GENERAL",
+          },
+        },
+        include: { platform: true },
+        orderBy: { updatedAt: "desc" },
+      }))
+
+    if (!promptRecord) {
+      throw new Error(`未找到 Prompt 模板：platformKey=${platformKey}, productType=${productType}`)
+    }
 
     // 5) 调用 n8n Webhook
     const webhookUrl = process.env.N8N_WEBHOOK_URL
@@ -170,10 +220,7 @@ export async function POST(req: NextRequest) {
 
     // 6) 解析 n8n 响应
     const generatedImages = n8nJson.images as string[]
-    const fullImageUrl =
-      (n8nJson.full_image_url as string) ||
-      (n8nJson.generated_image_url as string) ||
-      null
+    const fullImageUrl = (n8nJson.full_image_url as string) || (n8nJson.generated_image_url as string) || null
 
     if (!Array.isArray(generatedImages) || generatedImages.length === 0) {
       throw new Error("n8n 响应未包含九宫格图片数组 (images)")
@@ -233,9 +280,7 @@ export async function POST(req: NextRequest) {
             })
           })
 
-          console.log(
-            `💸 生成失败，已退款：bonus=${deductedBonus}，paid=${deductedPaid} 给用户 ${userId}`,
-          )
+          console.log(`💸 生成失败，已退款：bonus=${deductedBonus}，paid=${deductedPaid} 给用户 ${userId}`)
         }
       } catch (refundErr) {
         console.error("❌ 退款失败:", refundErr)

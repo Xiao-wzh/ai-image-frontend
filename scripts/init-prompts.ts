@@ -1,15 +1,18 @@
 /**
- * 手动初始化 ProductTypePrompt 数据
- * 运行方式: npx tsx scripts/init-prompts.ts
+ * 手动初始化 Platform + ProductTypePrompt 数据
+ * 运行方式（推荐）：
+ *   node -r dotenv/config node_modules/tsx/dist/cli.mjs scripts/init-prompts.ts dotenv_config_path=.env.local
  */
+
 import "dotenv/config"
 import { PrismaClient } from "@prisma/client"
 import { PrismaPg } from "@prisma/adapter-pg"
 import pg from "pg"
+import { ProductType } from "@/lib/constants"
 
 const DATABASE_URL = process.env.DATABASE_URL
 if (!DATABASE_URL) {
-  console.error("❌ DATABASE_URL 未设置")
+  console.error("❌ DATABASE_URL 未设置（请在 .env.local 中配置）")
   process.exit(1)
 }
 
@@ -18,17 +21,55 @@ const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
 async function main() {
-  console.log("[object Object]ProductTypePrompt 数据...")
+  console.log("🚀 正在初始化 Platform + ProductTypePrompt 数据...")
 
-  // 删除旧数据
-  await prisma.productTypePrompt.deleteMany({})
-  console.log("✅ 已清空旧数据")
+  // 1) 初始化平台
+  const platforms = [
+    { key: "SHOPEE", label: "虾皮 (Shopee)", isActive: true, sortOrder: 10 },
+    { key: "AMAZON", label: "亚马逊 (Amazon)", isActive: true, sortOrder: 20 },
+    { key: "TIKTOK", label: "TikTok", isActive: true, sortOrder: 30 },
+    { key: "GENERAL", label: "通用 (General)", isActive: true, sortOrder: 1000 },
+  ]
 
-  // 插入新数据
+  for (const p of platforms) {
+    await prisma.platform.upsert({
+      where: { key: p.key },
+      create: p,
+      update: {
+        label: p.label,
+        isActive: p.isActive,
+        sortOrder: p.sortOrder,
+      },
+    })
+  }
+  console.log("✅ Platform 已初始化")
+
+  // 2) 读取平台 id
+  const platformRows = await prisma.platform.findMany({ select: { id: true, key: true } })
+  const byKey = new Map(platformRows.map((p) => [p.key, p.id]))
+
+  const shopeeId = byKey.get("SHOPEE")
+  const amazonId = byKey.get("AMAZON")
+  const tiktokId = byKey.get("TIKTOK")
+  const generalId = byKey.get("GENERAL")
+
+  if (!shopeeId || !amazonId || !tiktokId || !generalId) {
+    throw new Error("平台初始化异常：未能获取全部平台 ID")
+  }
+
+  // 3) 清空系统 prompts（保留用户私有 prompts：userId != null）
+  await prisma.productTypePrompt.deleteMany({ where: { userId: null } })
+  console.log("✅ 已清空系统默认 prompts")
+
+  // 4) 插入系统 prompts
   await prisma.productTypePrompt.createMany({
     data: [
+      // Shopee
       {
-        productType: "MENSWEAR",
+        userId: null,
+        platformId: shopeeId,
+        productType: ProductType.MENSWEAR,
+        description: "男装",
         promptTemplate: `生成1張2400×2400像素的9宮格商品主圖（每格精確800×800像素，無白邊、無水印、無額外文字），風格必須符合台灣蝦皮男裝類目最常見的高轉換率主圖設計，包括：
 • 乾淨專業的電商排版
 • 高級感標題條（紅色 / 橘色 / 深藍等高對比色）
@@ -64,10 +105,12 @@ async function main() {
 4️⃣ 全部使用繁體中文
 5️⃣ 賣點真實合理，不誇張
 6️⃣ **最終僅輸出 1 張 2400×2400 九宮格大圖**`,
-        description: "男装商品主图生成",
       },
       {
-        productType: "BEDDING",
+        userId: null,
+        platformId: shopeeId,
+        productType: ProductType.BEDDING,
+        description: "寝具",
         promptTemplate: `生成1張2400×2400像素的9宮格商品主圖（每格精確800×800像素，無白邊、無水印、無額外文字）
 
 需明確控制以下視覺元素：
@@ -103,73 +146,90 @@ async function main() {
 • 所有文字樣式需與參考圖完全一致
 • 賣點合理、不造假
 • **最終只輸出 1 張九宮格大圖**`,
-        description: "寝具商品主图生成",
       },
+
+      // Amazon
       {
-        productType: "SEXY_SPECIES",
-        promptTemplate: `生成1張2400×2400像素的9宮格商品主圖（每格精確800×800像素，無白邊、無水印、無額外文字）
+        userId: null,
+        platformId: shopeeId,
+        productType: ProductType.SEXY_SPECIES,
+        description: "Sexyspecies",
+        promptTemplate: `生成1張2400×2400像素的9宮格商品主圖（每格精確800×800像素，無白邊、無水印、無額外文字），風格和視覺特色包括但不限於：
+粗黑描邊超大標題字體風格
+黃色或粉色手寫體重點標註（卖点或做工细节）
+黃底圓圈或橢圓強調細節
+多色小圖排列方式與位置
+紅×綠✓對比圖呈現方式
+規格表框線與文字排列
+淺灰背景、乾淨燈光氛圍
+整體配色、字體粗細、陰影、描邊
+商品名稱： \${productName}
+關鍵要求 - 文字清晰度最高優先：
+所有文字必須極度清晰、放大10倍依然筆畫分明、絕無亂碼、模糊、筆畫黏連或假字。
+請使用最粗最黑的繁體中文字體（如微軟正黑體、重黑體、Noto Sans TC Black 或類似），粗細至少 Bold 以上。
+強制加大字間距和行距（至少1.5倍），避免文字過於緊湊。
+所有重點文字必須加上明顯白色或黑色描邊（至少3-5像素外陰影/外發光），確保高對比易讀。
+如果無法完美清晰，請自動加大字體、放寬間距，寧可看起來稍鬆散，也絕不允許模糊。
+要求：
+商品主體（外觀、拼色位置、顏色、布料紋理、設計、車線、logo、版型）必須與我這次上傳的實拍圖100%一致，絕對不能修圖、改變任何細節。
+自動根據上傳的商品圖片智能填入以下9格內容，但所有視覺元素（排版、字體、標註方式、背景）必須與參考圖（圖1）完全一致：
+   - 格1（左上）：主視覺（模特兒穿著正面或側身）+背身小图+颜色缩略图＋粗黑大標題（不要太长）＋1~2个圓形標簽（卖点或做工细节）
+   格2（中上）：材質/成分特寫＋小優勢標籤
+格3（右上）：堆疊圖或成分splash＋3～4個圓形優勢icon
+格4（左中）：人物使用情境或觸感展示
+格5（中中）：面料/功能特寫＋優勢文字
+格6（右中）：升級賣點（如加厚、更輕、更強等）＋對應圖示
+格7（左下）：對比圖（其他普通產品打紅× vs 本商品打綠✓）
+格8（中下）：場景使用情境圖＋溫馨小icon
+格9（右下）：材质细节图
+所有文字必須使用繁體中文，字體、顏色、描邊、手寫體樣式必須與參考圖（圖1）完全一致。
+自動根據商品特性產生合理賣點與規格文字，但不能誇張或造假。
+最終只輸出1張2400×2400的9宮格大圖，不需要任何說明文字。`
+      },
 
-**固定品牌視覺風格**：
-• 粗黑描邊超大標題字
-• 黃色 / 粉色手寫體重點標註
-• 箭頭＋黃底圓圈/橢圓
-• 多色小圖排列
-• 紅 × 綠 ✓ 對比
-• 規格表框線
-• 淺灰背景＋乾淨燈光
-• SEXYSPECIES logo（小字）
+      // TikTok：默认留空用于测试空状态（如需要可自行加一条）
 
-**商品名稱：\${productName}**
-
-**文字清晰度最高優先**：
-• 放大 10 倍仍清晰
-• 粗黑繁體中文字體（Bold↑）
-• 字距/行距 ≥1.5 倍
-• 3–5px 強描邊
-
-**圖片要求**：
-• 褲子外觀、拼色、布料、腰頭、車線、logo **100% 與實拍一致，不得修圖**
-• 所有排版、字體、標註方式 **完全等同參考圖（圖1）**
-
-**9 格內容**：
-• 格1：主視覺＋背身小圖＋色卡＋粗黑標題＋圓形標籤
-• 格2：材質特寫
-• 格3：堆疊圖＋icon
-• 格4：使用情境
-• 格5：功能特寫
-• 格6：升級賣點
-• 格7：對比圖（× / ✓）
-• 格8：場景圖＋icon
-• 格9：完整規格表
-
-• 全部繁體中文
-• 賣點真實合理
-• **最終只輸出 1 張 2400×2400 九宮格大圖**`,
-        description: "Sexyspecies 品牌商品主图生成",
+      // General fallback
+      {
+        userId: null,
+        platformId: generalId,
+        productType: ProductType.MENSWEAR,
+        description: "男装",
+        promptTemplate: `（通用兜底）为 \${productName} 生成通用电商九宫格主图，文字清晰、排版干净、卖点真实。`,
       },
     ],
+    skipDuplicates: true,
   })
 
-  console.log("✅ 已插入 3 条 Prompt 模板数据")
+  console.log("✅ ProductTypePrompt 系统默认数据已初始化")
 
-  // 验证数据
-  const count = await prisma.productTypePrompt.count()
-  console.log(`✅ 当前数据库中共有 ${count} 条 Prompt 模板`)
-
-  const records = await prisma.productTypePrompt.findMany()
-  console.log("\n📋 已插入的数据：")
-  records.forEach((r) => {
-    console.log(`  - ${r.productType}: ${r.description}`)
+  // 5) 打印平台->类型概览
+  const summary = await prisma.platform.findMany({
+    where: { isActive: true },
+    orderBy: { sortOrder: "asc" },
+    select: {
+      key: true,
+      label: true,
+      prompts: {
+        where: { isActive: true, userId: null },
+        select: { productType: true, description: true },
+      },
+    },
   })
+
+  console.log("\n📋 当前平台配置概览：")
+  for (const p of summary) {
+    const types = p.prompts.map((x) => `${x.productType}${x.description ? `(${x.description})` : ""}`)
+    console.log(`- ${p.key} / ${p.label}: ${types.length ? types.join(", ") : "(暂无类型)"}`)
+  }
 }
 
 main()
   .catch((e) => {
-    console.error("❌ 错误:", e)
+    console.error("❌ 初始化失败:", e)
     process.exit(1)
   })
   .finally(async () => {
     await prisma.$disconnect()
     await pool.end()
   })
-
