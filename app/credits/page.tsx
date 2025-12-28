@@ -98,7 +98,7 @@ export default function CreditsPage() {
               <div className="text-4xl font-bold gradient-text-alt">{totalCredits}</div>
             )}
             <div className="mt-2 text-xs text-slate-500">
-              显示总余额（付费 + 赠送）。明细可在鼠标悬停积分处查看。
+              显示总余额（付费 + 赠送）
             </div>
           </motion.div>
 

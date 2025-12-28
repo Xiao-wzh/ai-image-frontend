@@ -87,11 +87,11 @@ export default function HistoryPage() {
   const grid = useMemo(() => {
     if (loading) {
       return (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid min-w-0 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40">
+            <div key={i} className="rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 min-w-0">
               <Skeleton className="aspect-square w-full bg-white/10" />
-              <div className="p-4 space-y-2">
+              <div className="p-4 space-y-2 min-w-0">
                 <Skeleton className="h-4 w-2/3 bg-white/10" />
                 <Skeleton className="h-3 w-1/3 bg-white/10" />
               </div>
@@ -102,7 +102,7 @@ export default function HistoryPage() {
     }
 
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+      <div className="grid min-w-0 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
         <AnimatePresence mode="popLayout">
           {items.map((item, idx) => (
             <motion.div
@@ -112,6 +112,7 @@ export default function HistoryPage() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 10 }}
               transition={{ duration: 0.2 }}
+              className="min-w-0"
             >
               <HistoryCard
                 item={item}
@@ -131,22 +132,22 @@ export default function HistoryPage() {
     <div className="flex h-screen bg-slate-950">
       <Sidebar />
 
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <main className="flex-1 overflow-y-auto">
-          <div className="relative pt-10 pb-8 px-8">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <main className="flex-1 overflow-y-auto min-w-0">
+          <div className="relative pt-10 pb-8 px-8 min-w-0">
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
               <div className="absolute -top-10 left-1/4 w-96 h-96 bg-blue-500/15 rounded-full blur-3xl" />
               <div className="absolute top-10 right-1/4 w-96 h-96 bg-purple-500/15 rounded-full blur-3xl" />
             </div>
 
-            <div className="relative max-w-6xl mx-auto">
-              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
-                <div>
+            <div className="relative max-w-6xl mx-auto min-w-0">
+              <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6 min-w-0">
+                <div className="min-w-0">
                   <h1 className="text-3xl md:text-4xl font-bold text-white">我的作品</h1>
                   <p className="text-slate-400 mt-2 text-sm">浏览你历史生成的九宫格作品，支持按商品名搜索。</p>
                 </div>
 
-                <div className="w-full md:w-[360px] relative">
+                <div className="w-full md:w-[360px] relative min-w-0">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <Input
                     value={query}
@@ -165,10 +166,7 @@ export default function HistoryPage() {
                   <div className="text-white font-semibold text-lg">还没有作品</div>
                   <div className="text-slate-400 text-sm mt-2">去首页生成一张九宫格作品吧。</div>
                   <div className="mt-6">
-                    <Button
-                      asChild
-                      className="rounded-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white"
-                    >
+                    <Button asChild className="rounded-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white">
                       <a href="/">去生成</a>
                     </Button>
                   </div>
@@ -188,9 +186,7 @@ export default function HistoryPage() {
                         {loadingMore ? "加载中..." : "加载更多"}
                       </Button>
                     ) : (
-                      !loading && (
-                        <div className="text-xs text-slate-500">没有更多了</div>
-                      )
+                      !loading && <div className="text-xs text-slate-500">没有更多了</div>
                     )}
                   </div>
                 </>
@@ -200,13 +196,7 @@ export default function HistoryPage() {
         </main>
       </div>
 
-      <HistoryDetailDialog
-        open={open}
-        onOpenChange={setOpen}
-        items={items}
-        initialIndex={activeIndex}
-      />
+      <HistoryDetailDialog open={open} onOpenChange={setOpen} items={items} initialIndex={activeIndex} />
     </div>
   )
 }
-

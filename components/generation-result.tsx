@@ -151,7 +151,7 @@ export function GenerationResult({
               <Grid className="w-4 h-4 mr-2" />
               九宫格视图
             </Button>
-            {/* <Button
+            <Button
               size="sm"
               onClick={() => setViewMode('full')}
               className={cn(
@@ -163,7 +163,7 @@ export function GenerationResult({
             >
               <ImageIcon className="w-4 h-4 mr-2" />
               拼接原图
-            </Button> */}
+            </Button>
           </div>
         )}
       </div>

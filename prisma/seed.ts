@@ -46,7 +46,6 @@ async function main() {
       {
         userId: null,
         platformId: shopeeId,
-        legacyPlatform: "SHOPEE",
         productType: ProductType.MENSWEAR,
         description: "男装",
         promptTemplate: `（Shopee 男装）为 \${productName} 生成高转化九宫格电商主图，文字清晰、排版干净，符合虾皮风格。`,
@@ -54,7 +53,6 @@ async function main() {
       {
         userId: null,
         platformId: shopeeId,
-        legacyPlatform: "SHOPEE",
         productType: ProductType.BEDDING,
         description: "寝具",
         promptTemplate: `（Shopee 寝具）为 \${productName} 生成九宫格主图，强调材质与卖点，风格符合虾皮。`,
@@ -64,7 +62,6 @@ async function main() {
       {
         userId: null,
         platformId: amazonId,
-        legacyPlatform: "AMAZON",
         productType: ProductType.MENSWEAR,
         description: "男装",
         promptTemplate: `（Amazon 男装）为 \${productName} 生成更偏品牌化与规范化的电商主图布局，减少花哨元素，突出参数与卖点。`,
@@ -74,7 +71,6 @@ async function main() {
       // {
       //   userId: null,
       //   platformId: tiktokId,
-      //   legacyPlatform: "TIKTOK",
       //   productType: ProductType.MENSWEAR,
       //   description: "男装",
       //   promptTemplate: `（TikTok 男装）为 \${productName} 生成适合短视频带货的高对比九宫格主图，标题更抓眼。`,
@@ -84,7 +80,6 @@ async function main() {
       {
         userId: null,
         platformId: generalId,
-        legacyPlatform: "GENERAL",
         productType: ProductType.MENSWEAR,
         description: "男装",
         promptTemplate: `（通用兜底）为 \${productName} 生成通用电商九宫格主图，文字清晰、排版干净、卖点真实。`,

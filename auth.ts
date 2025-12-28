@@ -31,6 +31,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 { username: identifier },
               ],
             },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              username: true,
+              image: true,
+              password: true,
+              credits: true,
+              bonusCredits: true,
+              role: true,
+            },
           })
 
           if (!user) {
@@ -62,6 +73,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             image: user.image ?? undefined,
             credits: user.credits,
             bonusCredits: user.bonusCredits,
+            role: user.role,
           }
         } catch (error) {
           console.error("❌ 登录验证错误:", error)
@@ -239,6 +251,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.username = user.username
         token.credits = user.credits
         token.bonusCredits = user.bonusCredits
+        token.role = user.role
       }
       return token
     },
@@ -247,15 +260,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.id = token.id as string
         session.user.username = token.username as string
         session.user.bonusCredits = token.bonusCredits as number
+        session.user.role = token.role as string
 
         // 关键：从数据库重新获取最新的积分，确保数据同步
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { credits: true, bonusCredits: true },
+          select: { credits: true, bonusCredits: true, role: true },
         })
 
         session.user.credits = dbUser?.credits ?? 0
         session.user.bonusCredits = dbUser?.bonusCredits ?? 0
+        session.user.role = dbUser?.role ?? (session.user.role || "USER")
       }
       return session
     },
