@@ -3,7 +3,7 @@ CREATE TABLE "Generation" (
     "id" UUID NOT NULL,
     "productName" TEXT NOT NULL,
     "productType" TEXT NOT NULL,
-    "originalImage" TEXT NOT NULL,
+    "originalImage" TEXT ,
     "generatedImage" TEXT,
     "status" TEXT NOT NULL DEFAULT 'PENDING',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

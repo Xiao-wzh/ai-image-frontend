@@ -3,7 +3,14 @@
 import { useEffect, useMemo, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import JSZip from "jszip"
-import { Download, Grid, Loader2, ChevronLeft, ChevronRight } from "lucide-react"
+import {
+  Download,
+  Grid,
+  Image as ImageIcon,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react"
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -26,7 +33,7 @@ export function HistoryDetailDialog({
   initialIndex: number
 }) {
   const [index, setIndex] = useState(initialIndex)
-  const [viewMode] = useState<"grid" | "full">("grid")
+  const [viewMode, setViewMode] = useState<"grid" | "full">("grid")
   const [isDownloading, setIsDownloading] = useState(false)
 
   useEffect(() => {
@@ -35,6 +42,7 @@ export function HistoryDetailDialog({
 
   const item = items[index]
   const generatedImages = item?.generatedImages ?? []
+  const fullImageUrl = item?.generatedImage ?? null
   const productName = item?.productName ?? "generated-images"
 
   const canPrev = index > 0
@@ -100,7 +108,7 @@ export function HistoryDetailDialog({
     }
   }
 
-  // 单张下载：通过后端代理 GET /api/download-images?url=... 规避浏览器 CORS 导致的 Failed to fetch
+  // 单张下载：通过后端代理 GET /api/download-images?url=... 规避浏览器 CORS
   const downloadOne = (imgUrl: string, idx: number) => {
     const filename = sanitizeFilename(`${productName || "image"}-${idx + 1}.png`)
     const href = `/api/download-images?url=${encodeURIComponent(imgUrl)}&filename=${encodeURIComponent(filename)}`
@@ -154,11 +162,10 @@ export function HistoryDetailDialog({
               生成完成
             </div>
 
-            {/* 保留“九宫格视图”按钮（为未来拼接原图通道预留位置） */}
             <div className="flex items-center gap-2 p-1 rounded-xl bg-white/5 border border-white/10">
               <Button
                 size="sm"
-                onClick={() => {}}
+                onClick={() => setViewMode("grid")}
                 className={cn(
                   "h-8 rounded-lg text-xs",
                   viewMode === "grid"
@@ -170,13 +177,22 @@ export function HistoryDetailDialog({
                 九宫格视图
               </Button>
 
-              {/* 未来要开放拼接原图时，把下面按钮恢复并接回 viewMode 切换即可 */}
-              {/*
-              <Button size="sm" onClick={() => setViewMode("full")} className={...}>
+              <Button
+                size="sm"
+                onClick={() => setViewMode("full")}
+                disabled={!fullImageUrl}
+                className={cn(
+                  "h-8 rounded-lg text-xs",
+                  viewMode === "full"
+                    ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
+                    : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white",
+                  !fullImageUrl && "opacity-50 cursor-not-allowed",
+                )}
+                title={!fullImageUrl ? "该记录没有拼接原图" : "查看拼接原图"}
+              >
                 <ImageIcon className="w-4 h-4 mr-2" />
                 拼接原图
               </Button>
-              */}
             </div>
           </div>
 
@@ -188,28 +204,43 @@ export function HistoryDetailDialog({
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.25 }}
             >
-              {/* 当前仅展示九宫格 */}
-              <div className="grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2">
-                {generatedImages.map((img, i) => (
-                  <motion.button
-                    key={i}
-                    type="button"
-                    className="relative aspect-square group overflow-hidden rounded-lg cursor-pointer"
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.2, delay: i * 0.03 }}
-                    whileHover={{ scale: 1.03 }}
-                    onClick={() => downloadOne(img, i)}
-                    title="点击下载"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img} alt={`Generated ${i + 1}`} className="w-full h-full object-cover" />
-                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                      <Download className="w-8 h-8 text-white drop-shadow-md" />
-                    </div>
-                  </motion.button>
-                ))}
-              </div>
+              {viewMode === "grid" ? (
+                <div className="grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2">
+                  {generatedImages.map((img, i) => (
+                    <motion.button
+                      key={i}
+                      type="button"
+                      className="relative aspect-square group overflow-hidden rounded-lg cursor-pointer"
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.2, delay: i * 0.03 }}
+                      whileHover={{ scale: 1.03 }}
+                      onClick={() => downloadOne(img, i)}
+                      title="点击下载"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img} alt={`Generated ${i + 1}`} className="w-full h-full object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Download className="w-8 h-8 text-white drop-shadow-md" />
+                      </div>
+                    </motion.button>
+                  ))}
+                </div>
+              ) : (
+                <motion.div
+                  className="relative rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 flex items-center justify-center p-4"
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={fullImageUrl || ""}
+                    alt="Generated Full"
+                    className="max-w-full max-h-[70vh] object-contain"
+                  />
+                </motion.div>
+              )}
             </motion.div>
           </AnimatePresence>
         </div>

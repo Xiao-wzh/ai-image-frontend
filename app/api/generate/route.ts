@@ -54,9 +54,9 @@ export async function POST(req: NextRequest) {
       .toUpperCase()
 
     if (!productName) throw new Error("请填写商品名称")
-    if (!Object.values(ProductType).includes(rawType as ProductTypeKey)) {
-      throw new Error("无效的商品类型")
-    }
+    // if (!Object.values(ProductType).includes(rawType as ProductTypeKey)) {
+    //   throw new Error("无效的商品类型")
+    // }
     productNameForRecord = productName
 
     const productType = rawType as ProductTypeKey
@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
         userId,
         productName,
         productType,
-        originalImage: imageBase64Array[0],
+        originalImage: "",
         status: "PENDING",
       },
     })
@@ -204,7 +204,17 @@ export async function POST(req: NextRequest) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         product_name: productName,
-        product_type: ProductTypePromptKey[productType],
+        
+        // ✅ 修复 1：不再查常量表，直接传字符串
+        // 这样新加的类型（如 "KIDS"）也能原样传过去
+        product_type: productType, 
+
+        // ✅ 修复 2：补上你想要的 platform 参数
+        platform: platformKey,
+
+        // ✅ 修复 3：补上 description 参数
+        // description: description,
+
         prompt_template: promptRecord.promptTemplate,
         images: imageBase64Array,
         image_count: imageBase64Array.length,

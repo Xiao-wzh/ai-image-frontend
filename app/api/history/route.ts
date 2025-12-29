@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
           productName: true,
           productType: true,
           generatedImages: true,
-          // generatedImage: true, // 不返回拼接原图字段
+          generatedImage: true, // 恢复拼接原图字段
           createdAt: true,
         },
       }),
@@ -76,4 +76,3 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "获取历史记录失败", message }, { status: 500 })
   }
 }
-
