@@ -2,15 +2,10 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles } from "lucide-react"
+import { Sparkles, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
-import { ChevronDown } from "lucide-react"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { CascaderPanel, type CascaderPlatformItem } from "@/components/cascader-panel"
 import { ImageUploadZone } from "./image-upload-zone"
 import { GenerationLoading } from "./generation-loading"
@@ -22,6 +17,12 @@ import { ProductTypeLabel, ProductTypeKey } from "@/lib/constants"
 const GENERATION_COST = 199
 
 type PlatformTreeItem = CascaderPlatformItem
+
+type SignResponse = {
+  uploadUrl: string
+  publicUrl: string
+  objectKey: string
+}
 
 interface UploadZoneProps {
   isAuthenticated?: boolean
@@ -92,6 +93,36 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     [previewUrls],
   )
 
+  async function signOne(file: File): Promise<SignResponse> {
+    const res = await fetch("/api/tos/sign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: file.name,
+        contentType: file.type || "application/octet-stream",
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok) {
+      throw new Error(data?.error || `签名失败: ${res.status}`)
+    }
+    return data as SignResponse
+  }
+
+  async function uploadToTos(uploadUrl: string, file: File) {
+    const res = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        // 对应签名时的 Content-Type
+        "Content-Type": file.type || "application/octet-stream",
+      },
+      body: file,
+    })
+    if (!res.ok) {
+      throw new Error(`上传失败: ${res.status}`)
+    }
+  }
+
   /* ──────────────── submit ──────────────── */
   const onSubmit = useCallback(async () => {
     if (!isAuthenticated) {
@@ -127,14 +158,17 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
       setGeneratedImages([])
       setFullImageUrl(null)
 
-      const fd = new FormData()
-      fd.append("productName", productName.trim())
-      fd.append("productType", productType)
-      // 传参保持不变：platformKey + productType
-      fd.append("platformKey", platformKey)
-      files.forEach((f) => fd.append("images", f))
+      // 1) 直传 TOS：逐个文件签名并 PUT 上传
+      toast.message("正在上传图片...")
+      const uploadedUrls: string[] = []
 
-      // 1. 乐观更新 UI（优先扣 bonusCredits，再扣 credits）
+      for (const file of files) {
+        const { uploadUrl, publicUrl } = await signOne(file)
+        await uploadToTos(uploadUrl, file)
+        uploadedUrls.push(publicUrl)
+      }
+
+      // 2) 乐观扣费（优先扣 bonusCredits）
       const deductBonus = Math.min(currentBonusCredits, GENERATION_COST)
       const deductPaid = GENERATION_COST - deductBonus
 
@@ -147,7 +181,17 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
         },
       })
 
-      const res = await fetch("/api/generate", { method: "POST", body: fd })
+      // 3) 调用生成接口（JSON）
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productName: productName.trim(),
+          productType,
+          platformKey,
+          images: uploadedUrls,
+        }),
+      })
       const data = await res.json().catch(() => ({}))
 
       if (!res.ok) {
@@ -162,7 +206,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
         toast.success("生成完成")
       }
 
-      // 2. 用后端返回的真实余额同步 UI
+      // 4) 同步余额
       if (typeof data.credits === "number" && typeof data.bonusCredits === "number") {
         await update({
           ...session,
@@ -176,7 +220,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     } catch (e: any) {
       toast.error(e?.message || "生成失败")
 
-      // 3. 失败回滚乐观更新
+      // 回滚余额
+      const currentCredits = session?.user?.credits ?? 0
+      const currentBonusCredits = session?.user?.bonusCredits ?? 0
       await update({
         ...session,
         user: {
@@ -214,7 +260,11 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     <>
       <div className="space-y-8">
         {/* Header */}
-        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-between"
+        >
           <div>
             <h3 className="text-2xl font-bold text-white mb-1">创建您的作品</h3>
             <p className="text-sm text-slate-400">上传图片并选择风格，让 AI 为您生成专业主图</p>
@@ -222,7 +272,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           {session?.user && (
             <motion.div whileHover={{ scale: 1.05 }} className="glass rounded-xl px-4 py-2">
               <div className="text-xs text-slate-400 mb-1">剩余积分</div>
-              <div className="text-xl font-bold gradient-text-alt">{(session.user.credits ?? 0) + (session.user.bonusCredits ?? 0)}</div>
+              <div className="text-xl font-bold gradient-text-alt">
+                {(session.user.credits ?? 0) + (session.user.bonusCredits ?? 0)}
+              </div>
             </motion.div>
           )}
         </motion.div>
@@ -230,10 +282,21 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
         {/* Form */}
         <AnimatePresence mode="wait">
           {!isSubmitting && generatedImages.length === 0 ? (
-            <motion.div key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
+            <motion.div
+              key="form"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="space-y-6"
+            >
               {/* 平台/风格（联级：下拉展开面板） + 商品名称 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.05 }} className="md:col-span-2">
+                <motion.div
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.05 }}
+                  className="md:col-span-2"
+                >
                   <label className="block text-sm font-medium text-slate-300 mb-2">平台 / 风格</label>
 
                   <DropdownMenu open={isCascaderOpen} onOpenChange={setIsCascaderOpen}>
@@ -274,7 +337,12 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                   )}
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="md:col-span-1">
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.2 }}
+                  className="md:col-span-1"
+                >
                   <label className="block text-sm font-medium text-slate-300 mb-2">商品名称</label>
                   <input
                     type="text"
@@ -289,15 +357,27 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
               {/* Upload Zone */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                 <label className="block text-sm font-medium text-slate-300 mb-3">上传商品图片</label>
-                <ImageUploadZone files={files} previewUrls={previewUrls} onFilesChange={handleFilesChange} maxFiles={8} />
+                <ImageUploadZone
+                  files={files}
+                  previewUrls={previewUrls}
+                  onFilesChange={handleFilesChange}
+                  maxFiles={8}
+                />
               </motion.div>
 
               {/* Pricing Info */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }} className="glass rounded-xl p-4 border border-white/10">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="glass rounded-xl p-4 border border-white/10"
+              >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-slate-400">生成价格</span>
-                    <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-xs font-bold border border-red-500/30">75% OFF</span>
+                    <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-xs font-bold border border-red-500/30">
+                      75% OFF
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-slate-500 line-through">800</span>

@@ -135,7 +135,7 @@ model Generation {
   userId          String?
   productName     String
   productType     String
-  originalImage   String?   @db.Text
+  originalImage   String[]
   generatedImage  String?  @db.Text /// 存储完整的、未裁剪的原图 URL
   generatedImages String[] /// 存储九宫格切片图片 URL 数组
   status          String   @default("PENDING")
