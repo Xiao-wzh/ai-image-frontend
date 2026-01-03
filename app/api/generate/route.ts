@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic"
 const GENERATION_COST = 199
 
 export async function POST(req: NextRequest) {
+  console.log("🔥 API HIT: /api/generate", Date.now())
   let generationId: string | null = null
   let preDeducted = false
 
