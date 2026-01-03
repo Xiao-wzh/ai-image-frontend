@@ -130,17 +130,25 @@ export async function POST(req: NextRequest) {
     const webhookUrl = process.env.N8N_GRSAI_WEBHOOK_URL
     if (!webhookUrl) throw new Error("N8N_GRSAI_WEBHOOK_URL 未配置")
 
+    const n8nPayload = {
+      generation_id: generationId,
+      product_name: productName,
+      product_type: ProductTypePromptKey[productType] || productType,
+      prompt_template: promptRecord.promptTemplate,
+      images: imageUrls,
+      image_count: imageUrls.length,
+    }
+
+    // 记录请求 n8n 的日志
+    console.log(
+      `[N8N_REQUEST] User: ${userId} (${session?.user?.username || "沒有username"}), Payload: `,
+      JSON.stringify(n8nPayload, null, 2),
+    )
+
     const n8nRes = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        generation_id: generationId, // 增加 generation_id 用于追踪
-        product_name: productName,
-        product_type: ProductTypePromptKey[productType] || productType,
-        prompt_template: promptRecord.promptTemplate,
-        images: imageUrls,
-        image_count: imageUrls.length,
-      }),
+      body: JSON.stringify(n8nPayload),
     })
 
     if (!n8nRes.ok) {

@@ -65,7 +65,7 @@ export default function DashboardPage() {
                 transition={{ duration: 0.6 }}
                 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight"
               >
-                <span className="gradient-text">X</span>
+                <span className="gradient-text">AI Species</span>
               </motion.h1>
               <motion.p
                 initial={{ opacity: 0, y: -10 }}
