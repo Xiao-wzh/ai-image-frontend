@@ -358,13 +358,21 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
 
               {/* Upload Zone */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                <label className="block text-sm font-medium text-slate-300 mb-3">上传商品图片</label>
-                <ImageUploadZone
-                  files={files}
-                  previewUrls={previewUrls}
-                  onFilesChange={handleFilesChange}
-                  maxFiles={8}
-                />
+                <div className="flex items-end justify-between gap-3 flex-wrap">
+                  <label className="block text-sm font-medium text-slate-300">上传商品图片</label>
+                  <div className="text-xs text-slate-500">
+                    提示：图片越清晰、角度越完整，生成结果越贴近实物，货不对板概率越小
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <ImageUploadZone
+                    files={files}
+                    previewUrls={previewUrls}
+                    onFilesChange={handleFilesChange}
+                    maxFiles={8}
+                  />
+                </div>
               </motion.div>
 
               {/* Generate Button */}

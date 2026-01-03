@@ -1,4 +1,4 @@
-import type { Adapter } from "@auth/core/adapters"
+import type { Adapter } from "next-auth/adapters"
 import prisma from "@/lib/prisma"
 
 // 自定义 NextAuth Adapter，兼容 Prisma 7 Driver Adapter

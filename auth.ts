@@ -248,10 +248,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // 首次登录时，将用户信息添加到 token
       if (user) {
         token.id = user.id!
-        token.username = user.username
-        token.credits = user.credits
-        token.bonusCredits = user.bonusCredits
-        token.role = user.role
+        token.username = (user as any).username
+        token.credits = (user as any).credits
+        token.bonusCredits = (user as any).bonusCredits
+        token.role = (user as any).role
       }
       return token
     },

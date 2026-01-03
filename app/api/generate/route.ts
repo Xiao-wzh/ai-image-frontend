@@ -183,7 +183,7 @@ export async function POST(req: NextRequest) {
     if (!webhookUrl) throw new Error("N8N_GRSAI_WEBHOOK_URL 未配置")
 
     const n8nPayload = {
-      username: session?.user?.username,
+      username: (session?.user as any)?.username ?? (session?.user as any)?.name ?? null,
       generation_id: generationId,
       product_name: productName,
       product_type: ProductTypePromptKey[productType] || productType,
@@ -236,6 +236,13 @@ export async function POST(req: NextRequest) {
       totalCredits: (updatedUser?.credits ?? 0) + (updatedUser?.bonusCredits ?? 0),
     })
   } catch (err: any) {
+    // catch 里拿不到 try 内部的 body（作用域不同），需要在外层重新解析一次
+    // 这里仅用于判断是否为折扣重试，以便生成正确的退款描述与回滚标记
+    const retryFromId = await req
+      .clone()
+      .json()
+      .then((b) => (b?.retryFromId as string | undefined))
+      .catch(() => undefined)
     const message = err?.message || String(err)
     console.error("❌ 生成 API 错误:", message)
 
