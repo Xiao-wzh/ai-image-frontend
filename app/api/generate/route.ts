@@ -31,18 +31,34 @@ export async function POST(req: NextRequest) {
     const productName = String(body?.productName ?? "").trim()
     const productType = String(body?.productType ?? "").trim() as ProductTypeKey
     const platformKey = String(body?.platformKey ?? "SHOPEE").trim().toUpperCase()
-    const images = (body?.images ?? []) as unknown
+    const rawImages = body?.images
 
     if (!productName) throw new Error("请填写商品名称")
     if (!productType) throw new Error("请选择商品类型")
 
-    if (!Array.isArray(images) || images.length === 0) {
-      throw new Error("请至少上传 1 张图片")
+    let imageUrls: string[] = []
+
+    if (Array.isArray(rawImages)) {
+      imageUrls = rawImages.map((x) => String(x).trim()).filter(Boolean)
+    } else if (typeof rawImages === "string") {
+      try {
+        const parsed = JSON.parse(rawImages)
+        if (Array.isArray(parsed)) {
+          imageUrls = parsed.map((x) => String(x).trim()).filter(Boolean)
+        } else if (rawImages.trim()) {
+          imageUrls = [rawImages.trim()]
+        }
+      } catch {
+        if (rawImages.trim()) imageUrls = [rawImages.trim()]
+      }
+    } else if (rawImages && typeof rawImages === "object") {
+      imageUrls = Object.values(rawImages)
+        .map((x) => String(x).trim())
+        .filter(Boolean)
     }
 
-    const imageUrls = images.map((x) => String(x).trim()).filter(Boolean)
     if (imageUrls.length === 0) {
-      throw new Error("图片 URL 无效")
+      throw new Error("请至少上传 1 张图片")
     }
 
     // 2) 原子扣费（并发安全） + 写入扣费流水
