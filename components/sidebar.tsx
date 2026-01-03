@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "./ui/button"
 import { PricingModal } from "./pricing-modal"
+import { useLoginModal } from "@/hooks/use-login-modal"
 
 type NavItem = {
   icon: any
@@ -27,6 +28,7 @@ export function Sidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false)
+  const loginModal = useLoginModal()
 
   // 获取头像 fallback 文字
   const getFallbackText = () => {
@@ -143,7 +145,7 @@ export function Sidebar() {
                 </div>
                 <div className="text-sm text-slate-400 mb-3">未登录</div>
                 <Button
-                  onClick={() => {}}
+                  onClick={() => loginModal.open()}
                   className="w-full text-xs bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-all"
                   size="sm"
                 >
