@@ -2,28 +2,43 @@
 
 import { useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Download, RefreshCw, ZoomIn, Grid, Image as ImageIcon, Loader2 } from "lucide-react"
-import JSZip from 'jszip'
+import {
+  Download,
+  RefreshCw,
+  ZoomIn,
+  Grid,
+  Image as ImageIcon,
+  Loader2,
+  Sparkles as SparklesIcon,
+  Flag,
+} from "lucide-react"
+import JSZip from "jszip"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 interface GenerationResultProps {
+  generationId: string
   generatedImages: string[]
   fullImageUrl: string | null
   productName: string
   onTryAnother: () => void
+  onDiscountRetry: (generationId: string) => void
   onPreview: (url: string) => void
 }
 
 export function GenerationResult({
+  generationId,
   generatedImages,
   fullImageUrl,
   productName,
   onTryAnother,
+  onDiscountRetry,
   onPreview,
 }: GenerationResultProps) {
-  const [viewMode, setViewMode] = useState<'grid' | 'full'>('grid')
+  const [viewMode, setViewMode] = useState<"grid" | "full">("grid")
   const [isDownloading, setIsDownloading] = useState(false)
+  const [hasUsedRetry, setHasUsedRetry] = useState(false)
 
   const handleDownload = async () => {
     if (generatedImages.length === 0) return
@@ -31,21 +46,16 @@ export function GenerationResult({
     setIsDownloading(true)
     try {
       const zip = new JSZip()
-
-      // 创建以商品名称命名的文件夹
-      const folderName = productName || 'generated-images'
+      const folderName = productName || "generated-images"
       const folder = zip.folder(folderName)
 
       if (!folder) {
-        throw new Error('创建文件夹失败')
+        throw new Error("创建文件夹失败")
       }
 
-      console.log(`开始通过后端下载 ${generatedImages.length} 张图片...`)
-
-      // 调用后端API下载图片（绕过CORS）
-      const response = await fetch('/api/download-images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/download-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageUrls: generatedImages }),
       })
 
@@ -56,61 +66,42 @@ export function GenerationResult({
       const data = await response.json()
 
       if (!data.success || !Array.isArray(data.images)) {
-        throw new Error('API返回数据格式错误')
+        throw new Error("API返回数据格式错误")
       }
 
       let successCount = 0
-
-      // 将Base64图片添加到ZIP
       data.images.forEach((imageData: any, index: number) => {
         if (imageData.success && imageData.data) {
-          const fileExtension = imageData.contentType?.split('/')[1] || 'png'
+          const fileExtension = imageData.contentType?.split("/")[1] || "png"
           const fileName = `${index + 1}.${fileExtension}`
-
-          // 将base64转换为blob
-          const binaryString = atob(imageData.data)
-          const bytes = new Uint8Array(binaryString.length)
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i)
-          }
-
-          folder.file(fileName, bytes)
+          folder.file(fileName, atob(imageData.data), { binary: true })
           successCount++
-          console.log(`第 ${index + 1} 张图片已添加到ZIP`)
-        } else {
-          console.error(`第 ${index + 1} 张图片下载失败:`, imageData.error)
         }
       })
 
-      console.log(`成功添加 ${successCount}/${generatedImages.length} 张图片到ZIP`)
-
       if (successCount === 0) {
-        throw new Error('所有图片下载失败')
+        throw new Error("所有图片下载失败")
       }
 
-      // 生成 ZIP 文件并下载
-      console.log('正在生成ZIP文件...')
-      const zipBlob = await zip.generateAsync({ type: 'blob' })
-      console.log(`ZIP文件生成成功，大小: ${zipBlob.size} bytes`)
-
+      const zipBlob = await zip.generateAsync({ type: "blob" })
       const url = URL.createObjectURL(zipBlob)
-      const a = document.createElement('a')
+      const a = document.createElement("a")
       a.href = url
       a.download = `${folderName}-${Date.now()}.zip`
       document.body.appendChild(a)
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-
-      if (successCount < generatedImages.length) {
-        alert(`下载完成！成功下载 ${successCount}/${generatedImages.length} 张图片`)
-      }
     } catch (error) {
-      console.error('生成压缩包失败:', error)
-      alert(`下载失败: ${error instanceof Error ? error.message : '未知错误'}\n\n请查看浏览器控制台获取详细信息`)
+      console.error("生成压缩包失败:", error)
     } finally {
       setIsDownloading(false)
     }
+  }
+
+  const handleDiscountRetryClick = () => {
+    setHasUsedRetry(true) // Optimistically hide the button
+    onDiscountRetry(generationId)
   }
 
   return (
@@ -122,6 +113,16 @@ export function GenerationResult({
     >
       {/* Success & View Toggle */}
       <div className="flex justify-between items-center gap-3 flex-wrap">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => toast.success("反馈已收到，客服审核确认后会返还积分")}
+          className="h-8 rounded-lg text-xs text-slate-500 hover:text-slate-200 hover:bg-white/5"
+        >
+          <Flag className="w-4 h-4 mr-2" />
+          图片与实物不符？点击申述退还积分
+        </Button>
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -140,12 +141,12 @@ export function GenerationResult({
           <div className="flex items-center gap-2 p-1 rounded-xl bg-white/5 border border-white/10">
             <Button
               size="sm"
-              onClick={() => setViewMode('grid')}
+              onClick={() => setViewMode("grid")}
               className={cn(
                 "h-8 rounded-lg text-xs",
-                viewMode === 'grid' 
+                viewMode === "grid"
                   ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
-                  : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white"
+                  : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white",
               )}
             >
               <Grid className="w-4 h-4 mr-2" />
@@ -153,12 +154,12 @@ export function GenerationResult({
             </Button>
             <Button
               size="sm"
-              onClick={() => setViewMode('full')}
+              onClick={() => setViewMode("full")}
               className={cn(
                 "h-8 rounded-lg text-xs",
-                viewMode === 'full' 
+                viewMode === "full"
                   ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
-                  : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white"
+                  : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white",
               )}
             >
               <ImageIcon className="w-4 h-4 mr-2" />
@@ -177,8 +178,7 @@ export function GenerationResult({
           exit={{ opacity: 0, y: -10 }}
           transition={{ duration: 0.3 }}
         >
-          {viewMode === 'grid' ? (
-            // Grid View
+          {viewMode === "grid" ? (
             <div className="grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/20 backdrop-blur-sm bg-slate-900/50 p-2 max-h-[62vh] overflow-y-auto">
               {generatedImages.map((img, i) => (
                 <motion.div
@@ -190,7 +190,7 @@ export function GenerationResult({
                   whileHover={{ scale: 1.05 }}
                 >
                   <img src={img} alt={`Generated slice ${i + 1}`} className="w-full h-full object-cover" />
-                  <div 
+                  <div
                     className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
                     onClick={() => onPreview(img)}
                   >
@@ -200,19 +200,18 @@ export function GenerationResult({
               ))}
             </div>
           ) : (
-            // Full Image View
             <motion.div
               className="relative group rounded-2xl overflow-hidden border border-white/20 backdrop-blur-sm flex items-center justify-center bg-slate-900/50"
               whileHover={{ scale: 1.02 }}
             >
               <img
-                src={fullImageUrl || ''}
+                src={fullImageUrl || ""}
                 alt="Generated Full Image"
                 className="max-w-full max-h-[70vh] object-contain"
               />
-              <div 
+              <div
                 className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                onClick={() => onPreview(fullImageUrl || '')}
+                onClick={() => onPreview(fullImageUrl || "")}
               >
                 <ZoomIn className="w-8 h-8 text-white" />
               </div>
@@ -226,7 +225,7 @@ export function GenerationResult({
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className="grid grid-cols-2 gap-3"
+        className="grid grid-cols-3 gap-3"
       >
         <Button
           onClick={handleDownload}
@@ -234,24 +233,32 @@ export function GenerationResult({
           variant="outline"
           className="h-12 rounded-xl border-white/20 bg-white/5 hover:bg-white/10 text-white backdrop-blur-sm transition-all group disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <motion.div whileHover={{ y: -2 }} transition={{ type: "spring", stiffness: 300 }}>
-            {isDownloading ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Download className="w-4 h-4 mr-2" />
-            )}
-          </motion.div>
-          {isDownloading ? '下载中...' : '下载全部图片'}
+          {isDownloading ? (
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+          ) : (
+            <Download className="w-4 h-4 mr-2 transition-transform group-hover:-translate-y-0.5" />
+          )}
+          {isDownloading ? "下载中..." : "下载全部"
+          }
         </Button>
+
+        {!hasUsedRetry && (
+          <Button
+            onClick={handleDiscountRetryClick}
+            variant="outline"
+            className="h-12 rounded-xl border-yellow-400/50 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-300 backdrop-blur-sm transition-all group"
+          >
+            <SparklesIcon className="w-4 h-4 mr-2 transition-transform group-hover:scale-110" />
+            优惠重试 (99积分)
+          </Button>
+        )}
 
         <Button
           onClick={onTryAnother}
           className="h-12 rounded-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white font-semibold shadow-lg shadow-purple-500/50 hover:shadow-xl hover:shadow-purple-500/60 transition-all group"
         >
-          <motion.div whileHover={{ rotate: 180 }} transition={{ type: "spring", stiffness: 200 }}>
-            <RefreshCw className="w-4 h-4 mr-2" />
-          </motion.div>
-          再生成一张
+          <RefreshCw className="w-4 h-4 mr-2 transition-transform group-hover:rotate-180" />
+          再来一次
         </Button>
       </motion.div>
     </motion.div>

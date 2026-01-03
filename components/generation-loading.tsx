@@ -207,6 +207,10 @@ export function GenerationLoading() {
           </motion.div>
         </AnimatePresence>
       </div>
+
+      <div className="text-xs text-slate-500 animate-pulse text-center">
+        预计耗时 1-3 分钟，请耐心等待...
+      </div>
     </motion.div>
   )
 }

@@ -138,8 +138,9 @@ model Generation {
   originalImage   String[]
   generatedImage  String?  @db.Text /// 存储完整的、未裁剪的原图 URL
   generatedImages String[] /// 存储九宫格切片图片 URL 数组
-  status          String   @default("PENDING")
-  createdAt       DateTime @default(now())
+  status                   String   @default("PENDING")
+  hasUsedDiscountedRetry Boolean @default(false)
+  createdAt                DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 }
