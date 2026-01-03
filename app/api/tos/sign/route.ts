@@ -62,8 +62,8 @@ export async function POST(req: NextRequest) {
     .replace(/\/$/, "")
 
   // 如果用户给的是不带协议的 endpoint，这里统一补 https
-  const base = endpoint.startsWith("http") ? endpoint : `https://${endpoint}`
-  const publicUrl = `${base}/${TOS_BUCKET}/${objectKey}`
+  const base = endpoint.startsWith("http") ? endpoint : `https://${TOS_BUCKET}.${endpoint}`
+  const publicUrl = `${base}/${objectKey}`
 
   return NextResponse.json({
     uploadUrl,
