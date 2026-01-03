@@ -159,7 +159,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
       setFullImageUrl(null)
 
       // 1) 直传 TOS：逐个文件签名并 PUT 上传
-      toast.message("正在上传图片...")
+      toast.success("正在上传图片...")
       const uploadedUrls: string[] = []
 
       for (const file of files) {
@@ -365,38 +365,22 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                 />
               </motion.div>
 
-              {/* Pricing Info */}
+              {/* Generate Button */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.4 }}
-                className="glass rounded-xl p-4 border border-white/10"
+                className="relative pt-4"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-400">生成价格</span>
-                    <span className="px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 text-xs font-bold border border-red-500/30">
-                      75% OFF
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-slate-500 line-through">800</span>
-                    <span className="text-2xl font-bold gradient-text">199</span>
-                    <span className="text-sm text-slate-400">积分</span>
-                  </div>
+                {/* Discount Badge */}
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-1 bg-yellow-400 rounded-full text-slate-900 text-xs font-bold shadow-lg z-10">
+                  🔥 2.5折特惠 <span className="line-through opacity-70 ml-1">原价 800</span>
                 </div>
-                <p className="text-xs text-slate-500 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" />
-                  一次生成即得 9 张精选商品图
-                </p>
-              </motion.div>
 
-              {/* Generate Button */}
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
                 <Button
                   onClick={onSubmit}
                   disabled={isSubmitting || typeSelectDisabled}
-                  className="w-full h-14 rounded-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white font-semibold text-base shadow-lg shadow-purple-500/50 hover:shadow-xl hover:shadow-purple-500/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed glow-purple relative overflow-hidden group"
+                  className="w-full h-16 rounded-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 hover:from-blue-700 hover:via-purple-700 hover:to-pink-700 text-white font-semibold shadow-lg shadow-purple-500/50 hover:shadow-xl hover:shadow-purple-500/60 transition-all disabled:opacity-50 disabled:cursor-not-allowed glow-purple relative overflow-hidden group flex flex-col items-center justify-center"
                 >
                   <motion.div
                     className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent"
@@ -404,11 +388,17 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                     whileHover={{ x: "100%" }}
                     transition={{ duration: 0.5 }}
                   />
-                  <span className="relative flex items-center justify-center gap-2">
+                  <div className="relative flex items-center justify-center gap-2 text-base">
                     <Sparkles className="w-5 h-5" />
-                    生成图像
-                  </span>
+                    <span>生成图像</span>
+                  </div>
+                  <div className="relative text-xs opacity-70 mt-1">费用 {GENERATION_COST} 积分</div>
                 </Button>
+
+                <p className="text-xs text-slate-500 text-center mt-3 flex items-center justify-center gap-1">
+                  <Sparkles className="w-3 h-3" />
+                  一次生成即得 9 张精选图
+                </p>
               </motion.div>
             </motion.div>
           ) : isSubmitting ? (
