@@ -20,9 +20,9 @@ const STORE_URL = "http://yunjishou.com/shop/5AE4JRCQ"
 
 const tiers = [
   { id: "tier_30", price: 30, credits: 3000, bonus: 0, label: "入门" },
-  { id: "tier_100", price: 100, credits: 10000, bonus: 2000, label: "热销" },
-  { id: "tier_300", price: 300, credits: 30000, bonus: 8000, label: "专业" },
-  { id: "tier_1000", price: 1000, credits: 100000, bonus: 30000, label: "旗舰" },
+  { id: "tier_100", price: 100, credits: 10000, bonus: 300, label: "热销" },
+  { id: "tier_300", price: 300, credits: 30000, bonus: 1000, label: "专业" },
+  { id: "tier_1000", price: 1000, credits: 100000, bonus: 5000, label: "旗舰" },
 ]
 
 interface PricingModalProps {

@@ -8,7 +8,7 @@ const loadingSteps = [
   { Icon: Rocket, text: "上传到安全云端" },
   { Icon: BrainCircuit, text: "AI 分析图像构图" },
   { Icon: Palette, text: "渲染高清细节" },
-  { Icon: Wand2, text: "最后润色中" },
+  { Icon: Wand2, text: "润色中" },
 ]
 
 export function GenerationLoading() {
