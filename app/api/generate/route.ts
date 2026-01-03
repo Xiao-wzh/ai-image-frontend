@@ -112,6 +112,9 @@ export async function POST(req: NextRequest) {
     deductedBonus = deductResult.deductBonus
     deductedPaid = deductResult.deductPaid
 
+    console.log("STEP2 deduct ok", { deductedBonus, deductedPaid })
+
+console.log("STEP3 about to create generation", { imageUrlsType: typeof imageUrls, isArray: Array.isArray(imageUrls), len: imageUrls.length })
     // 3) 创建 PENDING 记录
     const pending = await prisma.generation.create({
       data: {
@@ -123,6 +126,9 @@ export async function POST(req: NextRequest) {
       },
     })
     generationId = pending.id
+    console.log("STEP3 created generation", pending.id)
+
+console.log("STEP4 about to find prompt", { platformKey, productType, userId })
 
     // 4) 查询 Prompt
     const promptRecord =
@@ -138,6 +144,8 @@ export async function POST(req: NextRequest) {
         where: { isActive: true, productType, userId: null, platform: { key: "GENERAL" } },
         orderBy: { updatedAt: "desc" },
       }))
+      console.log("STEP4 found prompt", !!promptRecord)
+
 
     if (!promptRecord) {
       throw new Error(`未找到 Prompt 模板：platformKey=${platformKey}, productType=${productType}`)
@@ -208,6 +216,7 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     const message = err?.message || String(err)
     console.error("❌ 生成 API 错误:", message)
+    console.error("❌ stack:", err?.stack)
 
     if (generationId) {
       await prisma.generation.update({ where: { id: generationId }, data: { status: "FAILED" } }).catch(() => {})
