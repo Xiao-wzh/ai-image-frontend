@@ -112,9 +112,6 @@ export async function POST(req: NextRequest) {
     deductedBonus = deductResult.deductBonus
     deductedPaid = deductResult.deductPaid
 
-    console.log("STEP2 deduct ok", { deductedBonus, deductedPaid })
-
-console.log("STEP3 about to create generation", { imageUrlsType: typeof imageUrls, isArray: Array.isArray(imageUrls), len: imageUrls.length })
     // 3) 创建 PENDING 记录
     const pending = await prisma.generation.create({
       data: {
@@ -126,9 +123,6 @@ console.log("STEP3 about to create generation", { imageUrlsType: typeof imageUrl
       },
     })
     generationId = pending.id
-    console.log("STEP3 created generation", pending.id)
-
-console.log("STEP4 about to find prompt", { platformKey, productType, userId })
 
     // 4) 查询 Prompt
     const promptRecord =
@@ -144,8 +138,6 @@ console.log("STEP4 about to find prompt", { platformKey, productType, userId })
         where: { isActive: true, productType, userId: null, platform: { key: "GENERAL" } },
         orderBy: { updatedAt: "desc" },
       }))
-      console.log("STEP4 found prompt", !!promptRecord)
-
 
     if (!promptRecord) {
       throw new Error(`未找到 Prompt 模板：platformKey=${platformKey}, productType=${productType}`)
@@ -156,6 +148,7 @@ console.log("STEP4 about to find prompt", { platformKey, productType, userId })
     if (!webhookUrl) throw new Error("N8N_GRSAI_WEBHOOK_URL 未配置")
 
     const n8nPayload = {
+      username: session?.user?.username,
       generation_id: generationId,
       product_name: productName,
       product_type: ProductTypePromptKey[productType] || productType,
