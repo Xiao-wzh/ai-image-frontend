@@ -51,9 +51,6 @@ export async function POST(req: NextRequest) {
     key: objectKey,
     method: "PUT",
     expires: 300,
-    headers: {
-      "Content-Type": contentType,
-    },
   })
 
   // publicUrl：假设桶公有读
