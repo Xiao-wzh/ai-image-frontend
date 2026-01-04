@@ -39,7 +39,6 @@ export async function GET(req: NextRequest) {
             },
           }
         : {}),
-      status: "COMPLETED" as const,
     }
 
     const [items, total] = await Promise.all([
@@ -54,6 +53,7 @@ export async function GET(req: NextRequest) {
           productType: true,
           generatedImages: true,
           generatedImage: true, // 恢复拼接原图字段
+          status: true,
           createdAt: true,
         },
       }),

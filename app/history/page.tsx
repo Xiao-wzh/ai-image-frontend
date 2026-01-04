@@ -34,6 +34,7 @@ export default function HistoryPage() {
   const [activeIndex, setActiveIndex] = useState(0)
 
   const limit = 20
+  const POLL_INTERVAL_MS = 8000
 
   const fetchPage = async (nextOffset: number, append: boolean) => {
     const params = new URLSearchParams()
@@ -59,9 +60,6 @@ export default function HistoryPage() {
       setLoading(true)
       try {
         await fetchPage(0, false)
-        if (!cancelled) {
-          // nothing
-        }
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -71,6 +69,33 @@ export default function HistoryPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuery])
+
+  // 当列表中存在 PENDING 任务时，自动轮询刷新
+  useEffect(() => {
+    const hasPending = items.some((x) => String((x as any).status || "").toUpperCase() === "PENDING")
+    if (!hasPending) return
+
+    let cancelled = false
+    let timer: any
+
+    const tick = async () => {
+      if (cancelled) return
+      try {
+        await fetchPage(0, false)
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) timer = setTimeout(tick, POLL_INTERVAL_MS)
+      }
+    }
+
+    timer = setTimeout(tick, POLL_INTERVAL_MS)
+    return () => {
+      cancelled = true
+      if (timer) clearTimeout(timer)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, debouncedQuery])
 
   const onLoadMore = async () => {
     if (!hasMore || loadingMore) return
