@@ -201,7 +201,7 @@ export async function POST(req: NextRequest) {
 
     if (!n8nRes.ok) {
       const errorText = await n8nRes.text().catch(() => "")
-      throw new Error(`n8n 调用失败: ${n8nRes.status} ${n8nRes.statusText} - ${errorText}`)
+      throw new Error(`n8n 调用失败: ${n8nRes.status} ${n8nRes.statusText}`)
     }
 
     const rawText = await n8nRes.text().catch(() => "")

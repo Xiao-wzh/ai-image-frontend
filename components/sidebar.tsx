@@ -1,9 +1,9 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -15,11 +15,13 @@ type NavItem = {
   icon: any
   label: string
   href: string
+  badge?: "pending" // Special badge type
 }
 
 const navItems: NavItem[] = [
   { icon: Sparkles, label: "AI 生图", href: "/" },
   { icon: Images, label: "我的作品", href: "/history" },
+  { icon: ListTodo, label: "任务队列", href: "/tasks", badge: "pending" },
   { icon: Wallet, label: "积分流水", href: "/credits" },
 ]
 
@@ -29,6 +31,39 @@ export function Sidebar() {
   const router = useRouter()
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false)
   const loginModal = useLoginModal()
+  const [pendingCount, setPendingCount] = useState(0)
+
+  // Fetch pending task count
+  useEffect(() => {
+    if (!session?.user) return
+
+    let cancelled = false
+
+    const fetchPendingCount = async () => {
+      try {
+        const res = await fetch("/api/history?limit=50&offset=0")
+        if (!res.ok) return
+        const data = await res.json()
+        const items = data.items || []
+        const count = items.filter((x: any) => {
+          const s = String(x.status || "").toUpperCase()
+          return s === "PENDING" || s === "PROCESSING"
+        }).length
+        if (!cancelled) setPendingCount(count)
+      } catch {
+        // ignore
+      }
+    }
+
+    fetchPendingCount()
+
+    // Poll every 5 seconds if there are pending tasks
+    const interval = setInterval(fetchPendingCount, 5000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [session?.user])
 
   // 获取头像 fallback 文字
   const getFallbackText = () => {
@@ -66,12 +101,14 @@ export function Sidebar() {
               pathname === item.href ||
               (item.href === "/" ? pathname === "/" : pathname?.startsWith(item.href))
 
+            const showBadge = item.badge === "pending" && pendingCount > 0
+
             return (
               <button
                 key={item.label}
                 onClick={() => router.push(item.href)}
                 className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium",
+                  "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium relative",
                   isActive
                     ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg glow-blue"
                     : "text-slate-400 hover:text-white hover:bg-white/5",
@@ -79,6 +116,11 @@ export function Sidebar() {
               >
                 <item.icon className="w-4 h-4" />
                 <span>{item.label}</span>
+                {showBadge && (
+                  <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 animate-pulse">
+                    {pendingCount > 9 ? "9+" : pendingCount}
+                  </span>
+                )}
               </button>
             )
           })}

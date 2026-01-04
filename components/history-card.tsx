@@ -18,6 +18,7 @@ export type HistoryItem = {
   createdAt: string | Date
   status: string
   originalImage: string[]
+  hasUsedDiscountedRetry?: boolean
 }
 
 export function HistoryCard({
