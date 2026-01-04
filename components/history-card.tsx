@@ -17,6 +17,7 @@ export type HistoryItem = {
   generatedImage?: string | null
   createdAt: string | Date
   status: string
+  originalImage: string[]
 }
 
 export function HistoryCard({

@@ -1,6 +1,8 @@
 "use client"
 
 import { useEffect, useMemo, useState } from "react"
+import { useSession } from "next-auth/react"
+import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import JSZip from "jszip"
 import {
@@ -26,12 +28,15 @@ export function HistoryDetailDialog({
   onOpenChange,
   items,
   initialIndex,
+  onGenerateSuccess,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   items: HistoryItem[]
   initialIndex: number
+  onGenerateSuccess: () => void
 }) {
+  const { data: session } = useSession()
   const [index, setIndex] = useState(initialIndex)
   const [viewMode, setViewMode] = useState<"grid" | "full">("grid")
   const [isDownloading, setIsDownloading] = useState(false)
@@ -44,11 +49,48 @@ export function HistoryDetailDialog({
   const generatedImages = item?.generatedImages ?? []
   const fullImageUrl = item?.generatedImage ?? null
   const productName = item?.productName ?? "generated-images"
+  const originalImages = item?.originalImage ?? []
 
   const canPrev = index > 0
   const canNext = index < items.length - 1
 
   const title = useMemo(() => item?.productName || "作品详情", [item])
+
+  const handleRegenerate = async () => {
+    if (!item) return
+
+    const paid = (session?.user as any)?.credits ?? 0
+    const bonus = (session?.user as any)?.bonusCredits ?? 0
+    const total = paid + bonus
+
+    if (total < 199) {
+      toast.error("余额不足", { description: "再次生成需要 199 积分，请先充值" })
+      return
+    }
+
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productName: item.productName,
+          productType: item.productType,
+          images: item.originalImage,
+          platformKey: "SHOPEE",
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data?.error || `请求失败: ${res.status}`)
+      }
+
+      toast.success("任务已提交")
+      onOpenChange(false)
+      onGenerateSuccess()
+    } catch (e: any) {
+      toast.error(e?.message || "提交失败")
+    }
+  }
 
   const handleDownloadAll = async () => {
     if (!generatedImages.length) return
@@ -196,6 +238,23 @@ export function HistoryDetailDialog({
             </div>
           </div>
 
+          {/* 原始参考图 */}
+          <div className="mt-6">
+            <div className="text-sm font-semibold text-white mb-3">原始参考图</div>
+            {originalImages.length > 0 ? (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {originalImages.map((url, i) => (
+                  <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-white/10 bg-slate-900/40">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={url} alt={`Original ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-xs text-slate-500">无原始参考图</div>
+            )}
+          </div>
+
           <AnimatePresence mode="wait">
             <motion.div
               key={viewMode}
@@ -246,7 +305,15 @@ export function HistoryDetailDialog({
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-white/10 shrink-0">
+        <div className="p-4 border-t border-white/10 shrink-0 flex items-center justify-between gap-3 flex-wrap">
+          <Button
+            onClick={handleRegenerate}
+            variant="outline"
+            className="h-11 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white"
+          >
+            🔄 再次生成 (199积分)
+          </Button>
+
           <Button
             onClick={handleDownloadAll}
             disabled={isDownloading}

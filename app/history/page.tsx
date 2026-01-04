@@ -97,6 +97,10 @@ export default function HistoryPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, debouncedQuery])
 
+  const handleRefresh = () => {
+    fetchPage(0, false)
+  }
+
   const onLoadMore = async () => {
     if (!hasMore || loadingMore) return
     setLoadingMore(true)
@@ -221,7 +225,13 @@ export default function HistoryPage() {
         </main>
       </div>
 
-      <HistoryDetailDialog open={open} onOpenChange={setOpen} items={items} initialIndex={activeIndex} />
+      <HistoryDetailDialog
+        open={open}
+        onOpenChange={setOpen}
+        items={items}
+        initialIndex={activeIndex}
+        onGenerateSuccess={handleRefresh}
+      />
     </div>
   )
 }

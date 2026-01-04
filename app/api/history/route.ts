@@ -52,7 +52,8 @@ export async function GET(req: NextRequest) {
           productName: true,
           productType: true,
           generatedImages: true,
-          generatedImage: true, // 恢复拼接原图字段
+          // generatedImage: true, // 恢复拼接原图字段
+          originalImage: true,
           status: true,
           createdAt: true,
         },
