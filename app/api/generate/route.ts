@@ -13,7 +13,7 @@ const RETRY_COST = 99
 export async function POST(req: NextRequest) {
   let generationId: string | null = null
   let preDeducted = false
-  let cost = STANDARD_COST
+  let actualCost = STANDARD_COST
 
   let deductedBonus = 0
   let deductedPaid = 0
@@ -24,10 +24,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "请先登录" }, { status: 401 })
   }
 
-  try {
-    const body = await req.json().catch(() => null)
-    const retryFromId = body?.retryFromId as string | undefined
+  // 在 try 外部预先解析 body，以便 catch 块可以访问
+  const body = await req.clone().json().catch(() => null)
+  const retryFromId = body?.retryFromId as string | undefined
 
+  try {
     let productName: string
     let productType: ProductTypeKey
     let platformKey: string
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest) {
 
     if (retryFromId) {
       // --- 重试流程 ---
-      cost = RETRY_COST
+      actualCost = RETRY_COST
 
       const originalGeneration = await prisma.generation.findUnique({
         where: { id: retryFromId },
@@ -51,17 +52,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "该记录已使用过折扣重试机会" }, { status: 400 })
       }
 
-      // 从原始记录中获取数据
       productName = originalGeneration.productName
       productType = originalGeneration.productType as ProductTypeKey
       imageUrls = originalGeneration.originalImage
-      // 注意：platformKey 未存储在 Generation 中，这里暂时使用默认值
-      // 如需精确重试，Generation 表也应记录 platformKey
-      platformKey = "SHOPEE"
-
+      platformKey = "SHOPEE" // 暂时硬编码
     } else {
       // --- 标准流程 ---
-      cost = STANDARD_COST
+      actualCost = STANDARD_COST
 
       productName = String(body?.productName ?? "").trim()
       productType = String(body?.productType ?? "").trim() as ProductTypeKey
@@ -103,12 +100,12 @@ export async function POST(req: NextRequest) {
       }
 
       const totalCredits = (userRow.credits ?? 0) + (userRow.bonusCredits ?? 0)
-      if (totalCredits < cost) {
-        return { ok: false as const, status: 402 as const, error: `余额不足 (需要 ${cost} 积分，当前 ${totalCredits})` }
+      if (totalCredits < actualCost) {
+        return { ok: false as const, status: 402 as const, error: `余额不足 (需要 ${actualCost} 积分，当前 ${totalCredits})` }
       }
 
-      const deductBonus = Math.min(userRow.bonusCredits || 0, cost)
-      const deductPaid = cost - deductBonus
+      const deductBonus = Math.min(userRow.bonusCredits || 0, actualCost)
+      const deductPaid = actualCost - deductBonus
 
       await tx.user.update({
         where: { id: userId },
@@ -118,13 +115,12 @@ export async function POST(req: NextRequest) {
       await tx.creditRecord.create({
         data: {
           userId,
-          amount: -cost,
+          amount: -actualCost,
           type: "CONSUME",
           description: retryFromId ? `折扣重试: ${productName}` : `生成图片: ${productName}`,
         },
       })
 
-      // 如果是重试，标记原始记录
       if (retryFromId) {
         await tx.generation.update({
           where: { id: retryFromId },
@@ -143,10 +139,6 @@ export async function POST(req: NextRequest) {
     deductedBonus = deductResult.deductBonus
     deductedPaid = deductResult.deductPaid
 
-    // 3) 创建新的 PENDING 记录
-    // 约定：
-    // - hasUsedDiscountedRetry 语义是“这条记录是否已经用掉了它自己的折扣重试资格”
-    // - 因此：当本次生成是通过折扣重试产生的新记录时，它不应再次享有折扣重试资格，应直接标记为 true
     const pending = await prisma.generation.create({
       data: {
         userId,
@@ -159,7 +151,6 @@ export async function POST(req: NextRequest) {
     })
     generationId = pending.id
 
-    // 4) 查询 Prompt
     const promptRecord =
       (await prisma.productTypePrompt.findFirst({
         where: { isActive: true, productType, userId, platform: { key: platformKey } },
@@ -178,7 +169,6 @@ export async function POST(req: NextRequest) {
       throw new Error(`未找到 Prompt 模板：platformKey=${platformKey}, productType=${productType}`)
     }
 
-    // 5) 调用 n8n Webhook
     const webhookUrl = process.env.N8N_GRSAI_WEBHOOK_URL
     if (!webhookUrl) throw new Error("N8N_GRSAI_WEBHOOK_URL 未配置")
 
@@ -194,14 +184,26 @@ export async function POST(req: NextRequest) {
 
     console.log(`[N8N_REQUEST] User: ${userId}, Payload: `, JSON.stringify(n8nPayload, null, 2))
 
-    const n8nRes = await fetch(webhookUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(n8nPayload) })
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 180_000)
+
+    let n8nRes: Response
+    try {
+      n8nRes = await fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(n8nPayload),
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timeoutId)
+    }
 
     if (!n8nRes.ok) {
       const errorText = await n8nRes.text().catch(() => "")
       throw new Error(`n8n 调用失败: ${n8nRes.status} ${n8nRes.statusText} - ${errorText}`)
     }
 
-    // n8n 可能在异常情况下返回空 body，直接 json() 会抛 Unexpected end of JSON input
     const rawText = await n8nRes.text().catch(() => "")
     if (!rawText) {
       throw new Error("n8n 响应为空")
@@ -221,10 +223,8 @@ export async function POST(req: NextRequest) {
       throw new Error("n8n 响应未包含九宫格图片数组 (images)")
     }
 
-    // 6) 更新记录为 COMPLETED
     await prisma.generation.update({ where: { id: pending.id }, data: { generatedImages, generatedImage: fullImageUrl, status: "COMPLETED" } })
 
-    // 7) 返回成功响应
     const updatedUser = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true, bonusCredits: true } })
 
     return NextResponse.json({
@@ -236,14 +236,12 @@ export async function POST(req: NextRequest) {
       totalCredits: (updatedUser?.credits ?? 0) + (updatedUser?.bonusCredits ?? 0),
     })
   } catch (err: any) {
-    // catch 里拿不到 try 内部的 body（作用域不同），需要在外层重新解析一次
-    // 这里仅用于判断是否为折扣重试，以便生成正确的退款描述与回滚标记
-    const retryFromId = await req
-      .clone()
-      .json()
-      .then((b) => (b?.retryFromId as string | undefined))
-      .catch(() => undefined)
     const message = err?.message || String(err)
+    const errName = err?.name
+    if (errName === "AbortError" || errName === "TimeoutError") {
+      console.error("⏱️ N8N Response Timeout - Refunding user")
+    }
+
     console.error("❌ 生成 API 错误:", message)
 
     if (generationId) {
@@ -251,6 +249,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (preDeducted) {
+      console.log("🔄 准备执行退款...")
       try {
         if (userId) {
           await prisma.$transaction(async (tx) => {
@@ -259,9 +258,8 @@ export async function POST(req: NextRequest) {
               data: { bonusCredits: { increment: deductedBonus }, credits: { increment: deductedPaid } },
             })
             await tx.creditRecord.create({
-              data: { userId, amount: cost, type: "REFUND", description: retryFromId ? "折扣重试失败退款" : "生成失败退款" },
+              data: { userId, amount: actualCost, type: "REFUND", description: retryFromId ? "折扣重试失败退款" : "生成失败退款" },
             })
-            // 如果是重试失败，需要把原始记录的 hasUsedDiscountedRetry 标记回滚
             if (retryFromId) {
               await tx.generation.update({ where: { id: retryFromId }, data: { hasUsedDiscountedRetry: false } })
             }

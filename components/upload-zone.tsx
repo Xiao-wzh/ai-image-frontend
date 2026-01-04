@@ -366,12 +366,12 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                 </div>
 
                 <div className="mt-3">
-                  <ImageUploadZone
-                    files={files}
-                    previewUrls={previewUrls}
-                    onFilesChange={handleFilesChange}
-                    maxFiles={8}
-                  />
+                <ImageUploadZone
+                  files={files}
+                  previewUrls={previewUrls}
+                  onFilesChange={handleFilesChange}
+                  maxFiles={8}
+                />
                 </div>
               </motion.div>
 
