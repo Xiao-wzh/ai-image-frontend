@@ -185,7 +185,7 @@ export async function POST(req: NextRequest) {
     console.log(`[N8N_REQUEST] User: ${userId}, Payload: `, JSON.stringify(n8nPayload, null, 2))
 
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 180_000)
+    const timeoutId = setTimeout(() => controller.abort(), 360_000)
 
     let n8nRes: Response
     try {
@@ -239,13 +239,13 @@ export async function POST(req: NextRequest) {
     const message = err?.message || String(err)
     const errName = err?.name
     if (errName === "AbortError" || errName === "TimeoutError") {
-      console.error("⏱️ N8N Response Timeout - Refunding user")
+      console.error("⏱️ N8N Response Timeout - 为用户退款")
     }
 
     console.error("❌ 生成 API 错误:", message)
 
     if (generationId) {
-      await prisma.generation.update({ where: { id: generationId }, data: { status: "FAILED" } }).catch(() => {})
+      await prisma.generation.update({ where: { id: generationId }, data: { status: "FAILED" } }).catch(() => { })
     }
 
     if (preDeducted) {

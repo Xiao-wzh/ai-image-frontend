@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
           },
         }
         : {}),
+      // status: "COMPLETED" as const,
     }
 
     const [items, total] = await Promise.all([
