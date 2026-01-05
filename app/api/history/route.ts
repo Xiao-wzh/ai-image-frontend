@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
 
     const query = String(searchParams.get("query") ?? "").trim()
+    const status = searchParams.get("status") // Optional: COMPLETED, PENDING, FAILED
 
     const limitRaw = Number(searchParams.get("limit") ?? DEFAULT_LIMIT)
     const offsetRaw = Number(searchParams.get("offset") ?? 0)
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
           },
         }
         : {}),
-      // status: "COMPLETED" as const,
+      ...(status ? { status } : {}),
     }
 
     const [items, total] = await Promise.all([
