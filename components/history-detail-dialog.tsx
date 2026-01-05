@@ -401,22 +401,23 @@ export function HistoryDetailDialog({
           {/* Footer */}
           <div className="p-4 border-t border-white/10 shrink-0 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
-              <Button
-                onClick={() => setShowRegenerateConfirm(true)}
-                variant="outline"
-                className="h-11 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white"
-              >
-                🔄 再次生成 (199积分)
-              </Button>
-
-              {!item?.hasUsedDiscountedRetry && (
+              {/* Smart Regenerate Button - auto-detects discount availability */}
+              {!item?.hasUsedDiscountedRetry ? (
                 <Button
                   onClick={() => setShowDiscountConfirm(true)}
                   variant="outline"
                   className="h-11 rounded-xl border-yellow-400/50 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-300"
                 >
                   <SparklesIcon className="w-4 h-4 mr-2" />
-                  优惠重试 (99积分)
+                  重新生成 (99积分)
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => setShowRegenerateConfirm(true)}
+                  variant="outline"
+                  className="h-11 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white"
+                >
+                  🔄 重新生成 (199积分)
                 </Button>
               )}
 
@@ -582,7 +583,7 @@ export function HistoryDetailDialog({
               确认申诉
             </h4>
             <p className="text-sm text-slate-400 mb-4">
-              如果您对生成结果不满意，可以提交申诉申请退款。
+              如果生成出来的图片货不对版，可以提交申诉申请退还积分。
               <br />
               <span className="text-orange-400 font-medium">预计退还 {item?.hasUsedDiscountedRetry ? 99 : 199} 积分</span>
             </p>

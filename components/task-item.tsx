@@ -50,8 +50,12 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
         const bonus = (session?.user as any)?.bonusCredits ?? 0
         const total = paid + bonus
 
-        if (total < 199) {
-            toast.error("余额不足", { description: "再次生成需要 199 积分，请先充值" })
+        // Determine cost based on discount availability
+        const isDiscountAvailable = !item.hasUsedDiscountedRetry
+        const cost = isDiscountAvailable ? 99 : 199
+
+        if (total < cost) {
+            toast.error("余额不足", { description: `重新生成需要 ${cost} 积分，请先充值` })
             return
         }
 
@@ -70,6 +74,7 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                     productType: item.productType,
                     images: item.originalImage,
                     platformKey: "SHOPEE",
+                    sourceGenerationId: isDiscountAvailable ? item.id : undefined, // For discount retry tracking
                 }),
             })
             const data = await res.json().catch(() => ({}))
@@ -196,7 +201,7 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                 </div>
             </motion.div>
 
-            {/* Confirm Dialog */}
+            {/* Confirm Dialog - shows different price based on discount availability */}
             {showConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                     <motion.div
@@ -204,10 +209,23 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                         animate={{ opacity: 1, scale: 1 }}
                         className="glass rounded-2xl p-6 max-w-sm w-full mx-4 border border-white/10"
                     >
-                        <h4 className="text-lg font-semibold text-white mb-2">确认重新生成</h4>
-                        <p className="text-sm text-slate-400 mb-4">
-                            将使用相同参数重新生成图片，消耗 <span className="text-purple-400 font-semibold">199 积分</span>。
-                        </p>
+                        {!item.hasUsedDiscountedRetry ? (
+                            <>
+                                <h4 className="text-lg font-semibold text-white mb-2">确认重新生成</h4>
+                                <p className="text-sm text-slate-400 mb-4">
+                                    将使用相同参数重新生成图片，消耗 <span className="text-yellow-400 font-semibold">99 积分</span>。
+                                    <br />
+                                    <span className="text-xs text-slate-500">（每条记录仅限一次优惠机会）</span>
+                                </p>
+                            </>
+                        ) : (
+                            <>
+                                <h4 className="text-lg font-semibold text-white mb-2">确认重新生成</h4>
+                                <p className="text-sm text-slate-400 mb-4">
+                                    将使用相同参数重新生成图片，消耗 <span className="text-purple-400 font-semibold">199 积分</span>。
+                                </p>
+                            </>
+                        )}
                         <div className="flex gap-3">
                             <Button
                                 variant="outline"
@@ -219,7 +237,12 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                             <Button
                                 onClick={handleRegenerate}
                                 disabled={regenerating}
-                                className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:opacity-90"
+                                className={cn(
+                                    "flex-1 text-white hover:opacity-90",
+                                    !item.hasUsedDiscountedRetry
+                                        ? "bg-gradient-to-r from-yellow-500 to-orange-500"
+                                        : "bg-gradient-to-r from-blue-600 to-purple-600"
+                                )}
                             >
                                 {regenerating ? (
                                     <>
