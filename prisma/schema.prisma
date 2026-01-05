@@ -16,7 +16,7 @@ model User {
   password      String?                            /// 加密后的密码
   image         String?                            /// 头像 URL
   credits       Int       @default(0)              /// 付费/常规积分（用户购买获得）
-  bonusCredits  Int       @default(500)            /// 赠送积分（默认赠送 500=可生成2次）
+  bonusCredits  Int       @default(1000)           /// 赠送积分（默认赠送 1000=可生成5次）
   role          String    @default("USER")         /// 角色：USER / ADMIN
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
