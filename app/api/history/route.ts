@@ -54,11 +54,17 @@ export async function GET(req: NextRequest) {
           productName: true,
           productType: true,
           generatedImages: true,
-          // generatedImage: true,
+          // generatedImage: true, // 不返回此字段
           originalImage: true,
           status: true,
           createdAt: true,
           hasUsedDiscountedRetry: true,
+          appeal: {
+            select: {
+              id: true,
+              status: true,
+            },
+          },
         },
       }),
       prisma.generation.count({ where }),

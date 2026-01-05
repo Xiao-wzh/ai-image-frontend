@@ -14,6 +14,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Sparkles as SparklesIcon,
+  AlertTriangle,
 } from "lucide-react"
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
@@ -44,6 +45,8 @@ export function HistoryDetailDialog({
   const [isDownloading, setIsDownloading] = useState(false)
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false)
   const [showDiscountConfirm, setShowDiscountConfirm] = useState(false)
+  const [showAppealModal, setShowAppealModal] = useState(false)
+  const [isSubmittingAppeal, setIsSubmittingAppeal] = useState(false)
 
   useEffect(() => {
     if (open) setIndex(initialIndex)
@@ -135,6 +138,50 @@ export function HistoryDetailDialog({
     }
   }
 
+  const handleAppealSubmit = async () => {
+    if (!item) return
+
+    setIsSubmittingAppeal(true)
+    try {
+      const res = await fetch("/api/user/appeal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          generationId: item.id,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data?.error || "申诉提交失败")
+      }
+      toast.success("申诉已提交", { description: "请等待管理员审核" })
+      setShowAppealModal(false)
+      onGenerateSuccess() // Refresh to update appeal status
+    } catch (e: any) {
+      toast.error(e?.message || "申诉提交失败")
+    } finally {
+      setIsSubmittingAppeal(false)
+    }
+  }
+
+  // Check if can appeal: only COMPLETED status, and no existing PENDING/APPROVED appeal
+  const canAppeal = useMemo(() => {
+    if (!item) return false
+    if (item.status !== "COMPLETED") return false
+    if (!item.appeal) return true // No appeal exists
+    // Can re-appeal if previous was rejected
+    return item.appeal.status === "REJECTED"
+  }, [item])
+
+  const appealStatusText = useMemo(() => {
+    if (!item?.appeal) return null
+    switch (item.appeal.status) {
+      case "PENDING": return "申诉审核中"
+      case "APPROVED": return "申诉已通过"
+      case "REJECTED": return "申诉被拒绝"
+      default: return null
+    }
+  }, [item])
   const handleDownloadAll = async () => {
     if (!generatedImages.length) return
 
@@ -353,7 +400,7 @@ export function HistoryDetailDialog({
 
           {/* Footer */}
           <div className="p-4 border-t border-white/10 shrink-0 flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
                 onClick={() => setShowRegenerateConfirm(true)}
                 variant="outline"
@@ -371,6 +418,29 @@ export function HistoryDetailDialog({
                   <SparklesIcon className="w-4 h-4 mr-2" />
                   优惠重试 (99积分)
                 </Button>
+              )}
+
+              {/* Appeal Button */}
+              {item?.status === "COMPLETED" && (
+                canAppeal ? (
+                  <Button
+                    onClick={() => setShowAppealModal(true)}
+                    variant="outline"
+                    className="h-11 rounded-xl border-orange-400/50 bg-orange-400/10 hover:bg-orange-400/20 text-orange-300"
+                  >
+                    <AlertTriangle className="w-4 h-4 mr-2" />
+                    申诉
+                  </Button>
+                ) : appealStatusText ? (
+                  <span className={cn(
+                    "text-xs px-3 py-2 rounded-xl",
+                    item.appeal?.status === "PENDING" && "bg-yellow-500/20 text-yellow-400",
+                    item.appeal?.status === "APPROVED" && "bg-green-500/20 text-green-400",
+                    item.appeal?.status === "REJECTED" && "bg-red-500/20 text-red-400",
+                  )}>
+                    {appealStatusText}
+                  </span>
+                ) : null
               )}
             </div>
 
@@ -482,6 +552,57 @@ export function HistoryDetailDialog({
                 className="flex-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white hover:opacity-90"
               >
                 确认优惠重试
+              </Button>
+            </div>
+          </motion.div>
+        </div>,
+        document.body
+      )}
+
+      {/* Appeal Modal - rendered via Portal to document.body */}
+      {typeof document !== 'undefined' && showAppealModal && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowAppealModal(false)
+            }
+          }}
+          onMouseDownCapture={(e) => e.stopPropagation()}
+          onPointerDownCapture={(e) => e.stopPropagation()}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="glass rounded-2xl p-6 max-w-sm w-full mx-4 border border-white/10 relative pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h4 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-orange-400" />
+              确认申诉
+            </h4>
+            <p className="text-sm text-slate-400 mb-4">
+              如果您对生成结果不满意，可以提交申诉申请退款。
+              <br />
+              <span className="text-orange-400 font-medium">预计退还 {item?.hasUsedDiscountedRetry ? 99 : 199} 积分</span>
+            </p>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowAppealModal(false)}
+                className="flex-1 border-white/10 bg-white/5 hover:bg-white/10 text-white"
+              >
+                取消
+              </Button>
+              <Button
+                onClick={handleAppealSubmit}
+                disabled={isSubmittingAppeal}
+                className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {isSubmittingAppeal ? (
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                ) : null}
+                确认申诉
               </Button>
             </div>
           </motion.div>

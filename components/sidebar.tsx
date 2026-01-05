@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet, ListTodo } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -23,6 +23,7 @@ const navItems: NavItem[] = [
   { icon: Images, label: "我的作品", href: "/history" },
   { icon: ListTodo, label: "任务队列", href: "/tasks", badge: "pending" },
   { icon: Wallet, label: "积分流水", href: "/credits" },
+  { icon: ShieldCheck, label: "售后记录", href: "/appeals" },
 ]
 
 export function Sidebar() {
@@ -178,6 +179,17 @@ export function Sidebar() {
                     {(session.user.credits || 0) + (session.user.bonusCredits || 0)}
                   </div>
                 </div>
+                <Button
+                  onClick={() => {
+                    import("next-auth/react").then(({ signOut }) => signOut())
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  className="w-full mt-3 text-xs text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                >
+                  <LogOut className="w-3.5 h-3.5 mr-2" />
+                  退出登录
+                </Button>
               </>
             ) : (
               /* Not Logged In State */

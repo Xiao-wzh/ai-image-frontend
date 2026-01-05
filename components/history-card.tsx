@@ -19,6 +19,10 @@ export type HistoryItem = {
   status: string
   originalImage: string[]
   hasUsedDiscountedRetry?: boolean
+  appeal?: {
+    id: string
+    status: string
+  } | null
 }
 
 export function HistoryCard({
