@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "./ui/button"
 import { PricingModal } from "./pricing-modal"
+import { DailyCheckin } from "./daily-checkin"
 import { useLoginModal } from "@/hooks/use-login-modal"
 
 type NavItem = {
@@ -126,6 +127,14 @@ export function Sidebar() {
             )
           })}
         </nav>
+
+          {/* 每日签到按钮组件 */}
+        {/* Daily Check-in */}
+        <div className="px-4 mt-auto">
+          <div className="border-t border-white/5 pt-4">
+            <DailyCheckin />
+          </div>
+        </div>
 
         {/* User Info */}
         <div className="p-4 border-t border-white/5">

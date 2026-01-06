@@ -18,6 +18,7 @@ model User {
   credits       Int       @default(0)              /// 付费/常规积分（用户购买获得）
   bonusCredits  Int       @default(1000)           /// 赠送积分（默认赠送 1000=可生成5次）
   role          String    @default("USER")         /// 角色：USER / ADMIN
+  lastCheckIn   DateTime?                          /// 每日打卡时间
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
