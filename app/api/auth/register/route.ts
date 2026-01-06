@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     // 限制只允许 QQ邮箱 和 Gmail 邮箱
     const emailLower = email.toLowerCase().trim()
-    const allowedDomains = ["@qq.com", "@gmail.com"]
+    const allowedDomains = ["@qq.com"]
     const isAllowedDomain = allowedDomains.some(domain => emailLower.endsWith(domain))
     if (!isAllowedDomain) {
       return NextResponse.json(
