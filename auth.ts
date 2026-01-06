@@ -23,14 +23,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           const identifier = credentials.identifier as string
 
-          // 查找用户（支持邮箱或用户名）
-          const user = await prisma.user.findFirst({
-            where: {
-              OR: [
-                { email: identifier },
-                { username: identifier },
-              ],
-            },
+          // 安全修复：优先精确匹配邮箱，避免用户名冒充邮箱
+          // 1. 先尝试用邮箱精确匹配
+          let user = await prisma.user.findUnique({
+            where: { email: identifier },
             select: {
               id: true,
               email: true,
@@ -43,6 +39,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               role: true,
             },
           })
+
+          // 2. 如果邮箱没匹配到，再尝试用户名匹配
+          if (!user) {
+            user = await prisma.user.findUnique({
+              where: { username: identifier },
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                username: true,
+                image: true,
+                password: true,
+                credits: true,
+                bonusCredits: true,
+                role: true,
+              },
+            })
+          }
 
           if (!user) {
             return null
@@ -92,12 +106,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         },
       },
       from: process.env.EMAIL_FROM,
-      
+
       // 自定义邮件发送函数（中文邮件）
       async sendVerificationRequest({ identifier: email, url, provider }) {
         const { host } = new URL(url)
         const transport = createTransport(provider.server)
-        
+
         try {
           await transport.sendMail({
             to: email,
@@ -226,7 +240,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               </html>
             `,
           })
-          
+
           console.log("✅ 验证邮件已发送至:", email)
           console.log("📧 邮件服务器:", process.env.EMAIL_SERVER_HOST)
         } catch (error) {

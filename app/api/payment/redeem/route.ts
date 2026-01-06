@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
+import { processReferralReward } from "@/lib/referral-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -82,6 +83,7 @@ export async function POST(req: NextRequest) {
         ok: true as const,
         paid,
         bonus,
+        total,
         credits: userAfter?.credits ?? 0,
         bonusCredits: userAfter?.bonusCredits ?? 0,
       }
@@ -89,6 +91,14 @@ export async function POST(req: NextRequest) {
 
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: result.status })
+    }
+
+    // 6) 处理推广返佣（在事务外执行，不影响主流程）
+    try {
+      await processReferralReward(userId, result.total, "CDK", code)
+    } catch (e) {
+      // 返佣失败不影响用户兑换成功
+      console.error("推广返佣处理失败:", e)
     }
 
     return NextResponse.json({
@@ -109,4 +119,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "兑换失败，请稍后重试" }, { status: 500 })
   }
 }
-

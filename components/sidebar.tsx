@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -25,6 +25,7 @@ const navItems: NavItem[] = [
   { icon: ListTodo, label: "任务队列", href: "/tasks", badge: "pending" },
   { icon: Wallet, label: "积分流水", href: "/credits" },
   { icon: ShieldCheck, label: "售后记录", href: "/appeals" },
+  { icon: Gift, label: "邀请赚积分", href: "/referral" },
 ]
 
 export function Sidebar() {
@@ -128,7 +129,7 @@ export function Sidebar() {
           })}
         </nav>
 
-          {/* 每日签到按钮组件 */}
+        {/* 每日签到按钮组件 */}
         {/* Daily Check-in */}
         <div className="px-4 mt-auto">
           <div className="border-t border-white/5 pt-4">

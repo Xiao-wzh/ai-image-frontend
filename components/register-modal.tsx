@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { signIn } from "next-auth/react"
 import { motion } from "framer-motion"
-import { Mail, User, Lock, Key, ArrowRight } from "lucide-react"
+import { Mail, User, Lock, Key, ArrowRight, Gift } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
 import {
@@ -26,6 +26,7 @@ export function RegisterModal({ isOpen, onClose }: RegisterModalProps) {
   const [regUsername, setRegUsername] = useState("")
   const [regPassword, setRegPassword] = useState("")
   const [regCode, setRegCode] = useState("")
+  const [regInviteCode, setRegInviteCode] = useState("")
   const [isSendingCode, setIsSendingCode] = useState(false)
   const [countdown, setCountdown] = useState(0)
   const [isRegistering, setIsRegistering] = useState(false)
@@ -75,7 +76,7 @@ export function RegisterModal({ isOpen, onClose }: RegisterModalProps) {
   // Handle Registration
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // 前端验证
     if (!regEmail.trim()) {
       toast.error("请输入邮箱地址")
@@ -104,6 +105,7 @@ export function RegisterModal({ isOpen, onClose }: RegisterModalProps) {
           username: regUsername.trim(),
           password: regPassword,
           code: regCode.trim(),
+          inviteCode: regInviteCode.trim() || undefined,
         }),
       })
 
@@ -131,6 +133,7 @@ export function RegisterModal({ isOpen, onClose }: RegisterModalProps) {
         setRegUsername("")
         setRegPassword("")
         setRegCode("")
+        setRegInviteCode("")
       }
     } catch (error: any) {
       console.error("注册错误:", error)
@@ -143,12 +146,12 @@ export function RegisterModal({ isOpen, onClose }: RegisterModalProps) {
   // Handle Login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!loginIdentifier.trim()) {
       toast.error("请输入邮箱或用户名")
       return
     }
-    
+
     if (!loginPassword.trim()) {
       toast.error("请输入密码")
       return
@@ -296,7 +299,7 @@ export function RegisterModal({ isOpen, onClose }: RegisterModalProps) {
                     type="text"
                     value={regUsername}
                     onChange={(e) => setRegUsername(e.target.value)}
-                    placeholder="用户名 (3-20字符)"
+                    placeholder="用户名 (6-12个字符，只能包含字母、数字)"
                     className="w-full h-12 rounded-xl border border-white/10 bg-white/5 pl-12 pr-4 text-white placeholder:text-slate-500 outline-none focus:border-blue-500 focus:bg-white/10 focus:ring-2 focus:ring-blue-500/20 transition-all"
                   />
                 </div>
@@ -309,6 +312,18 @@ export function RegisterModal({ isOpen, onClose }: RegisterModalProps) {
                     onChange={(e) => setRegPassword(e.target.value)}
                     placeholder="密码 (至少6位)"
                     className="w-full h-12 rounded-xl border border-white/10 bg-white/5 pl-12 pr-4 text-white placeholder:text-slate-500 outline-none focus:border-blue-500 focus:bg-white/10 focus:ring-2 focus:ring-blue-500/20 transition-all"
+                  />
+                </div>
+                {/* Invite Code (Optional) */}
+                <div className="relative">
+                  <Gift className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none z-10" />
+                  <input
+                    type="text"
+                    value={regInviteCode}
+                    onChange={(e) => setRegInviteCode(e.target.value.toUpperCase())}
+                    placeholder="邀请码 (可选)"
+                    maxLength={8}
+                    className="w-full h-12 rounded-xl border border-white/10 bg-white/5 pl-12 pr-4 text-white placeholder:text-slate-500 outline-none focus:border-yellow-500 focus:bg-white/10 focus:ring-2 focus:ring-yellow-500/20 transition-all uppercase"
                   />
                 </div>
                 <Button

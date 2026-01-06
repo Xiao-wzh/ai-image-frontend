@@ -19,6 +19,13 @@ model User {
   bonusCredits  Int       @default(1000)           /// 赠送积分（默认赠送 1000=可生成5次）
   role          String    @default("USER")         /// 角色：USER / ADMIN
   lastCheckIn   DateTime?                          /// 每日打卡时间
+  
+  // 推广邀请系统
+  referralCode  String?   @unique                  /// 用户专属推广码
+  invitedById   String?                            /// 邀请人ID
+  invitedBy     User?     @relation("UserInvites", fields: [invitedById], references: [id])
+  invites       User[]    @relation("UserInvites") /// 此用户邀请的所有用户
+  
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -28,8 +35,29 @@ model User {
   creditRecords   CreditRecord[]
   redemptionCodes RedemptionCode[] @relation("UserRedemptionCodes")
   appeals         Appeal[]
+  
+  // 推广佣金记录
+  referralRewardsGiven    ReferralRecord[] @relation("InviterRewards") /// 作为邀请人获得的佣金
+  referralRewardsGenerated ReferralRecord[] @relation("InviteeRewards") /// 作为被邀请人产生的佣金
 
   productTypePrompts ProductTypePrompt[]
+}
+
+// 推广佣金记录
+model ReferralRecord {
+  id          String   @id @default(cuid())
+  inviterId   String                              /// 邀请人ID（获得佣金的人）
+  inviteeId   String                              /// 被邀请人ID（充值的人）
+  amount      Int                                 /// 佣金金额（例如充值金额的10%）
+  sourceType  String                              /// 来源类型：CDK / ALIPAY / WECHAT
+  sourceId    String?                             /// 关联的订单ID或CDK码
+  createdAt   DateTime @default(now())
+
+  inviter     User     @relation("InviterRewards", fields: [inviterId], references: [id])
+  invitee     User     @relation("InviteeRewards", fields: [inviteeId], references: [id])
+
+  @@index([inviterId])
+  @@index([inviteeId])
 }
 
 model Account {
