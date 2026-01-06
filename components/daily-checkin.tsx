@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { cn } from "@/lib/utils"
+import { DAILY_CHECKIN_REWARD } from "@/lib/constants"
 
 type CheckInStatus = {
     canCheckIn: boolean
@@ -74,7 +75,7 @@ export function DailyCheckin() {
                 await updateSession()
 
                 toast.success("打卡成功！", {
-                    description: "400 积分已到账",
+                    description: `${DAILY_CHECKIN_REWARD} 积分已到账`,
                 })
 
                 // Hide animations after delay
@@ -209,7 +210,7 @@ export function DailyCheckin() {
                                 canCheckIn ? "text-white" : "text-slate-400"
                             )}
                         >
-                            {canCheckIn ? "+400" : "已领取"}
+                            {canCheckIn ? `+${DAILY_CHECKIN_REWARD}` : "已领取"}
                         </div>
                     </div>
 
@@ -249,7 +250,7 @@ export function DailyCheckin() {
                             className="absolute left-1/2 top-0 -translate-x-1/2 pointer-events-none"
                         >
                             <span className="text-2xl font-bold text-yellow-400 drop-shadow-lg">
-                                +400
+                                +{DAILY_CHECKIN_REWARD}
                             </span>
                         </motion.div>
                     )}

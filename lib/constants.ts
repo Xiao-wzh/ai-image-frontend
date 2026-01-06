@@ -38,3 +38,6 @@ export const PlatformLabel: Record<PlatformTypeKey, string> = {
   [PlatformType.TIKTOK]: "TikTok",
   [PlatformType.GENERAL]: "通用",
 }
+
+// 每日打卡奖励积分数
+export const DAILY_CHECKIN_REWARD = 200

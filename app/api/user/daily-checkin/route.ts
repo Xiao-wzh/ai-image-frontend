@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
-
+import { DAILY_CHECKIN_REWARD } from "@/lib/constants"
 /**
  * 检查用户是否可以打卡
  * 比较用户的 lastCheckIn 日期与当前服务器日期
@@ -74,6 +74,8 @@ export async function POST() {
         const userId = session.user.id
         const now = new Date()
 
+
+
         // 使用事务确保原子操作
         const result = await prisma.$transaction(async (tx) => {
             // 获取用户当前状态
@@ -91,13 +93,13 @@ export async function POST() {
                 throw new Error("今日已打卡")
             }
 
-            const rewardAmount = 400
+
 
             // 更新用户积分和打卡时间
             const updatedUser = await tx.user.update({
                 where: { id: userId },
                 data: {
-                    bonusCredits: { increment: rewardAmount },
+                    bonusCredits: { increment: DAILY_CHECKIN_REWARD },
                     lastCheckIn: now,
                 },
                 select: { credits: true, bonusCredits: true },
@@ -107,7 +109,7 @@ export async function POST() {
             await tx.creditRecord.create({
                 data: {
                     userId,
-                    amount: rewardAmount,
+                    amount: DAILY_CHECKIN_REWARD,
                     type: "DAILY_REWARD",
                     description: "每日打卡奖励",
                 },
@@ -122,7 +124,7 @@ export async function POST() {
 
         return NextResponse.json({
             success: true,
-            message: "打卡成功，获得 400 积分！",
+            message: `打卡成功，获得 ${DAILY_CHECKIN_REWARD} 积分！`,
             ...result,
         })
     } catch (error: any) {
