@@ -24,6 +24,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "邮箱格式不正确" }, { status: 400 })
     }
 
+    // 限制只允许 QQ邮箱 和 Gmail 邮箱
+    const emailLower = email.toLowerCase().trim()
+    const allowedDomains = ["@qq.com", "@gmail.com"]
+    const isAllowedDomain = allowedDomains.some(domain => emailLower.endsWith(domain))
+    if (!isAllowedDomain) {
+      return NextResponse.json(
+        { error: "仅支持 QQ邮箱 和 Gmail 邮箱注册" },
+        { status: 400 }
+      )
+    }
+
     // 验证用户名长度
     if (username.length < 3 || username.length > 20) {
       return NextResponse.json(

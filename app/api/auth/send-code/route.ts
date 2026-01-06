@@ -25,6 +25,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "邮箱格式不正确" }, { status: 400 })
     }
 
+    // 限制只允许 QQ邮箱 和 Gmail 邮箱
+    const emailLower = email.toLowerCase()
+    const allowedDomains = ["@qq.com", "@gmail.com"]
+    const isAllowedDomain = allowedDomains.some(domain => emailLower.endsWith(domain))
+    if (!isAllowedDomain) {
+      return NextResponse.json(
+        { error: "仅支持 QQ邮箱 和 Gmail 邮箱注册" },
+        { status: 400 }
+      )
+    }
+
     // 检查邮箱是否已注册
     const existingUser = await prisma.user.findUnique({
       where: { email },
