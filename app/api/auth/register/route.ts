@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import bcrypt from "bcryptjs"
+import { REGISTRATION_BONUS, INVITE_CODE_BONUS } from "@/lib/constants"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -168,9 +169,9 @@ export async function POST(req: NextRequest) {
     // 6. 生成唯一推广码
     const referralCode = await generateUniqueReferralCode()
 
-    // 7. 计算初始积分（有邀请码额外赠送200）
-    const inviteBonus = inviter ? 200 : 0
-    const initialBonusCredits = 1000 + inviteBonus // 默认1000 + 邀请奖励200
+    // 7. 计算初始积分（使用全局配置）
+    const inviteBonus = inviter ? INVITE_CODE_BONUS : 0
+    const initialBonusCredits = REGISTRATION_BONUS + inviteBonus
 
     // 8. 创建用户（使用事务）
     const user = await prisma.$transaction(async (tx) => {

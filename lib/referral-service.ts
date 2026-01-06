@@ -1,7 +1,5 @@
 import prisma from "@/lib/prisma"
-
-// 推广佣金比例 (10%)
-const REFERRAL_COMMISSION_RATE = 0.10
+import { REFERRAL_COMMISSION_RATE } from "@/lib/constants"
 
 type ReferralRewardResult = {
     success: boolean

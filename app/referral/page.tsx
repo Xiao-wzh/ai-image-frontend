@@ -8,6 +8,7 @@ import { toast } from "sonner"
 import { Sidebar } from "@/components/sidebar"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { REFERRAL_COMMISSION_RATE } from "@/lib/constants"
 
 type ReferralStats = {
     code: string | null
@@ -76,7 +77,7 @@ export default function ReferralPage() {
                         推广中心
                     </h1>
                     <p className="text-slate-400 mt-2">
-                        邀请好友注册，获得永久 <span className="text-yellow-400 font-semibold">10%</span> 返利
+                        邀请好友注册，获得永久 <span className="text-yellow-400 font-semibold">{REFERRAL_COMMISSION_RATE * 100}%</span> 返利
                     </p>
                 </motion.div>
 
@@ -120,7 +121,7 @@ export default function ReferralPage() {
                             </div>
                         )}
                         <p className="text-slate-400 text-sm mt-4">
-                            好友注册时填写此邀请码，即可绑定推广关系
+                            好友注册时填写此邀请码，即可绑定推广关系，并且好友获得200积分奖励
                         </p>
                     </motion.div>
 
@@ -165,7 +166,7 @@ export default function ReferralPage() {
                             <div className="text-slate-400 text-sm">已邀请用户</div>
                         </div>
                         <div>
-                            <div className="text-3xl font-bold text-white">10%</div>
+                            <div className="text-3xl font-bold text-white">{REFERRAL_COMMISSION_RATE * 100}%</div>
                             <div className="text-slate-400 text-sm">永久返利比例</div>
                         </div>
                     </div>
