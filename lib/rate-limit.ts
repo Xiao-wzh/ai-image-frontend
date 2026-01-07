@@ -6,13 +6,13 @@ import { getRedis } from "./redis"
 
 // 限制配置
 const CONFIG = {
-    // IP 限制
+    // IP 限制 (放宽以支持同一局域网多人注册)
     IP_ATTEMPT_WINDOW: 10 * 60,      // 10 分钟
-    IP_ATTEMPT_LIMIT: 3,              // 10分钟内最多3次尝试
+    IP_ATTEMPT_LIMIT: 30,            // 10分钟内最多30次尝试 (放宽，同一IP可能有多人)
     IP_SUCCESS_WINDOW: 24 * 60 * 60,  // 24 小时
-    IP_SUCCESS_LIMIT: 5,              // 24小时内最多5次成功注册
+    IP_SUCCESS_LIMIT: 50,             // 24小时内最多50次成功注册 (放宽，支持公司/学校场景)
 
-    // 设备限制
+    // 设备限制 (保持严格，防止单设备刷号)
     DEVICE_WINDOW: 24 * 60 * 60,      // 24 小时
     DEVICE_LIMIT: 2,                  // 24小时内每设备最多2次成功注册
 }
