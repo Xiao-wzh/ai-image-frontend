@@ -12,7 +12,7 @@ model User {
   name            String?
   username        String?   @unique                  /// 用户名（唯一）
   email           String    @unique
-  normalizedEmail String?                     /// 归一化邮箱（防别名重复注册）
+  normalizedEmail String?   @unique                  /// 归一化邮箱（防别名重复注册）
   emailVerified DateTime?
   password      String?                            /// 加密后的密码
   image         String?                            /// 头像 URL

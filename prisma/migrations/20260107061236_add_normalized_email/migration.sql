@@ -7,3 +7,5 @@
 -- AlterTable
 ALTER TABLE "User" ADD COLUMN     "normalizedEmail" TEXT;
 
+-- CreateIndex
+CREATE UNIQUE INDEX "User_normalizedEmail_key" ON "User"("normalizedEmail");
