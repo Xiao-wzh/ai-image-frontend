@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { useSession } from "next-auth/react"
 import { toast } from "sonner"
@@ -15,15 +15,45 @@ import {
   ChevronRight,
   Sparkles as SparklesIcon,
   AlertTriangle,
+  Lock,
+  Unlock,
+  Droplets,
+  Settings,
+  Check,
 } from "lucide-react"
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import { getWatermarkedUrl, WatermarkParams } from "@/lib/tos-watermark"
 import type { HistoryItem } from "@/components/history-card"
 
 function sanitizeFilename(name: string) {
   return name.replace(/[\\/:*?"<>|]/g, "-")
+}
+
+type WatermarkTemplate = {
+  id: string
+  name: string
+  type: "IMAGE" | "TEXT"
+  content: string
+  opacity: number
+  rotate: number
+  scale: number
+  position: string
+  xOffset: number
+  yOffset: number
+  isTiled: boolean
+  fontSize: number | null
+  fontColor: string | null
+  fontName: string | null
 }
 
 export function HistoryDetailDialog({
@@ -48,11 +78,50 @@ export function HistoryDetailDialog({
   const [showAppealModal, setShowAppealModal] = useState(false)
   const [isSubmittingAppeal, setIsSubmittingAppeal] = useState(false)
 
+  // Watermark states
+  const [isWatermarkUnlocked, setIsWatermarkUnlocked] = useState(false)
+  const [isUnlocking, setIsUnlocking] = useState(false)
+  const [showUnlockConfirm, setShowUnlockConfirm] = useState(false)
+  const [watermarkTemplates, setWatermarkTemplates] = useState<WatermarkTemplate[]>([])
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
+  const [loadingTemplates, setLoadingTemplates] = useState(false)
+
   useEffect(() => {
     if (open) setIndex(initialIndex)
   }, [open, initialIndex])
 
   const item = items[index]
+
+  // Sync watermark unlock state from item
+  useEffect(() => {
+    if (item) {
+      setIsWatermarkUnlocked(item.isWatermarkUnlocked ?? false)
+    }
+  }, [item])
+
+  // Fetch watermark templates when unlocked
+  const fetchTemplates = useCallback(async () => {
+    if (!isWatermarkUnlocked) return
+    setLoadingTemplates(true)
+    try {
+      const res = await fetch("/api/user/watermarks")
+      if (res.ok) {
+        const data = await res.json()
+        setWatermarkTemplates(data.templates || [])
+      }
+    } catch {
+      // Silent fail
+    } finally {
+      setLoadingTemplates(false)
+    }
+  }, [isWatermarkUnlocked])
+
+  useEffect(() => {
+    if (open && isWatermarkUnlocked) {
+      fetchTemplates()
+    }
+  }, [open, isWatermarkUnlocked, fetchTemplates])
+
   const generatedImages = item?.generatedImages ?? []
   const fullImageUrl = item?.generatedImage ?? null
   const productName = item?.productName ?? "generated-images"
@@ -62,6 +131,67 @@ export function HistoryDetailDialog({
   const canNext = index < items.length - 1
 
   const title = useMemo(() => item?.productName || "作品详情", [item])
+
+  // Get selected template object
+  const selectedTemplate = useMemo(() => {
+    if (!selectedTemplateId || selectedTemplateId === "none") return null
+    return watermarkTemplates.find(t => t.id === selectedTemplateId) || null
+  }, [selectedTemplateId, watermarkTemplates])
+
+  // Apply watermark to images
+  const displayImages = useMemo(() => {
+    if (!selectedTemplate || !generatedImages.length) {
+      return generatedImages
+    }
+
+    const params: WatermarkParams = {
+      type: selectedTemplate.type,
+      content: selectedTemplate.content,
+      opacity: selectedTemplate.opacity,
+      rotate: selectedTemplate.rotate,
+      scale: selectedTemplate.scale,
+      position: selectedTemplate.position,
+      xOffset: selectedTemplate.xOffset,
+      yOffset: selectedTemplate.yOffset,
+      isTiled: selectedTemplate.isTiled,
+      fontSize: selectedTemplate.fontSize,
+      fontColor: selectedTemplate.fontColor,
+      fontName: selectedTemplate.fontName,
+    }
+
+    return generatedImages.map(url => {
+      const watermarkedUrl = getWatermarkedUrl(url, params)
+      console.log("[水印下载URL]", watermarkedUrl)
+      return watermarkedUrl
+    })
+  }, [generatedImages, selectedTemplate])
+
+  // Handle unlock watermark
+  const handleUnlockWatermark = async () => {
+    if (!item) return
+    setIsUnlocking(true)
+    try {
+      const res = await fetch("/api/generation/unlock-watermark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ generationId: item.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "解锁失败")
+
+      setIsWatermarkUnlocked(true)
+      setShowUnlockConfirm(false)
+      toast.success("水印功能已解锁！")
+      // Update item in parent
+      if (item) item.isWatermarkUnlocked = true
+      onGenerateSuccess() // Refresh list
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "解锁失败"
+      toast.error(message)
+    } finally {
+      setIsUnlocking(false)
+    }
+  }
 
   const handleRegenerate = async () => {
     if (!item) return
@@ -75,13 +205,11 @@ export function HistoryDetailDialog({
       return
     }
 
-    // Close both dialogs immediately and show toast
     setShowRegenerateConfirm(false)
     toast.success("正在重新生成...", { description: "新任务已提交" })
     onOpenChange(false)
     onGenerateSuccess()
 
-    // Make API call in background
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -114,13 +242,11 @@ export function HistoryDetailDialog({
       return
     }
 
-    // Close both dialogs immediately and show toast
     setShowDiscountConfirm(false)
     toast.success("优惠重试任务已提交", { description: "新任务已加入队列" })
     onOpenChange(false)
     onGenerateSuccess()
 
-    // Make API call in background
     try {
       const res = await fetch("/api/generate", {
         method: "POST",
@@ -156,7 +282,7 @@ export function HistoryDetailDialog({
       }
       toast.success("申诉已提交", { description: "请等待管理员审核" })
       setShowAppealModal(false)
-      onGenerateSuccess() // Refresh to update appeal status
+      onGenerateSuccess()
     } catch (e: any) {
       toast.error(e?.message || "申诉提交失败")
     } finally {
@@ -164,12 +290,10 @@ export function HistoryDetailDialog({
     }
   }
 
-  // Check if can appeal: only COMPLETED status, and no existing PENDING/APPROVED appeal
   const canAppeal = useMemo(() => {
     if (!item) return false
     if (item.status !== "COMPLETED") return false
-    if (!item.appeal) return true // No appeal exists
-    // Can re-appeal if previous was rejected
+    if (!item.appeal) return true
     return item.appeal.status === "REJECTED"
   }, [item])
 
@@ -182,8 +306,9 @@ export function HistoryDetailDialog({
       default: return null
     }
   }, [item])
+
   const handleDownloadAll = async () => {
-    if (!generatedImages.length) return
+    if (!displayImages.length) return
 
     setIsDownloading(true)
     try {
@@ -195,7 +320,7 @@ export function HistoryDetailDialog({
       const response = await fetch("/api/download-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageUrls: generatedImages }),
+        body: JSON.stringify({ imageUrls: displayImages }),
       })
 
       if (!response.ok) {
@@ -240,7 +365,6 @@ export function HistoryDetailDialog({
     }
   }
 
-  // 单张下载：通过后端代理 GET /api/download-images?url=... 规避浏览器 CORS
   const downloadOne = (imgUrl: string, idx: number) => {
     const filename = sanitizeFilename(`${productName || "image"}-${idx + 1}.png`)
     const href = `/api/download-images?url=${encodeURIComponent(imgUrl)}&filename=${encodeURIComponent(filename)}`
@@ -258,9 +382,9 @@ export function HistoryDetailDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className={cn(
           "max-w-6xl w-[95vw] h-[90vh] p-0 flex flex-col gap-0 bg-slate-950/95 border-white/10 overflow-hidden",
-          (showRegenerateConfirm || showDiscountConfirm) && "pointer-events-none"
+          (showRegenerateConfirm || showDiscountConfirm || showUnlockConfirm) && "pointer-events-none"
         )}>
-          {/* Header（预留右侧 X 按钮空间，避免重叠） */}
+          {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-white/10 pr-12 shrink-0">
             <DialogTitle className="text-white">
               <span className="truncate block">{title}</span>
@@ -292,6 +416,76 @@ export function HistoryDetailDialog({
 
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto p-6">
+            {/* Watermark Bar */}
+            <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <Droplets className="w-4 h-4 text-cyan-400" />
+                  <span className="text-sm font-medium text-white">水印功能</span>
+                </div>
+
+                {!isWatermarkUnlocked ? (
+                  // Locked state
+                  <Button
+                    size="sm"
+                    onClick={() => setShowUnlockConfirm(true)}
+                    className="h-8 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white"
+                  >
+                    <Lock className="w-3.5 h-3.5 mr-1.5" />
+                    解锁水印 (100积分)
+                  </Button>
+                ) : (
+                  // Unlocked state - show template selector
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 text-xs text-green-400">
+                      <Unlock className="w-3 h-3" />
+                      <span>已解锁</span>
+                    </div>
+                    <Select
+                      value={selectedTemplateId || "none"}
+                      onValueChange={setSelectedTemplateId}
+                    >
+                      <SelectTrigger className="w-[180px] h-8 bg-white/5 border-white/10 text-white text-xs">
+                        <SelectValue placeholder="选择水印模板" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-900 border-white/10">
+                        <SelectItem value="none" className="text-white text-xs">
+                          无水印
+                        </SelectItem>
+                        {loadingTemplates ? (
+                          <div className="px-2 py-1 text-xs text-slate-400">加载中...</div>
+                        ) : watermarkTemplates.length === 0 ? (
+                          <div className="px-2 py-1 text-xs text-slate-400">暂无模板</div>
+                        ) : (
+                          watermarkTemplates.map((tpl) => (
+                            <SelectItem key={tpl.id} value={tpl.id} className="text-white text-xs">
+                              {tpl.name}
+                            </SelectItem>
+                          ))
+                        )}
+                        <div className="border-t border-white/10 mt-1 pt-1">
+                          <a
+                            href="/settings/watermark"
+                            target="_blank"
+                            className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-cyan-400 hover:text-cyan-300 hover:bg-white/5 rounded"
+                          >
+                            <Settings className="w-3 h-3" />
+                            管理模板
+                          </a>
+                        </div>
+                      </SelectContent>
+                    </Select>
+                    {selectedTemplate && (
+                      <div className="flex items-center gap-1 text-xs text-cyan-400">
+                        <Check className="w-3 h-3" />
+                        <span>已应用</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm text-green-400 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-green-500" />
@@ -351,15 +545,16 @@ export function HistoryDetailDialog({
 
             <AnimatePresence mode="wait">
               <motion.div
-                key={viewMode}
+                key={viewMode + (selectedTemplateId || 'none')}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
+                className="mt-4"
               >
                 {viewMode === "grid" ? (
                   <div className="grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2">
-                    {generatedImages.map((img, i) => (
+                    {displayImages.map((img, i) => (
                       <motion.button
                         key={i}
                         type="button"
@@ -401,7 +596,6 @@ export function HistoryDetailDialog({
           {/* Footer */}
           <div className="p-4 border-t border-white/10 shrink-0 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Smart Regenerate Button - auto-detects discount availability */}
               {!item?.hasUsedDiscountedRetry ? (
                 <Button
                   onClick={() => setShowDiscountConfirm(true)}
@@ -421,7 +615,6 @@ export function HistoryDetailDialog({
                 </Button>
               )}
 
-              {/* Appeal Button */}
               {item?.status === "COMPLETED" && (
                 canAppeal ? (
                   <Button
@@ -456,29 +649,72 @@ export function HistoryDetailDialog({
               ) : (
                 <Download className="w-4 h-4 mr-2" />
               )}
-              {isDownloading ? "下载中..." : "下载全部图片"}
+              {isDownloading ? "下载中..." : selectedTemplate ? "下载带水印图片" : "下载全部图片"}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Regenerate Confirmation Modal - rendered via Portal to document.body */}
+      {/* Unlock Watermark Confirmation Modal */}
+      {typeof document !== 'undefined' && showUnlockConfirm && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowUnlockConfirm(false)
+            }
+          }}
+          onMouseDownCapture={(e) => e.stopPropagation()}
+          onPointerDownCapture={(e) => e.stopPropagation()}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="glass rounded-2xl p-6 max-w-sm w-full mx-4 border border-white/10 relative pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h4 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+              <Droplets className="w-5 h-5 text-cyan-400" />
+              解锁水印功能
+            </h4>
+            <p className="text-sm text-slate-400 mb-4">
+              支付 <span className="text-cyan-400 font-semibold">100 积分</span> 解锁本组作品的水印编辑权限。
+              <br />
+              <span className="text-xs text-slate-500">解锁后永久可用，可随时添加或更换水印。</span>
+            </p>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowUnlockConfirm(false)}
+                className="flex-1 border-white/10 bg-white/5 hover:bg-white/10 text-white"
+              >
+                取消
+              </Button>
+              <Button
+                onClick={handleUnlockWatermark}
+                disabled={isUnlocking}
+                className="flex-1 bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {isUnlocking ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                确认解锁
+              </Button>
+            </div>
+          </motion.div>
+        </div>,
+        document.body
+      )}
+
+      {/* Regenerate Confirmation Modal */}
       {typeof document !== 'undefined' && showRegenerateConfirm && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto"
           onClick={(e) => {
-            // Only close if clicking the overlay itself, not the modal content
             if (e.target === e.currentTarget) {
               setShowRegenerateConfirm(false)
             }
           }}
-          onMouseDownCapture={(e) => {
-            // Prevent underlying elements from receiving events
-            e.stopPropagation()
-          }}
-          onPointerDownCapture={(e) => {
-            e.stopPropagation()
-          }}
+          onMouseDownCapture={(e) => e.stopPropagation()}
+          onPointerDownCapture={(e) => e.stopPropagation()}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -510,23 +746,17 @@ export function HistoryDetailDialog({
         document.body
       )}
 
-      {/* Discount Retry Confirmation Modal - rendered via Portal to document.body */}
+      {/* Discount Retry Confirmation Modal */}
       {typeof document !== 'undefined' && showDiscountConfirm && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto"
           onClick={(e) => {
-            // Only close if clicking the overlay itself, not the modal content
             if (e.target === e.currentTarget) {
               setShowDiscountConfirm(false)
             }
           }}
-          onMouseDownCapture={(e) => {
-            // Prevent underlying elements from receiving events
-            e.stopPropagation()
-          }}
-          onPointerDownCapture={(e) => {
-            e.stopPropagation()
-          }}
+          onMouseDownCapture={(e) => e.stopPropagation()}
+          onPointerDownCapture={(e) => e.stopPropagation()}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -560,7 +790,7 @@ export function HistoryDetailDialog({
         document.body
       )}
 
-      {/* Appeal Modal - rendered via Portal to document.body */}
+      {/* Appeal Modal */}
       {typeof document !== 'undefined' && showAppealModal && createPortal(
         <div
           className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto"

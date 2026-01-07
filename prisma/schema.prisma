@@ -36,6 +36,7 @@ model User {
   creditRecords   CreditRecord[]
   redemptionCodes RedemptionCode[] @relation("UserRedemptionCodes")
   appeals         Appeal[]
+  watermarkTemplates WatermarkTemplate[]
   
   // 推广佣金记录
   referralRewardsGiven    ReferralRecord[] @relation("InviterRewards") /// 作为邀请人获得的佣金
@@ -171,6 +172,7 @@ model Generation {
   generatedImages String[] /// 存储九宫格切片图片 URL 数组
   status                   String   @default("PENDING")
   hasUsedDiscountedRetry Boolean @default(false)
+  isWatermarkUnlocked    Boolean @default(false) /// 是否已解锁水印功能
   createdAt                DateTime @default(now())
 
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -222,4 +224,29 @@ model Appeal {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+}
+
+/// 水印模板（用户预设）
+model WatermarkTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String                         /// 模板名称
+  type      String                         /// 类型：IMAGE / TEXT
+  content   String   @db.Text              /// 图片URL 或 文本内容
+  opacity   Int      @default(100)         /// 不透明度 0-100
+  rotate    Int      @default(0)           /// 旋转角度 0-360
+  scale     Int      @default(100)         /// 缩放比例 1-100
+  position  String   @default("se")        /// TOS gravity: nw/north/ne/west/center/east/sw/south/se
+  xOffset   Int      @default(10)          /// 水平边距（像素）
+  yOffset   Int      @default(10)          /// 垂直边距（像素）
+  isTiled   Boolean  @default(false)       /// 是否平铺
+  fontSize  Int?                           /// 文本字号（仅type=TEXT）
+  fontColor String?                        /// 文本颜色（仅type=TEXT，Hex格式 #FFFFFF）
+  fontName  String?                        /// 字体名称（仅type=TEXT）
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

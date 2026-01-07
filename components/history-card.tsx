@@ -19,6 +19,7 @@ export type HistoryItem = {
   status: string
   originalImage: string[]
   hasUsedDiscountedRetry?: boolean
+  isWatermarkUnlocked?: boolean
   appeal?: {
     id: string
     status: string

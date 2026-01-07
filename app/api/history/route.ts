@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
           status: true,
           createdAt: true,
           hasUsedDiscountedRetry: true,
+          isWatermarkUnlocked: true,
           appeal: {
             select: {
               id: true,

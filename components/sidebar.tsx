@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -26,6 +26,7 @@ const navItems: NavItem[] = [
   { icon: Wallet, label: "积分流水", href: "/credits" },
   { icon: ShieldCheck, label: "售后记录", href: "/appeals" },
   { icon: Gift, label: "邀请赚积分", href: "/referral" },
+  { icon: Droplets, label: "水印模板", href: "/settings/watermark" },
 ]
 
 // 管理员专属导航
