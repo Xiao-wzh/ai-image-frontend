@@ -49,7 +49,12 @@ export function RegisterModal({ isOpen, onClose }: RegisterModalProps) {
     if (typeof window === "undefined") return ""
     let deviceId = localStorage.getItem("device_id")
     if (!deviceId) {
-      deviceId = "dev_" + crypto.randomUUID()
+      // 兼容性生成UUID（不依赖 crypto.randomUUID）
+      deviceId = "dev_" + "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+        const r = (Math.random() * 16) | 0
+        const v = c === "x" ? r : (r & 0x3) | 0x8
+        return v.toString(16)
+      })
       localStorage.setItem("device_id", deviceId)
     }
     return deviceId
