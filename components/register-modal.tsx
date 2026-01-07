@@ -44,6 +44,17 @@ export function RegisterModal({ isOpen, onClose }: RegisterModalProps) {
     }
   }, [countdown])
 
+  // 获取或生成设备ID（用于限流）
+  const getDeviceId = (): string => {
+    if (typeof window === "undefined") return ""
+    let deviceId = localStorage.getItem("device_id")
+    if (!deviceId) {
+      deviceId = "dev_" + crypto.randomUUID()
+      localStorage.setItem("device_id", deviceId)
+    }
+    return deviceId
+  }
+
   // Send Verification Code
   const handleSendCode = async () => {
     if (!regEmail.trim()) {
@@ -97,6 +108,7 @@ export function RegisterModal({ isOpen, onClose }: RegisterModalProps) {
 
     try {
       setIsRegistering(true)
+      const deviceId = getDeviceId()
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,6 +118,7 @@ export function RegisterModal({ isOpen, onClose }: RegisterModalProps) {
           password: regPassword,
           code: regCode.trim(),
           inviteCode: regInviteCode.trim() || undefined,
+          deviceId,
         }),
       })
 

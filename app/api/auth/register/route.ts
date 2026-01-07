@@ -2,9 +2,24 @@ import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { REGISTRATION_BONUS, INVITE_CODE_BONUS } from "@/lib/constants"
+import { normalizeEmail } from "@/lib/normalize-email"
+import { checkRegistrationRateLimit, recordRegistrationSuccess } from "@/lib/rate-limit"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+
+// 获取客户端 IP
+function getClientIp(req: NextRequest): string {
+  const forwarded = req.headers.get("x-forwarded-for")
+  if (forwarded) {
+    return forwarded.split(",")[0].trim()
+  }
+  const realIp = req.headers.get("x-real-ip")
+  if (realIp) {
+    return realIp
+  }
+  return "127.0.0.1"
+}
 
 // 生成6位随机推广码（大写字母+数字）
 function generateReferralCode(): string {
@@ -40,7 +55,17 @@ async function generateUniqueReferralCode(): Promise<string> {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { email, username, password, code, inviteCode } = body
+    const { email, username, password, code, inviteCode, deviceId } = body
+
+    // 0. 频率限制检查
+    const clientIp = getClientIp(req)
+    const rateCheck = await checkRegistrationRateLimit(clientIp, deviceId)
+    if (!rateCheck.allowed) {
+      return NextResponse.json(
+        { error: rateCheck.reason || "操作过于频繁" },
+        { status: 429 }
+      )
+    }
 
     // 1. 验证必填字段
     if (!email?.trim() || !username?.trim() || !password?.trim() || !code?.trim()) {
@@ -58,13 +83,24 @@ export async function POST(req: NextRequest) {
 
     // 限制只允许 QQ邮箱 和 Gmail 邮箱
     const emailLower = email.toLowerCase().trim()
-    const allowedDomains = ["@qq.com"]
+    const allowedDomains = ["@qq.com", "@gmail.com"]
     const isAllowedDomain = allowedDomains.some(domain => emailLower.endsWith(domain))
     if (!isAllowedDomain) {
       return NextResponse.json(
         { error: "仅支持 QQ邮箱 和 Gmail 邮箱注册" },
         { status: 400 }
       )
+    }
+
+    // QQ邮箱只支持纯数字前缀（如 123456@qq.com）
+    if (emailLower.endsWith("@qq.com")) {
+      const qqPrefix = emailLower.split("@")[0]
+      if (!/^\d+$/.test(qqPrefix)) {
+        return NextResponse.json(
+          { error: "QQ邮箱仅支持纯数字格式（如 123456@qq.com）" },
+          { status: 400 }
+        )
+      }
     }
 
     // 验证用户名格式
@@ -112,18 +148,22 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 3. 检查邮箱和用户名是否已存在
+    // 3. 检查邮箱和用户名是否已存在（双保险：原始邮箱 + 归一化邮箱）
+    const emailLowerTrimmed = email.trim().toLowerCase()
+    const normalizedEmailValue = normalizeEmail(email)
+
     const existingUser = await prisma.user.findFirst({
       where: {
         OR: [
-          { email: email.trim() },
+          { email: emailLowerTrimmed },
+          { normalizedEmail: normalizedEmailValue },
           { username: username.trim() },
         ],
       },
     })
 
     if (existingUser) {
-      if (existingUser.email === email.trim()) {
+      if (existingUser.email === emailLowerTrimmed || existingUser.normalizedEmail === normalizedEmailValue) {
         return NextResponse.json(
           { error: "该邮箱已被注册" },
           { status: 400 }
@@ -178,7 +218,8 @@ export async function POST(req: NextRequest) {
       // 创建用户
       const newUser = await tx.user.create({
         data: {
-          email: email.trim(),
+          email: emailLowerTrimmed,
+          normalizedEmail: normalizedEmailValue,
           username: username.trim(),
           password: hashedPassword,
           emailVerified: new Date(),
@@ -209,6 +250,9 @@ export async function POST(req: NextRequest) {
     })
 
     console.log(`✅ 用户注册成功: ${user.email} (${user.username})${inviter ? ` - 由 ${inviter.email} 邀请` : ""}`)
+
+    // 记录成功注册（限流计数）
+    await recordRegistrationSuccess(clientIp, deviceId)
 
     return NextResponse.json({
       success: true,

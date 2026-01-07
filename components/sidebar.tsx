@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -26,6 +26,12 @@ const navItems: NavItem[] = [
   { icon: Wallet, label: "积分流水", href: "/credits" },
   { icon: ShieldCheck, label: "售后记录", href: "/appeals" },
   { icon: Gift, label: "邀请赚积分", href: "/referral" },
+]
+
+// 管理员专属导航
+const adminItems: NavItem[] = [
+  { icon: LayoutGrid, label: "生成记录管理", href: "/admin/generations" },
+  { icon: ShieldCheck, label: "售后审核", href: "/admin/appeals" },
 ]
 
 export function Sidebar() {
@@ -127,6 +133,32 @@ export function Sidebar() {
               </button>
             )
           })}
+
+          {/* 管理员菜单 */}
+          {session?.user?.role === "ADMIN" && (
+            <>
+              <div className="my-3 border-t border-white/10" />
+              <div className="text-xs text-slate-500 px-4 py-1 font-medium">管理员</div>
+              {adminItems.map((item) => {
+                const isActive = pathname?.startsWith(item.href)
+                return (
+                  <button
+                    key={item.label}
+                    onClick={() => router.push(item.href)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium",
+                      isActive
+                        ? "bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg"
+                        : "text-orange-400/70 hover:text-orange-300 hover:bg-white/5",
+                    )}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </button>
+                )
+              })}
+            </>
+          )}
         </nav>
 
         {/* 每日签到按钮组件 */}
