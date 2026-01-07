@@ -1,11 +1,12 @@
 import { auth } from "@/auth"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
+import { WATERMARK_UNLOCK_COST } from "@/lib/constants"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const UNLOCK_COST = 100 // 解锁水印功能所需积分
+const UNLOCK_COST = WATERMARK_UNLOCK_COST
 
 export async function POST(req: NextRequest) {
     try {

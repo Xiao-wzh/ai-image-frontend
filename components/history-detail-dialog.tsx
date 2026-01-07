@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
 import { getWatermarkedUrl, WatermarkParams } from "@/lib/tos-watermark"
+import { WATERMARK_UNLOCK_COST } from "@/lib/constants"
 import type { HistoryItem } from "@/components/history-card"
 
 function sanitizeFilename(name: string) {
@@ -432,7 +433,7 @@ export function HistoryDetailDialog({
                     className="h-8 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white"
                   >
                     <Lock className="w-3.5 h-3.5 mr-1.5" />
-                    解锁水印 (100积分)
+                    解锁水印 ({WATERMARK_UNLOCK_COST}积分)
                   </Button>
                 ) : (
                   // Unlocked state - show template selector
@@ -678,7 +679,7 @@ export function HistoryDetailDialog({
               解锁水印功能
             </h4>
             <p className="text-sm text-slate-400 mb-4">
-              支付 <span className="text-cyan-400 font-semibold">100 积分</span> 解锁本组作品的水印编辑权限。
+              支付 <span className="text-cyan-400 font-semibold">{WATERMARK_UNLOCK_COST} 积分</span> 解锁本组作品的水印编辑权限。
               <br />
               <span className="text-xs text-slate-500">解锁后永久可用，可随时添加或更换水印。</span>
             </p>

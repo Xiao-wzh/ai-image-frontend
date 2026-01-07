@@ -52,3 +52,8 @@ export const INVITE_CODE_BONUS = 200
 
 // 推广返佣比例（邀请人获得被邀请人充值金额的百分比）
 export const REFERRAL_COMMISSION_RATE = 0.1 // 10%
+
+// ==================== 水印功能配置 ====================
+
+// 解锁水印功能所需积分
+export const WATERMARK_UNLOCK_COST = 100
