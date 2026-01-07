@@ -32,6 +32,7 @@ const navItems: NavItem[] = [
 const adminItems: NavItem[] = [
   { icon: LayoutGrid, label: "生成记录管理", href: "/admin/generations" },
   { icon: ShieldCheck, label: "售后审核", href: "/admin/appeals" },
+  { icon: Settings, label: "提示词管理", href: "/admin/prompts" },
 ]
 
 export function Sidebar() {

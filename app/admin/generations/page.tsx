@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { motion } from "framer-motion"
-import { Search, Filter, RefreshCw, Eye, ChevronLeft, ChevronRight, User, Calendar, Loader2, X } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Search, Filter, RefreshCw, ChevronLeft, ChevronRight, User, Loader2, X, ZoomIn } from "lucide-react"
 import { format } from "date-fns"
 
 import { Sidebar } from "@/components/sidebar"
@@ -14,7 +14,6 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ProductType, ProductTypeLabel } from "@/lib/constants"
 
 type UserOption = {
     id: string
@@ -22,6 +21,12 @@ type UserOption = {
     username: string | null
     email: string
     image: string | null
+}
+
+type PlatformOption = {
+    key: string
+    name: string
+    prompts: { productType: string; productTypeLabel: string }[]
 }
 
 type Generation = {
@@ -45,10 +50,15 @@ export default function AdminGenerationsPage() {
     const [userLoading, setUserLoading] = useState(false)
 
     const [productSearch, setProductSearch] = useState("")
+    const [platform, setPlatform] = useState<string>("all")
     const [productType, setProductType] = useState<string>("all")
     const [status, setStatus] = useState<string>("all")
     const [startDate, setStartDate] = useState("")
     const [endDate, setEndDate] = useState("")
+
+    // Platforms and product types from database
+    const [platforms, setPlatforms] = useState<PlatformOption[]>([])
+    const [filteredProductTypes, setFilteredProductTypes] = useState<{ key: string; label: string }[]>([])
 
     // Data states
     const [data, setData] = useState<Generation[]>([])
@@ -57,6 +67,78 @@ export default function AdminGenerationsPage() {
     const [total, setTotal] = useState(0)
     const [totalPages, setTotalPages] = useState(0)
     const limit = 20
+
+    // Image preview lightbox
+    const [previewImage, setPreviewImage] = useState<string | null>(null)
+
+    // Fetch platforms from database
+    useEffect(() => {
+        const fetchPlatforms = async () => {
+            try {
+                const res = await fetch("/api/config/platforms")
+                if (res.ok) {
+                    const result = await res.json()
+                    // API returns array directly: [{id, label, value, types: [{label, value}]}]
+                    const platformList: PlatformOption[] = (Array.isArray(result) ? result : []).map((p: any) => ({
+                        key: p.value,  // API uses 'value' for key
+                        name: p.label, // API uses 'label' for name
+                        prompts: (p.types || []).map((t: any) => ({
+                            productType: t.value,
+                            productTypeLabel: t.label || t.value,
+                        })),
+                    }))
+                    setPlatforms(platformList)
+                    console.log("Loaded platforms:", platformList)
+
+                    // Extract all unique product types
+                    const allTypes: { key: string; label: string }[] = []
+                    const seen = new Set<string>()
+                    platformList.forEach((p) => {
+                        p.prompts.forEach((pr) => {
+                            if (!seen.has(pr.productType)) {
+                                seen.add(pr.productType)
+                                allTypes.push({ key: pr.productType, label: pr.productTypeLabel })
+                            }
+                        })
+                    })
+                    setFilteredProductTypes(allTypes)
+                }
+            } catch (err) {
+                console.error("获取平台失败:", err)
+            }
+        }
+        fetchPlatforms()
+    }, [])
+
+    // Update product types when platform changes
+    useEffect(() => {
+        if (platform === "all") {
+            // Show all product types
+            const allTypes: { key: string; label: string }[] = []
+            const seen = new Set<string>()
+            platforms.forEach((p) => {
+                p.prompts.forEach((pr) => {
+                    if (!seen.has(pr.productType)) {
+                        seen.add(pr.productType)
+                        allTypes.push({ key: pr.productType, label: pr.productTypeLabel })
+                    }
+                })
+            })
+            setFilteredProductTypes(allTypes)
+        } else {
+            // Show product types for selected platform
+            const selectedPlatform = platforms.find((p) => p.key === platform)
+            if (selectedPlatform) {
+                setFilteredProductTypes(
+                    selectedPlatform.prompts.map((pr) => ({
+                        key: pr.productType,
+                        label: pr.productTypeLabel,
+                    }))
+                )
+            }
+        }
+        setProductType("all") // Reset product type when platform changes
+    }, [platform, platforms])
 
     // User search
     const searchUsers = useCallback(async (query: string) => {
@@ -111,7 +193,7 @@ export default function AdminGenerationsPage() {
 
     useEffect(() => {
         fetchData()
-    }, [page]) // Only auto-fetch on page change
+    }, [page])
 
     const handleSearch = () => {
         setPage(1)
@@ -121,12 +203,12 @@ export default function AdminGenerationsPage() {
     const handleReset = () => {
         setSelectedUser(null)
         setProductSearch("")
+        setPlatform("all")
         setProductType("all")
         setStatus("all")
         setStartDate("")
         setEndDate("")
         setPage(1)
-        // fetchData will be called after state updates
     }
 
     // Status badge colors
@@ -139,6 +221,18 @@ export default function AdminGenerationsPage() {
         }
         const config = statusConfig[s] || { color: "bg-gray-500/20 text-gray-400", label: s }
         return <Badge className={`${config.color} border`}>{config.label}</Badge>
+    }
+
+    // Get product type label
+    const getProductTypeLabel = (key: string) => {
+        const found = filteredProductTypes.find(t => t.key === key)
+        if (found) return found.label
+        // Search all platforms
+        for (const p of platforms) {
+            const pr = p.prompts.find(pr => pr.productType === key)
+            if (pr) return pr.productTypeLabel
+        }
+        return key
     }
 
     return (
@@ -158,23 +252,24 @@ export default function AdminGenerationsPage() {
                     <p className="text-slate-400 mt-1">查看和管理所有用户的生成记录</p>
                 </motion.div>
 
-                {/* Filter Bar */}
+                {/* Filter Bar - Multi-row layout */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.1 }}
-                    className="bg-white/5 border border-white/10 rounded-2xl p-4 mb-6"
+                    className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-6"
                 >
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                    {/* Row 1: User, Product, Platform */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                         {/* User Combobox */}
-                        <div className="space-y-1">
-                            <label className="text-xs text-slate-400">用户</label>
+                        <div className="space-y-2">
+                            <label className="text-sm text-slate-300 font-medium">用户</label>
                             <Popover open={userSearchOpen} onOpenChange={setUserSearchOpen}>
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
                                         role="combobox"
-                                        className="w-full justify-between h-10 bg-white/5 border-white/10 text-white hover:bg-white/10"
+                                        className="w-full justify-between h-11 bg-white/5 border-white/10 text-white hover:bg-white/10"
                                     >
                                         {selectedUser ? (
                                             <div className="flex items-center gap-2 truncate">
@@ -184,7 +279,7 @@ export default function AdminGenerationsPage() {
                                                         {(selectedUser.name || selectedUser.email)?.[0]?.toUpperCase()}
                                                     </AvatarFallback>
                                                 </Avatar>
-                                                <span className="truncate">{selectedUser.username || selectedUser.name || selectedUser.email}</span>
+                                                <span className="truncate text-white">{selectedUser.username || selectedUser.name || selectedUser.email}</span>
                                             </div>
                                         ) : (
                                             <span className="text-slate-400">选择用户...</span>
@@ -233,7 +328,7 @@ export default function AdminGenerationsPage() {
                                                                 </AvatarFallback>
                                                             </Avatar>
                                                             <div className="flex flex-col">
-                                                                <span className="font-medium">{user.username || user.name || "无名称"}</span>
+                                                                <span className="font-medium text-white">{user.username || user.name || "无名称"}</span>
                                                                 <span className="text-xs text-slate-400">{user.email}</span>
                                                             </div>
                                                         </CommandItem>
@@ -247,77 +342,99 @@ export default function AdminGenerationsPage() {
                         </div>
 
                         {/* Product Search */}
-                        <div className="space-y-1">
-                            <label className="text-xs text-slate-400">产品名称</label>
+                        <div className="space-y-2">
+                            <label className="text-sm text-slate-300 font-medium">产品名称</label>
                             <Input
                                 value={productSearch}
                                 onChange={(e) => setProductSearch(e.target.value)}
                                 placeholder="搜索产品..."
-                                className="h-10 bg-white/5 border-white/10 text-white"
+                                className="h-11 bg-white/5 border-white/10 text-white placeholder:text-slate-500"
                             />
                         </div>
 
-                        {/* Product Type */}
-                        <div className="space-y-1">
-                            <label className="text-xs text-slate-400">产品类型</label>
-                            <Select value={productType} onValueChange={setProductType}>
-                                <SelectTrigger className="h-10 bg-white/5 border-white/10 text-white">
-                                    <SelectValue placeholder="全部类型" />
+                        {/* Platform */}
+                        <div className="space-y-2">
+                            <label className="text-sm text-slate-300 font-medium">平台</label>
+                            <Select value={platform} onValueChange={setPlatform}>
+                                <SelectTrigger className="h-11 bg-white/5 border-white/10 text-white">
+                                    <SelectValue placeholder="全部平台" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-slate-900 border-white/10">
-                                    <SelectItem value="all">全部类型</SelectItem>
-                                    {Object.entries(ProductTypeLabel).map(([key, label]) => (
-                                        <SelectItem key={key} value={key}>{label}</SelectItem>
+                                    <SelectItem value="all" className="text-white">全部平台</SelectItem>
+                                    {platforms.map((p) => (
+                                        <SelectItem key={p.key} value={p.key} className="text-white">{p.name}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
                         </div>
 
+                        {/* Product Type / Style */}
+                        <div className="space-y-2">
+                            <label className="text-sm text-slate-300 font-medium">风格</label>
+                            <Select value={productType} onValueChange={setProductType}>
+                                <SelectTrigger className="h-11 bg-white/5 border-white/10 text-white">
+                                    <SelectValue placeholder="全部风格" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-white/10">
+                                    <SelectItem value="all" className="text-white">全部风格</SelectItem>
+                                    {filteredProductTypes.map((type) => (
+                                        <SelectItem key={type.key} value={type.key} className="text-white">{type.label}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+
+                    {/* Row 2: Status, Date Range, Actions */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         {/* Status */}
-                        <div className="space-y-1">
-                            <label className="text-xs text-slate-400">状态</label>
+                        <div className="space-y-2">
+                            <label className="text-sm text-slate-300 font-medium">状态</label>
                             <Select value={status} onValueChange={setStatus}>
-                                <SelectTrigger className="h-10 bg-white/5 border-white/10 text-white">
+                                <SelectTrigger className="h-11 bg-white/5 border-white/10 text-white">
                                     <SelectValue placeholder="全部状态" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-slate-900 border-white/10">
-                                    <SelectItem value="all">全部状态</SelectItem>
-                                    <SelectItem value="PENDING">处理中</SelectItem>
-                                    <SelectItem value="PROCESSING">生成中</SelectItem>
-                                    <SelectItem value="COMPLETED">已完成</SelectItem>
-                                    <SelectItem value="FAILED">失败</SelectItem>
+                                    <SelectItem value="all" className="text-white">全部状态</SelectItem>
+                                    <SelectItem value="PENDING" className="text-white">处理中</SelectItem>
+                                    <SelectItem value="PROCESSING" className="text-white">生成中</SelectItem>
+                                    <SelectItem value="COMPLETED" className="text-white">已完成</SelectItem>
+                                    <SelectItem value="FAILED" className="text-white">失败</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
 
-                        {/* Date Range */}
-                        <div className="space-y-1">
-                            <label className="text-xs text-slate-400">日期范围</label>
-                            <div className="flex gap-2">
-                                <Input
-                                    type="date"
-                                    value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    className="h-10 bg-white/5 border-white/10 text-white flex-1"
-                                />
-                                <Input
-                                    type="date"
-                                    value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    className="h-10 bg-white/5 border-white/10 text-white flex-1"
-                                />
-                            </div>
+                        {/* Start Date */}
+                        <div className="space-y-2">
+                            <label className="text-sm text-slate-300 font-medium">开始日期</label>
+                            <Input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="h-11 bg-white/5 border-white/10 text-white"
+                            />
+                        </div>
+
+                        {/* End Date */}
+                        <div className="space-y-2">
+                            <label className="text-sm text-slate-300 font-medium">结束日期</label>
+                            <Input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="h-11 bg-white/5 border-white/10 text-white"
+                            />
                         </div>
 
                         {/* Buttons */}
-                        <div className="space-y-1">
-                            <label className="text-xs text-transparent">操作</label>
+                        <div className="space-y-2">
+                            <label className="text-sm text-transparent font-medium">操作</label>
                             <div className="flex gap-2">
-                                <Button onClick={handleSearch} className="h-10 flex-1 bg-blue-600 hover:bg-blue-700">
-                                    <Search className="w-4 h-4 mr-1" />
+                                <Button onClick={handleSearch} className="h-11 flex-1 bg-blue-600 hover:bg-blue-700 text-white">
+                                    <Search className="w-4 h-4 mr-2" />
                                     搜索
                                 </Button>
-                                <Button onClick={handleReset} variant="outline" className="h-10 bg-white/5 border-white/10 text-white hover:bg-white/10">
+                                <Button onClick={handleReset} variant="outline" className="h-11 bg-white/5 border-white/10 text-white hover:bg-white/10">
                                     <RefreshCw className="w-4 h-4" />
                                 </Button>
                             </div>
@@ -339,9 +456,10 @@ export default function AdminGenerationsPage() {
                 >
                     {/* Table Header */}
                     <div className="grid grid-cols-12 gap-4 p-4 border-b border-white/10 text-xs text-slate-400 font-medium">
-                        <div className="col-span-3">用户</div>
-                        <div className="col-span-3">产品</div>
-                        <div className="col-span-2">缩略图</div>
+                        <div className="col-span-2">用户</div>
+                        <div className="col-span-2">产品</div>
+                        <div className="col-span-2">原图</div>
+                        <div className="col-span-2">九宫格</div>
                         <div className="col-span-2">状态</div>
                         <div className="col-span-2">时间</div>
                     </div>
@@ -350,7 +468,7 @@ export default function AdminGenerationsPage() {
                     {loading ? (
                         <div className="space-y-4 p-4">
                             {[1, 2, 3, 4, 5].map((i) => (
-                                <Skeleton key={i} className="h-16 w-full bg-white/10 rounded-xl" />
+                                <Skeleton key={i} className="h-20 w-full bg-white/10 rounded-xl" />
                             ))}
                         </div>
                     ) : data.length === 0 ? (
@@ -366,48 +484,82 @@ export default function AdminGenerationsPage() {
                                     className="grid grid-cols-12 gap-4 p-4 items-center hover:bg-white/5 transition-colors"
                                 >
                                     {/* User */}
-                                    <div className="col-span-3 flex items-center gap-3">
-                                        <Avatar className="w-8 h-8">
+                                    <div className="col-span-2 flex items-center gap-2">
+                                        <Avatar className="w-8 h-8 flex-shrink-0">
                                             <AvatarImage src={item.user?.image || ""} />
-                                            <AvatarFallback className="bg-blue-500 text-xs">
+                                            <AvatarFallback className="bg-blue-500 text-xs text-white">
                                                 {(item.user?.name || item.user?.email)?.[0]?.toUpperCase() || "U"}
                                             </AvatarFallback>
                                         </Avatar>
                                         <div className="min-w-0">
                                             <div className="text-sm text-white font-medium truncate">
-                                                {item.user?.username || item.user?.name || "未知用户"}
+                                                {item.user?.username || item.user?.name || "未知"}
                                             </div>
-                                            <div className="text-xs text-slate-400 truncate">
-                                                {item.user?.email || "-"}
+                                            <div className="text-xs text-slate-500 truncate">
+                                                {item.user?.email?.split("@")[0] || "-"}
                                             </div>
                                         </div>
                                     </div>
 
                                     {/* Product */}
-                                    <div className="col-span-3">
-                                        <div className="text-sm text-white truncate">{item.productName}</div>
+                                    <div className="col-span-2">
+                                        <div className="text-sm text-white truncate" title={item.productName}>{item.productName}</div>
                                         <Badge variant="outline" className="text-xs mt-1 border-white/20 text-slate-400">
-                                            {ProductTypeLabel[item.productType as keyof typeof ProductTypeLabel] || item.productType}
+                                            {getProductTypeLabel(item.productType)}
                                         </Badge>
                                     </div>
 
-                                    {/* Thumbnail */}
+                                    {/* Original Images */}
                                     <div className="col-span-2">
-                                        {item.generatedImage || item.generatedImages?.[0] ? (
-                                            <img
-                                                src={item.generatedImage || item.generatedImages?.[0]}
-                                                alt="Generated"
-                                                className="w-12 h-12 object-cover rounded-lg border border-white/10"
-                                            />
-                                        ) : item.originalImage?.[0] ? (
-                                            <img
-                                                src={item.originalImage[0]}
-                                                alt="Original"
-                                                className="w-12 h-12 object-cover rounded-lg border border-white/10 opacity-50"
-                                            />
+                                        <div className="flex -space-x-2">
+                                            {item.originalImage?.slice(0, 3).map((img, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    className="relative w-12 h-12 rounded-lg border-2 border-[#0a0a0f] overflow-hidden cursor-pointer hover:z-10 hover:scale-110 transition-transform group"
+                                                    onClick={() => setPreviewImage(img)}
+                                                >
+                                                    <img
+                                                        src={img}
+                                                        alt={`Original ${idx + 1}`}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <ZoomIn className="w-4 h-4 text-white" />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {(item.originalImage?.length || 0) > 3 && (
+                                                <div className="w-12 h-12 rounded-lg bg-white/10 border-2 border-[#0a0a0f] flex items-center justify-center text-xs text-slate-400">
+                                                    +{item.originalImage.length - 3}
+                                                </div>
+                                            )}
+                                            {!item.originalImage?.length && (
+                                                <div className="w-12 h-12 bg-white/5 rounded-lg flex items-center justify-center">
+                                                    <span className="text-slate-500 text-xs">无</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Generated Image (九宫格) - Admin Only */}
+                                    <div className="col-span-2">
+                                        {item.generatedImage ? (
+                                            <div
+                                                className="relative w-16 h-16 rounded-lg border-2 border-emerald-500/30 overflow-hidden cursor-pointer hover:scale-110 transition-transform group"
+                                                onClick={() => setPreviewImage(item.generatedImage!)}
+                                            >
+                                                <img
+                                                    src={item.generatedImage}
+                                                    alt="九宫格"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                    <ZoomIn className="w-4 h-4 text-white" />
+                                                </div>
+                                            </div>
                                         ) : (
-                                            <div className="w-12 h-12 bg-white/5 rounded-lg flex items-center justify-center">
-                                                <span className="text-slate-500 text-xs">无图</span>
+                                            <div className="w-16 h-16 bg-white/5 rounded-lg flex items-center justify-center">
+                                                <span className="text-slate-500 text-xs">无</span>
                                             </div>
                                         )}
                                     </div>
@@ -456,6 +608,41 @@ export default function AdminGenerationsPage() {
                     )}
                 </motion.div>
             </main>
+
+            {/* Image Preview Lightbox */}
+            <AnimatePresence>
+                {previewImage && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+                        onClick={() => setPreviewImage(null)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.9, opacity: 0 }}
+                            className="relative max-w-4xl max-h-[90vh]"
+                            onClick={(e) => e.stopPropagation()}
+                        >
+                            <img
+                                src={previewImage}
+                                alt="Preview"
+                                className="max-w-full max-h-[90vh] object-contain rounded-lg"
+                            />
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                className="absolute top-2 right-2 bg-black/50 border-white/20 text-white hover:bg-black/70"
+                                onClick={() => setPreviewImage(null)}
+                            >
+                                <X className="w-5 h-5" />
+                            </Button>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     )
 }
