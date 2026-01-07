@@ -163,11 +163,11 @@ export function Sidebar() {
 
         {/* 每日签到按钮组件 */}
         {/* Daily Check-in */}
-        <div className="px-4 mt-auto">
+        {/* <div className="px-4 mt-auto">
           <div className="border-t border-white/5 pt-4">
             <DailyCheckin />
           </div>
-        </div>
+        </div> */}
 
         {/* User Info */}
         <div className="p-4 border-t border-white/5">

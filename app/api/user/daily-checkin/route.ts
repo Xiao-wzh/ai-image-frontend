@@ -65,6 +65,7 @@ export async function GET() {
 
 // POST: 执行打卡
 export async function POST() {
+    return NextResponse.json({ error: "活动未开始" }, { status: 500 })
     try {
         const session = await auth()
         if (!session?.user?.id) {
