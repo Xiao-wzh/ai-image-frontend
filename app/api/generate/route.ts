@@ -24,6 +24,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "请先登录" }, { status: 401 })
   }
 
+  // 检查用户并发任务数量限制（最多2个进行中的任务）
+  const MAX_CONCURRENT_TASKS = 2
+  const pendingCount = await prisma.generation.count({
+    where: {
+      userId,
+      status: { in: ["PENDING", "PROCESSING"] },
+    },
+  })
+  if (pendingCount >= MAX_CONCURRENT_TASKS) {
+    return NextResponse.json(
+      { error: `您当前有 ${pendingCount} 个任务正在进行中，请等待完成后再提交新任务（最多同时 ${MAX_CONCURRENT_TASKS} 个）` },
+      { status: 429 }
+    )
+  }
+
   // 在 try 外部预先解析 body，以便 catch 块可以访问
   const body = await req.clone().json().catch(() => null)
   const retryFromId = body?.retryFromId as string | undefined
