@@ -25,13 +25,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "邮箱格式不正确" }, { status: 400 })
     }
 
-    // 限制只允许 QQ邮箱 和 Gmail 邮箱
+    // 限制只允许 QQ邮箱（纯数字格式）
     const emailLower = email.toLowerCase()
-    const allowedDomains = ["@qq.com", "@gmail.com"]
-    const isAllowedDomain = allowedDomains.some(domain => emailLower.endsWith(domain))
-    if (!isAllowedDomain) {
+    if (!emailLower.endsWith("@qq.com")) {
       return NextResponse.json(
-        { error: "仅支持 QQ邮箱 和 Gmail 邮箱注册" },
+        { error: "仅支持 QQ邮箱注册" },
+        { status: 400 }
+      )
+    }
+
+    // QQ邮箱只支持纯数字前缀
+    const qqPrefix = emailLower.split("@")[0]
+    if (!/^\d+$/.test(qqPrefix)) {
+      return NextResponse.json(
+        { error: "QQ邮箱仅支持纯数字格式（如 123456@qq.com）" },
         { status: 400 }
       )
     }
