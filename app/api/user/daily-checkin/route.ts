@@ -66,17 +66,18 @@ export async function GET() {
 // POST: 执行打卡
 export async function POST() {
     return NextResponse.json({ error: "活动未开始" }, { status: 500 })
+    /* 活动暂停
     try {
         const session = await auth()
         if (!session?.user?.id) {
             return NextResponse.json({ error: "未登录" }, { status: 401 })
         }
-
+    
         const userId = session.user.id
         const now = new Date()
-
-
-
+    
+    
+    
         // 使用事务确保原子操作
         const result = await prisma.$transaction(async (tx) => {
             // 获取用户当前状态
@@ -84,18 +85,18 @@ export async function POST() {
                 where: { id: userId },
                 select: { lastCheckIn: true, bonusCredits: true },
             })
-
+    
             if (!user) {
                 throw new Error("用户不存在")
             }
-
+    
             // 再次检查是否可以打卡（防止重复打卡）
             if (user.lastCheckIn && isSameDay(user.lastCheckIn, now)) {
                 throw new Error("今日已打卡")
             }
-
-
-
+    
+    
+    
             // 更新用户积分和打卡时间
             const updatedUser = await tx.user.update({
                 where: { id: userId },
@@ -105,7 +106,7 @@ export async function POST() {
                 },
                 select: { credits: true, bonusCredits: true },
             })
-
+    
             // 创建积分记录
             await tx.creditRecord.create({
                 data: {
@@ -115,14 +116,14 @@ export async function POST() {
                     description: "每日打卡奖励",
                 },
             })
-
+    
             return {
                 newCredits: updatedUser.credits,
                 newBonusCredits: updatedUser.bonusCredits,
                 totalCredits: updatedUser.credits + updatedUser.bonusCredits,
             }
         })
-
+    
         return NextResponse.json({
             success: true,
             message: `打卡成功，获得 ${DAILY_CHECKIN_REWARD} 积分！`,
@@ -130,14 +131,15 @@ export async function POST() {
         })
     } catch (error: any) {
         console.error("打卡失败:", error)
-
+    
         if (error.message === "今日已打卡") {
             return NextResponse.json({ error: "今日已打卡" }, { status: 400 })
         }
         if (error.message === "用户不存在") {
             return NextResponse.json({ error: "用户不存在" }, { status: 404 })
         }
-
+    
         return NextResponse.json({ error: "打卡失败" }, { status: 500 })
     }
+    活动暂停 */
 }
