@@ -1,13 +1,12 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { X, Megaphone, Pin, Calendar } from "lucide-react"
+import { X, Megaphone, Calendar } from "lucide-react"
 import ReactMarkdown from "react-markdown"
 import remarkGfm from "remark-gfm"
 
 import { Button } from "@/components/ui/button"
-import { cn } from "@/lib/utils"
 
 type Announcement = {
     id: string
@@ -26,39 +25,30 @@ function getTodayString(): string {
     ).padStart(2, "0")}`
 }
 
-/** ✅ 标准化 Markdown：避免 \r\n / 多个空行导致的“空太多” */
+/** Normalize Markdown: avoid extra blank lines from \r\n */
 function normalizeMarkdown(md: string): string {
     return String(md ?? "")
-        .replace(/\r\n/g, "\n")       // Windows 换行 -> \n
-        .replace(/\n{3,}/g, "\n\n")   // 3+ 空行折叠成 2 行（Markdown 分段只需要 1 个空行）
+        .replace(/\r\n/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
         .trim()
 }
 
-export function SystemAnnouncementModal() {
-    const [isOpen, setIsOpen] = useState(false)
+type SystemAnnouncementModalProps = {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+}
+
+export function SystemAnnouncementModal({ open, onOpenChange }: SystemAnnouncementModalProps) {
     const [announcements, setAnnouncements] = useState<Announcement[]>([])
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
-        const closedDate = localStorage.getItem(STORAGE_KEY)
-        const today = getTodayString()
-
-        if (closedDate === today) {
-            setLoading(false)
-            return
-        }
-
         const fetchAnnouncements = async () => {
             try {
                 const res = await fetch("/api/announcements/active")
                 if (!res.ok) throw new Error("Failed to fetch")
                 const data = await res.json()
-                const items = data.announcements || []
-
-                if (items.length > 0) {
-                    setAnnouncements(items)
-                    setIsOpen(true)
-                }
+                setAnnouncements(data.announcements || [])
             } catch (error) {
                 console.error("Failed to fetch announcements:", error)
             } finally {
@@ -66,24 +56,26 @@ export function SystemAnnouncementModal() {
             }
         }
 
-        fetchAnnouncements()
-    }, [])
+        if (open) {
+            fetchAnnouncements()
+        }
+    }, [open])
 
-    const handleClose = () => setIsOpen(false)
+    const handleClose = () => onOpenChange(false)
 
     const handleCloseForToday = () => {
         localStorage.setItem(STORAGE_KEY, getTodayString())
-        setIsOpen(false)
+        onOpenChange(false)
     }
 
-    if (loading || !isOpen || announcements.length === 0) return null
+    if (!open || (loading && announcements.length === 0)) return null
 
     const pinnedAnnouncements = announcements.filter((a) => a.type === "PINNED")
     const normalAnnouncements = announcements.filter((a) => a.type === "NORMAL")
 
     return (
         <AnimatePresence>
-            {isOpen && (
+            {open && (
                 <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -96,7 +88,7 @@ export function SystemAnnouncementModal() {
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95, y: 10 }}
                         transition={{ type: "spring", duration: 0.5 }}
-                        className="bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl w-full max-w-3xl max-h-[80vh] overflow-hidden shadow-2xl"
+                        className="bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden shadow-2xl flex flex-col"
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Header */}
@@ -118,61 +110,65 @@ export function SystemAnnouncementModal() {
                         </div>
 
                         {/* Content */}
-                        <div className="p-4 max-h-[70vh] overflow-y-auto space-y-4">
-                            {/* Pinned announcements */}
-                            {pinnedAnnouncements.length > 0 && (
-                                <div className="space-y-3">
-                                    {pinnedAnnouncements.map((item) => {
-                                        const md = normalizeMarkdown(item.content)
-                                        return (
-                                            <div
-                                                key={item.id}
-                                                className="p-4 rounded-r-lg bg-amber-500/10 border-l-4 border-amber-500 mb-4"
-                                            >
-                                                <div className="flex items-center gap-2 mb-3">
-                                                    <span className="text-lg">📢</span>
-                                                    <h3 className="text-amber-400 font-bold text-base">{item.title}</h3>
-                                                </div>
+                        <div className="p-4 flex-1 overflow-y-auto space-y-4">
+                            {loading ? (
+                                <div className="text-center text-slate-400 py-8">加载中...</div>
+                            ) : announcements.length === 0 ? (
+                                <div className="text-center text-slate-400 py-8">暂无公告</div>
+                            ) : (
+                                <>
+                                    {/* Pinned announcements */}
+                                    {pinnedAnnouncements.length > 0 && (
+                                        <div className="space-y-3">
+                                            {pinnedAnnouncements.map((item) => {
+                                                const md = normalizeMarkdown(item.content)
+                                                return (
+                                                    <div
+                                                        key={item.id}
+                                                        className="p-4 rounded-r-lg bg-amber-500/10 border-l-4 border-amber-500 mb-4"
+                                                    >
+                                                        <div className="flex items-center gap-2 mb-3">
+                                                            <span className="text-lg">📢</span>
+                                                            <h3 className="text-amber-400 font-bold text-base">{item.title}</h3>
+                                                        </div>
 
-                                                <div
-                                                    className="prose prose-invert prose-sm max-w-none prose-p:text-amber-200 prose-p:my-2 prose-headings:text-amber-400 prose-headings:font-bold prose-headings:mt-4 prose-headings:mb-2 prose-strong:text-amber-400 prose-ul:my-2 prose-ol:my-2 prose-li:text-amber-200 prose-li:my-1 prose-blockquote:border-l-2 prose-blockquote:border-amber-400 prose-blockquote:pl-4 prose-blockquote:text-amber-300 prose-blockquote:italic prose-code:bg-amber-500/30 prose-code:text-amber-200 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-hr:border-amber-500/40 prose-hr:my-4 prose-a:text-amber-300 prose-a:underline"
-                                                >
-                                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
-                                                </div>
+                                                        <div className="prose prose-invert prose-sm max-w-none prose-p:text-amber-200 prose-p:my-2 prose-headings:text-amber-400 prose-headings:font-bold prose-headings:mt-4 prose-headings:mb-2 prose-strong:text-amber-400 prose-ul:my-2 prose-ol:my-2 prose-li:text-amber-200 prose-li:my-1 prose-blockquote:border-l-2 prose-blockquote:border-amber-400 prose-blockquote:pl-4 prose-blockquote:text-amber-300 prose-blockquote:italic prose-code:bg-amber-500/30 prose-code:text-amber-200 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-hr:border-amber-500/40 prose-hr:my-4 prose-a:text-amber-300 prose-a:underline">
+                                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
+                                                        </div>
 
-                                                <div className="mt-3 flex items-center gap-1 text-xs text-amber-400/70">
-                                                    <Calendar className="w-3 h-3" />
-                                                    {new Date(item.createdAt).toLocaleDateString("zh-CN")}
-                                                </div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            )}
+                                                        <div className="mt-3 flex items-center gap-1 text-xs text-amber-400/70">
+                                                            <Calendar className="w-3 h-3" />
+                                                            {new Date(item.createdAt).toLocaleDateString("zh-CN")}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
 
-                            {/* Normal announcements */}
-                            {normalAnnouncements.length > 0 && (
-                                <div className="space-y-3">
-                                    {normalAnnouncements.map((item) => {
-                                        const md = normalizeMarkdown(item.content)
-                                        return (
-                                            <div key={item.id} className="p-4 rounded-lg bg-slate-800/50 border border-slate-700/50">
-                                                <h3 className="text-white font-bold text-base mb-3">{item.title}</h3>
+                                    {/* Normal announcements */}
+                                    {normalAnnouncements.length > 0 && (
+                                        <div className="space-y-3">
+                                            {normalAnnouncements.map((item) => {
+                                                const md = normalizeMarkdown(item.content)
+                                                return (
+                                                    <div key={item.id} className="p-4 rounded-lg bg-slate-800/50 border border-slate-700/50">
+                                                        <h3 className="text-white font-bold text-base mb-3">{item.title}</h3>
 
-                                                <div
-                                                    className="prose prose-invert prose-sm max-w-none prose-p:text-slate-300 prose-p:my-2 prose-headings:text-white prose-headings:font-bold prose-headings:mt-4 prose-headings:mb-2 prose-strong:text-white prose-ul:my-2 prose-ol:my-2 prose-li:text-slate-300 prose-li:my-1 prose-blockquote:border-l-2 prose-blockquote:border-blue-400 prose-blockquote:pl-4 prose-blockquote:text-slate-400 prose-blockquote:italic prose-code:bg-slate-700 prose-code:text-slate-200 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-hr:border-slate-600 prose-hr:my-4 prose-a:text-blue-400 prose-a:underline"
-                                                >
-                                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
-                                                </div>
+                                                        <div className="prose prose-invert prose-sm max-w-none prose-p:text-slate-300 prose-p:my-2 prose-headings:text-white prose-headings:font-bold prose-headings:mt-4 prose-headings:mb-2 prose-strong:text-white prose-ul:my-2 prose-ol:my-2 prose-li:text-slate-300 prose-li:my-1 prose-blockquote:border-l-2 prose-blockquote:border-blue-400 prose-blockquote:pl-4 prose-blockquote:text-slate-400 prose-blockquote:italic prose-code:bg-slate-700 prose-code:text-slate-200 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-hr:border-slate-600 prose-hr:my-4 prose-a:text-blue-400 prose-a:underline">
+                                                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{md}</ReactMarkdown>
+                                                        </div>
 
-                                                <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
-                                                    <Calendar className="w-3 h-3" />
-                                                    {new Date(item.createdAt).toLocaleDateString("zh-CN")}
-                                                </div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
+                                                        <div className="mt-3 flex items-center gap-1 text-xs text-slate-500">
+                                                            <Calendar className="w-3 h-3" />
+                                                            {new Date(item.createdAt).toLocaleDateString("zh-CN")}
+                                                        </div>
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
 
@@ -197,4 +193,12 @@ export function SystemAnnouncementModal() {
             )}
         </AnimatePresence>
     )
+}
+
+/** Export helper for checking if should auto-open */
+export function shouldAutoOpenAnnouncement(): boolean {
+    if (typeof window === "undefined") return false
+    const closedDate = localStorage.getItem(STORAGE_KEY)
+    const today = getTodayString()
+    return closedDate !== today
 }

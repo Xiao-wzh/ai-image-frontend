@@ -9,18 +9,37 @@ import { RegisterModal } from "@/components/register-modal"
 import { UserAccountNav } from "@/components/user-account-nav"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { LogIn } from "lucide-react"
+import { LogIn, Megaphone } from "lucide-react"
+import { useAnnouncementModal } from "@/hooks/use-announcement-modal"
 
 export default function DashboardPage() {
   const { data: session, status } = useSession()
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const announcementModal = useAnnouncementModal()
 
   return (
     <div className="flex h-screen bg-slate-950">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header with Auth */}
-        <header className="absolute top-0 right-0 p-6 z-10">
+        <header className="absolute top-0 right-0 p-6 z-10 flex items-center gap-3">
+          {/* Announcement Button */}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+          >
+            <Button
+              onClick={() => announcementModal.open()}
+              className="glass rounded-xl px-4 py-2 hover:bg-white/10 text-white backdrop-blur-sm border border-white/10 transition-all group"
+              variant="ghost"
+            >
+              <Megaphone className="w-4 h-4 mr-2 group-hover:scale-110 transition-transform" />
+              公告
+            </Button>
+          </motion.div>
+
+          {/* Auth Section */}
           {status === "loading" ? (
             <Skeleton className="w-10 h-10 rounded-full bg-white/10" />
           ) : session?.user ? (
@@ -47,6 +66,7 @@ export default function DashboardPage() {
             </motion.div>
           )}
         </header>
+
 
         <main className="flex-1 overflow-y-auto">
           {/* Hero Section */}
