@@ -342,7 +342,7 @@ export default function WatermarkSettingsPage() {
                         <Droplets className="w-6 h-6 text-cyan-400" />
                         水印模板管理
                     </h1>
-                    <p className="text-slate-400 mt-1">创建和管理您的水印预设 (使用火山引擎 TOS 实时预览)</p>
+                    <p className="text-slate-400 mt-1">创建和管理您的水印预设 (实时预览)</p>
                 </motion.div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
