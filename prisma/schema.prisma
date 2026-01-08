@@ -250,3 +250,16 @@ model WatermarkTemplate {
 
   @@index([userId])
 }
+
+/// 系统公告（弹窗通知）
+model SystemAnnouncement {
+  id        String   @id @default(uuid()) @db.Uuid
+  title     String                         /// 公告标题
+  content   String   @db.Text              /// 公告内容（支持 Markdown）
+  type      String   @default("NORMAL")    /// 类型：PINNED（置顶高亮）/ NORMAL（普通）
+  isActive  Boolean  @default(true)        /// 是否启用
+  sortOrder Int      @default(0)           /// 排序权重（越大越靠前）
+  createdAt DateTime @default(now())
+
+  @@index([isActive, type, sortOrder])
+}

@@ -7,9 +7,10 @@ import { ThemeProvider } from "next-themes"
 import { SessionProvider } from "@/components/session-provider"
 import { LoginModalProviderClient } from "@/components/login-modal-provider"
 import { LoginModalRoot } from "@/components/login-modal-root"
+import { SystemAnnouncementModal } from "@/components/system-announcement-modal"
 import "./globals.css"
 
-const plusJakartaSans = Plus_Jakarta_Sans({ 
+const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-plus-jakarta",
   display: "swap",
@@ -49,10 +50,11 @@ export default function RootLayout({
         <SessionProvider>
           <LoginModalProviderClient>
             <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
-            {children}
-            <LoginModalRoot />
-            <Toaster richColors closeButton position="top-center" />
-            <Analytics />
+              {children}
+              <LoginModalRoot />
+              <SystemAnnouncementModal />
+              <Toaster richColors closeButton position="top-center" />
+              <Analytics />
             </ThemeProvider>
           </LoginModalProviderClient>
         </SessionProvider>

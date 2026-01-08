@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -34,6 +34,7 @@ const adminItems: NavItem[] = [
   { icon: LayoutGrid, label: "生成记录管理", href: "/admin/generations" },
   { icon: ShieldCheck, label: "售后审核", href: "/admin/appeals" },
   { icon: Settings, label: "提示词管理", href: "/admin/prompts" },
+  { icon: Megaphone, label: "公告管理", href: "/admin/announcements" },
 ]
 
 export function Sidebar() {

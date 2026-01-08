@@ -67,14 +67,14 @@ export default function DashboardPage() {
               >
                 <span className="gradient-text">AI Species</span>
               </motion.h1>
-              <motion.p
+              <motion.h1
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.1 }}
-                className="text-xl text-slate-400 max-w-2xl mx-auto"
+                className="text-3xl text-slate-400 max-w-2xl mx-auto"
               >
-                AI 智能绘图
-              </motion.p>
+                虾皮老郑
+              </motion.h1>
             </div>
 
             {/* Glassmorphism Container */}
