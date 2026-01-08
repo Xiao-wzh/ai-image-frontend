@@ -43,6 +43,8 @@ export async function POST(req: NextRequest) {
   const body = await req.clone().json().catch(() => null)
   const retryFromId = body?.retryFromId as string | undefined
 
+  console.log(`[GENERATE_API] Received request - retryFromId: ${retryFromId}, body keys: ${Object.keys(body || {})}`)
+
   try {
     let productName: string
     let productType: ProductTypeKey
@@ -52,6 +54,7 @@ export async function POST(req: NextRequest) {
     if (retryFromId) {
       // --- 重试流程 ---
       actualCost = RETRY_COST
+      console.log(`[GENERATE_API] Discount retry mode - setting actualCost to ${RETRY_COST}`)
 
       const originalGeneration = await prisma.generation.findUnique({
         where: { id: retryFromId },
@@ -141,8 +144,10 @@ export async function POST(req: NextRequest) {
           where: { id: retryFromId },
           data: { hasUsedDiscountedRetry: true },
         })
+        console.log(`[GENERATE_API] Updated original record ${retryFromId} - hasUsedDiscountedRetry: true`)
       }
 
+      console.log(`[GENERATE_API] Deducted ${actualCost} credits (bonus: ${deductBonus}, paid: ${deductPaid})`)
       return { ok: true as const, deductBonus, deductPaid }
     })
 

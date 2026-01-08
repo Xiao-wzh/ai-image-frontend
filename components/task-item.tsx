@@ -62,20 +62,30 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
         // Close modal immediately and show toast
         setShowConfirm(false)
         toast.success("正在重新生成...", { description: "新任务已提交，请等待处理" })
+
+        // Optimistically update the discount flag to prevent double usage
+        if (isDiscountAvailable) {
+            item.hasUsedDiscountedRetry = true
+        }
+
         onRegenerateSuccess()
 
         // Make API call in background
         try {
-            const res = await fetch("/api/generate", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
+            // If discount is available, use the retry endpoint which only needs retryFromId
+            const requestBody = isDiscountAvailable
+                ? { retryFromId: item.id }
+                : {
                     productName: item.productName,
                     productType: item.productType,
                     images: item.originalImage,
                     platformKey: "SHOPEE",
-                    sourceGenerationId: isDiscountAvailable ? item.id : undefined, // For discount retry tracking
-                }),
+                }
+
+            const res = await fetch("/api/generate", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(requestBody),
             })
             const data = await res.json().catch(() => ({}))
             if (!res.ok) {

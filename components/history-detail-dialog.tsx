@@ -245,6 +245,12 @@ export function HistoryDetailDialog({
 
     setShowDiscountConfirm(false)
     toast.success("优惠重试任务已提交", { description: "新任务已加入队列" })
+
+    // Optimistically update the discount flag to prevent double usage
+    if (item) {
+      item.hasUsedDiscountedRetry = true
+    }
+
     onOpenChange(false)
     onGenerateSuccess()
 
