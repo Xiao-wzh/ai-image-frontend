@@ -289,7 +289,7 @@ async function getAncestorChain(
     let currentId: string | null = userId
 
     for (let i = 0; i < depth && currentId; i++) {
-        const user = await prisma.user.findUnique({
+                                                                                                    const user: { id: string; agentLevel: number; invitedById: string | null } | null = await prisma.user.findUnique({
             where: { id: currentId },
             select: { id: true, agentLevel: true, invitedById: true },
         })
