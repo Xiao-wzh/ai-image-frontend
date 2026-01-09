@@ -43,6 +43,15 @@ model User {
   referralRewardsGenerated ReferralRecord[] @relation("InviteeRewards") /// 作为被邀请人产生的佣金
 
   productTypePrompts ProductTypePrompt[]
+
+  // 代理系统
+  agentLevel    Int       @default(0)    /// 代理等级: 0=普通用户, 1=推广员(L3), 2=运营中心(L2), 3=合伙人(L1)
+  agentBalance  Int       @default(0)    /// 代理佣金余额(可提现)
+  agentQuota    Int       @default(0)    /// L1专属: 剩余授权名额(初始5)
+
+  commissionRecordsEarned   CommissionRecord[] @relation("EarnerCommissions")
+  commissionRecordsGenerated CommissionRecord[] @relation("SourceCommissions")
+  withdrawals               Withdrawal[]
 }
 
 // 推广佣金记录
@@ -262,4 +271,41 @@ model SystemAnnouncement {
   createdAt DateTime @default(now())
 
   @@index([isActive, type, sortOrder])
+}
+
+/// 代理佣金流水记录
+model CommissionRecord {
+  id            String   @id @default(cuid())
+  earnerId      String                         /// 获得佣金的代理ID
+  sourceUserId  String                         /// 产生消费的用户ID
+  amount        Int                            /// 佣金金额
+  rate          Int                            /// 佣金比例(12/5/3)
+  level         Int                            /// 分润层级(1=直推/2=管理/3=顶级)
+  orderId       String?                        /// 关联订单ID(CDK码或支付单号)
+  orderType     String                         /// 订单类型: CDK / ALIPAY / WECHAT
+  createdAt     DateTime @default(now())
+
+  earner        User     @relation("EarnerCommissions", fields: [earnerId], references: [id])
+  sourceUser    User     @relation("SourceCommissions", fields: [sourceUserId], references: [id])
+
+  @@index([earnerId])
+  @@index([sourceUserId])
+  @@index([createdAt])
+}
+
+/// 代理提现记录
+model Withdrawal {
+  id          String   @id @default(cuid())
+  userId      String                         /// 申请提现的代理ID
+  amount      Int                            /// 提现金额
+  status      String   @default("PENDING")   /// 状态: PENDING / APPROVED / REJECTED / COMPLETED
+  bankInfo    String?  @db.Text              /// 收款账户信息(JSON: 银行/支付宝/微信)
+  adminNote   String?                        /// 管理员备注
+  processedAt DateTime?                      /// 处理时间
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
 }

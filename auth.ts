@@ -266,6 +266,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.credits = (user as any).credits
         token.bonusCredits = (user as any).bonusCredits
         token.role = (user as any).role
+        token.agentLevel = (user as any).agentLevel ?? 0
       }
       return token
     },
@@ -279,12 +280,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // 关键：从数据库重新获取最新的积分，确保数据同步
         const dbUser = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { credits: true, bonusCredits: true, role: true },
+          select: { credits: true, bonusCredits: true, role: true, agentLevel: true },
         })
 
         session.user.credits = dbUser?.credits ?? 0
         session.user.bonusCredits = dbUser?.bonusCredits ?? 0
         session.user.role = dbUser?.role ?? (session.user.role || "USER")
+        session.user.agentLevel = dbUser?.agentLevel ?? 0
       }
       return session
     },
