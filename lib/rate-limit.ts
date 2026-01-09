@@ -14,7 +14,7 @@ const CONFIG = {
 
     // 设备限制 (保持严格，防止单设备刷号)
     DEVICE_WINDOW: 24 * 60 * 60,      // 24 小时
-    DEVICE_LIMIT: 2,                  // 24小时内每设备最多2次成功注册
+    DEVICE_LIMIT: 9,                  // 24小时内每设备最多2次成功注册
 }
 
 type RateLimitResult = {

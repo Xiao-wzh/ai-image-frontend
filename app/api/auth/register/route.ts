@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs"
 import { REGISTRATION_BONUS, INVITE_CODE_BONUS } from "@/lib/constants"
 import { normalizeEmail } from "@/lib/normalize-email"
 import { checkRegistrationRateLimit, recordRegistrationSuccess } from "@/lib/rate-limit"
+import { bindAgentRelationship } from "@/lib/agent-service"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -191,7 +192,7 @@ export async function POST(req: NextRequest) {
     if (inviteCode?.trim()) {
       inviter = await prisma.user.findUnique({
         where: { referralCode: inviteCode.trim().toUpperCase() },
-        select: { id: true, email: true },
+        select: { id: true, email: true, agentLevel: true }, // 新增: 查询 agentLevel
       })
       if (!inviter) {
         return NextResponse.json(
@@ -207,9 +208,16 @@ export async function POST(req: NextRequest) {
     // 6. 生成唯一推广码
     const referralCode = await generateUniqueReferralCode()
 
-    // 7. 计算初始积分（使用全局配置）
-    const inviteBonus = inviter ? INVITE_CODE_BONUS : 0
-    const initialBonusCredits = REGISTRATION_BONUS + inviteBonus
+    // 7. 计算初始积分
+    // 新用户始终获得邀请码奖励（如果有邀请人）
+    const inviteeBonus = inviter ? INVITE_CODE_BONUS : 0
+    const initialBonusCredits = REGISTRATION_BONUS + inviteeBonus
+
+    // 判断邀请人是否应该获得积分奖励
+    // - L0 普通用户邀请: 双方都得积分
+    // - L1/L2/L3 代理商邀请: 代理不得积分（他们通过用户充值赚取 RMB 佣金）
+    const isInviterAgent = inviter && inviter.agentLevel > 0
+    const inviterBonus = inviter && !isInviterAgent ? INVITE_CODE_BONUS : 0
 
     // 8. 创建用户（使用事务）
     const user = await prisma.$transaction(async (tx) => {
@@ -227,16 +235,36 @@ export async function POST(req: NextRequest) {
         },
       })
 
-      // 如果有邀请人，记录邀请奖励
-      if (inviter && inviteBonus > 0) {
+      // 记录新用户的邀请码奖励
+      if (inviter && inviteeBonus > 0) {
         await tx.creditRecord.create({
           data: {
             userId: newUser.id,
-            amount: inviteBonus,
+            amount: inviteeBonus,
             type: "SYSTEM_REWARD",
             description: "邀请码注册奖励",
           },
         })
+      }
+
+      // 只有 L0 普通用户邀请时，给邀请人发放积分奖励
+      // 代理商（L1/L2/L3）走现金佣金通道，不混发积分
+      if (inviter && inviterBonus > 0) {
+        await tx.user.update({
+          where: { id: inviter.id },
+          data: { bonusCredits: { increment: inviterBonus } },
+        })
+        await tx.creditRecord.create({
+          data: {
+            userId: inviter.id,
+            amount: inviterBonus,
+            type: "SYSTEM_REWARD",
+            description: `邀请 ${username.trim()} 注册奖励`,
+          },
+        })
+        console.log(`🎁 L0 邀请人 ${inviter.email} 获得 ${inviterBonus} 积分奖励`)
+      } else if (inviter && isInviterAgent) {
+        console.log(`⚙️ 代理商 ${inviter.email} (L${inviter.agentLevel}) 邀请了新用户，不发放积分，等待充值佣金`)
       }
 
       return newUser
@@ -246,6 +274,9 @@ export async function POST(req: NextRequest) {
     await prisma.verificationCode.delete({
       where: { id: verificationCode.id },
     })
+
+    // 10. 绑定代理关系（设置代理等级）
+    await bindAgentRelationship(user.id, inviter?.id || null)
 
     console.log(`✅ 用户注册成功: ${user.email} (${user.username})${inviter ? ` - 由 ${inviter.email} 邀请` : ""}`)
 

@@ -12,6 +12,7 @@ declare module "next-auth" {
       credits: number
       bonusCredits: number
       role: string
+      agentLevel: number // 代理等级: 0=User, 1=L3, 2=L2, 3=L1
     }
   }
 
@@ -26,5 +27,6 @@ declare module "next-auth/jwt" {
     credits?: number
     bonusCredits?: number
     role?: string
+    agentLevel?: number // 代理等级
   }
 }

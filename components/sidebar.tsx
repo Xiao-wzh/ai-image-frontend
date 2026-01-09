@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -21,12 +21,13 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { icon: Sparkles, label: "AI 生图", href: "/" },
+  { icon: Droplets, label: "水印模板", href: "/settings/watermark" },
   { icon: Images, label: "我的作品", href: "/history" },
   { icon: ListTodo, label: "任务队列", href: "/tasks", badge: "pending" },
   { icon: Wallet, label: "积分流水", href: "/credits" },
   { icon: ShieldCheck, label: "售后记录", href: "/appeals" },
   { icon: Gift, label: "邀请赚积分", href: "/referral" },
-  { icon: Droplets, label: "水印模板", href: "/settings/watermark" },
+  
 ]
 
 // 管理员专属导航
@@ -136,6 +137,25 @@ export function Sidebar() {
               </button>
             )
           })}
+
+          {/* 合伙人中心 - 仅 agentLevel > 0 可见 */}
+          {session?.user?.agentLevel && session.user.agentLevel > 0 && (() => {
+            const isActive = pathname === "/agent" || pathname?.startsWith("/agent")
+            return (
+              <button
+                onClick={() => router.push("/agent")}
+                className={cn(
+                  "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium",
+                  isActive
+                    ? "bg-gradient-to-r from-yellow-500 to-orange-500 text-white shadow-lg"
+                    : "text-yellow-400/80 hover:text-yellow-300 hover:bg-white/5",
+                )}
+              >
+                <Crown className="w-4 h-4" />
+                <span>合伙人中心</span>
+              </button>
+            )
+          })()}
 
           {/* 管理员菜单 */}
           {session?.user?.role === "ADMIN" && (
