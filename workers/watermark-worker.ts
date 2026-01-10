@@ -23,7 +23,9 @@ const MAX_POLL_ATTEMPTS = 15      // 最大轮询次数
 const MAX_POLL_INTERVAL = 16000   // 最大轮询间隔 16s
 const FETCH_TIMEOUT = 15000       // fetch 超时 15s
 const CONCURRENCY = 5             // Worker 并发数
-const REDIS_URL = process.env.REDIS_URL || "redis://localhost:6379"
+const REDIS_HOST = process.env.REDIS_HOST || "127.0.0.1"
+const REDIS_PORT = parseInt(process.env.REDIS_PORT || "6379")
+const REDIS_PASSWORD = process.env.REDIS_PASSWORD || undefined
 
 // 创建 Prisma 客户端
 const DATABASE_URL = process.env.DATABASE_URL
@@ -38,7 +40,7 @@ const prisma = new PrismaClient({ adapter }) as any
 
 console.log("🚀 去水印 Worker 启动中...")
 console.log(`📊 并发数: ${CONCURRENCY}`)
-console.log(`🔗 Redis: ${REDIS_URL.replace(/\/\/.*@/, "//***@")}`)
+console.log(`🔗 Redis: ${REDIS_HOST}:${REDIS_PORT}`)
 
 /**
  * 带超时的 fetch
@@ -266,14 +268,22 @@ const worker = new Worker<WatermarkJobData, WatermarkJobResult>(
         }
     },
     {
-        connection: { url: REDIS_URL } as any,
+        connection: {
+            host: REDIS_HOST,
+            port: REDIS_PORT,
+            password: REDIS_PASSWORD,
+        },
         concurrency: CONCURRENCY,
     }
 )
 
 // 监控事件
 const queueEvents = new QueueEvents(QUEUE_NAME, {
-    connection: { url: REDIS_URL } as any
+    connection: {
+        host: REDIS_HOST,
+        port: REDIS_PORT,
+        password: REDIS_PASSWORD,
+    }
 })
 
 queueEvents.on("completed", ({ jobId }) => {

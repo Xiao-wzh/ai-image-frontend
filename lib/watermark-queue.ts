@@ -21,10 +21,10 @@ export interface WatermarkJobResult {
     error?: string
 }
 
-// Redis 连接 URL
-function getRedisUrl(): string {
-    return process.env.REDIS_URL || "redis://localhost:6379"
-}
+// Redis 连接配置
+const REDIS_HOST = process.env.REDIS_HOST || "127.0.0.1"
+const REDIS_PORT = parseInt(process.env.REDIS_PORT || "6379")
+const REDIS_PASSWORD = process.env.REDIS_PASSWORD || undefined
 
 // 创建队列单例
 let watermarkQueue: Queue<WatermarkJobData, WatermarkJobResult> | null = null
@@ -33,8 +33,10 @@ export function getWatermarkQueue(): Queue<WatermarkJobData, WatermarkJobResult>
     if (!watermarkQueue) {
         watermarkQueue = new Queue<WatermarkJobData, WatermarkJobResult>(QUEUE_NAME, {
             connection: {
-                url: getRedisUrl(),
-            } as any,
+                host: REDIS_HOST,
+                port: REDIS_PORT,
+                password: REDIS_PASSWORD,
+            },
             defaultJobOptions: {
                 attempts: 3,                              // 最多重试 3 次
                 backoff: {
