@@ -26,12 +26,12 @@ const REDIS_HOST = process.env.REDIS_HOST || "127.0.0.1"
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || "6379")
 const REDIS_PASSWORD = process.env.REDIS_PASSWORD || undefined
 
-// 创建队列单例
-let watermarkQueue: Queue<WatermarkJobData, WatermarkJobResult> | null = null
+// 创建队列单例（使用 any 避免 BullMQ 类型问题）
+let watermarkQueue: Queue | null = null
 
-export function getWatermarkQueue(): Queue<WatermarkJobData, WatermarkJobResult> {
+export function getWatermarkQueue(): Queue {
     if (!watermarkQueue) {
-        watermarkQueue = new Queue<WatermarkJobData, WatermarkJobResult>(QUEUE_NAME, {
+        watermarkQueue = new Queue(QUEUE_NAME, {
             connection: {
                 host: REDIS_HOST,
                 port: REDIS_PORT,
@@ -43,7 +43,6 @@ export function getWatermarkQueue(): Queue<WatermarkJobData, WatermarkJobResult>
                     type: "exponential",
                     delay: 2000,                          // 初始延迟 2 秒
                 },
-                timeout: 3 * 60 * 1000,                   // 单任务超时 3 分钟
                 removeOnComplete: { count: 1000 },        // 保留 1000 个完成任务
                 removeOnFail: { count: 5000 },            // 保留 5000 个失败任务（便于排查）
             },
@@ -56,7 +55,7 @@ export function getWatermarkQueue(): Queue<WatermarkJobData, WatermarkJobResult>
 /**
  * 添加去水印任务到队列（幂等：用 taskId 作为 jobId）
  */
-export async function addWatermarkJob(data: WatermarkJobData): Promise<Job<WatermarkJobData, WatermarkJobResult>> {
+export async function addWatermarkJob(data: WatermarkJobData): Promise<Job> {
     const queue = getWatermarkQueue()
     const job = await queue.add("process", data, {
         jobId: data.taskId,  // ✅ 关键：用 taskId 作为 jobId，防止重复入队
