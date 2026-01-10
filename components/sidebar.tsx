@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -22,12 +22,13 @@ type NavItem = {
 const navItems: NavItem[] = [
   { icon: Sparkles, label: "AI 生图", href: "/" },
   { icon: Droplets, label: "水印模板", href: "/settings/watermark" },
+  { icon: Eraser, label: "智能去水印", href: "/watermark" },
   { icon: Images, label: "我的作品", href: "/history" },
   { icon: ListTodo, label: "任务队列", href: "/tasks", badge: "pending" },
   { icon: Wallet, label: "积分流水", href: "/credits" },
   { icon: ShieldCheck, label: "售后记录", href: "/appeals" },
   { icon: Gift, label: "邀请赚积分", href: "/referral" },
-  
+
 ]
 
 // 管理员专属导航
