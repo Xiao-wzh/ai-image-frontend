@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
-import { triggerQueue } from "@/lib/watermark-queue"
+import { addWatermarkJobs, WatermarkJobData } from "@/lib/watermark-queue"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -11,7 +11,7 @@ const WATERMARK_COST_PER_IMAGE = 50
 
 export async function POST(req: NextRequest) {
     try {
-        // Authenticate user
+        // 认证用户
         const session = await auth()
         if (!session?.user?.id) {
             return NextResponse.json(
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
         const userId = session.user.id
 
-        // Parse request body
+        // 解析请求
         const body = await req.json()
         const { urls } = body
 
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
             )
         }
 
-        // Validate URLs
+        // 验证 URL
         const validUrls = urls.filter((url: unknown) => {
             if (typeof url !== "string") return false
             try {
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
                 }
             })
 
-            // 4. 创建任务，保存扣费信息用于失败退款
+            // 4. 创建任务
             const tasks = []
             for (const url of validUrls) {
                 const task = await tx.watermarkTask.create({
@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
                 tasks.push(task)
             }
 
-            console.log(`[Watermark Submit] Charged ${totalCost} credits (bonus: ${deductBonus}, paid: ${deductPaid})`)
+            console.log(`[去水印提交] 扣费 ${totalCost} 积分 (赠送: ${deductBonus}, 付费: ${deductPaid})`)
 
             return {
                 tasks,
@@ -116,12 +116,23 @@ export async function POST(req: NextRequest) {
             }
         })
 
+        // 添加任务到 Redis 队列（幂等：用 taskId 作为 jobId）
+        const jobs: WatermarkJobData[] = result.tasks.map((task: { id: string; originalUrl: string }) => ({
+            taskId: task.id,
+            originalUrl: task.originalUrl,
+            userId
+        }))
+
+        try {
+            await addWatermarkJobs(jobs)
+        } catch (queueError: any) {
+            console.error("[去水印提交] 添加队列失败:", queueError.message)
+            // ✅ 队列失败时：任务保持 PENDING，等待下次重试或补偿任务处理
+            // 不回滚扣费，因为任务已创建，Worker 可以从 DB 恢复
+        }
+
         const taskIds = result.tasks.map((task: { id: string }) => task.id)
-
-        // Trigger queue processor (fire-and-forget)
-        triggerQueue()
-
-        console.log(`[Watermark Submit] Created ${taskIds.length} tasks for user ${userId}`)
+        console.log(`[去水印提交] 创建 ${taskIds.length} 个任务，用户 ${userId}`)
 
         // 获取更新后的余额
         const updatedUser = await prisma.user.findUnique({
@@ -140,7 +151,7 @@ export async function POST(req: NextRequest) {
         })
 
     } catch (error: unknown) {
-        console.error("[Watermark Submit] Error:", error)
+        console.error("[去水印提交] 错误:", error)
         const message = error instanceof Error ? error.message : "提交失败"
 
         // 余额不足返回 402

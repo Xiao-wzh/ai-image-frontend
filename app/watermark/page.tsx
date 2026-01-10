@@ -106,14 +106,30 @@ export default function WatermarkPage() {
     // Track previous task statuses to detect changes
     const prevTaskStatusesRef = useRef<Map<string, string>>(new Map())
 
-    // Fetch history with SWR (poll every 3 seconds)
+    // Fetch history with SWR
     const { data, mutate } = useSWR<{ success: boolean; tasks: WatermarkTask[] }>(
         "/api/watermark/history",
         fetcher,
-        { refreshInterval: 3000 }
+        {
+            // 只有当有待处理任务时才轮询，否则不轮询
+            refreshInterval: (data) => {
+                const hasPending = data?.tasks?.some(t =>
+                    t.status === "PENDING" || t.status === "PROCESSING"
+                )
+                return hasPending ? 3000 : 0
+            }
+        }
     )
 
     const tasks = data?.tasks || []
+    const hasPendingTasks = tasks.some(t => t.status === "PENDING" || t.status === "PROCESSING")
+
+    // 获取队列状态（只在有待处理任务时轮询）
+    const { data: queueData } = useSWR<{ pendingCount: number; queuePosition: number }>(
+        hasPendingTasks ? "/api/watermark/queue-status" : null,
+        fetcher,
+        { refreshInterval: 5000 }
+    )
 
     // Detect task status changes and refresh session (for refunds on failure)
     useEffect(() => {
@@ -197,10 +213,24 @@ export default function WatermarkPage() {
         }
 
         setIsSubmitting(true)
-        setUploadProgress("上传中...")
 
         try {
-            // Upload all images to TOS
+            // ✅ 先检查积分是否足够
+            setUploadProgress("检查积分...")
+            const requiredCredits = selectedImages.length * 50
+
+            const sessionRes = await fetch("/api/auth/session")
+            const sessionData = await sessionRes.json()
+            const totalCredits = (sessionData?.user?.credits || 0) + (sessionData?.user?.bonusCredits || 0)
+
+            if (totalCredits < requiredCredits) {
+                toast.error(`积分不足 (需要 ${requiredCredits}，当前 ${totalCredits})`)
+                setIsSubmitting(false)
+                setUploadProgress("")
+                return
+            }
+
+            // 积分足够，开始上传
             const tosUrls: string[] = []
 
             for (let i = 0; i < selectedImages.length; i++) {
@@ -242,10 +272,11 @@ export default function WatermarkPage() {
     const StatusBadge = ({ task }: { task: WatermarkTask }) => {
         switch (task.status) {
             case "PENDING":
+                const queuePos = queueData?.queuePosition || 0
                 return (
                     <Badge variant="outline" className="bg-yellow-500/10 text-yellow-400 border-yellow-500/30">
                         <Clock className="w-3 h-3 mr-1" />
-                        等待中
+                        {queuePos > 0 ? `排队中 (前方${queuePos}个)` : "等待中"}
                     </Badge>
                 )
             case "PROCESSING":
@@ -315,7 +346,6 @@ export default function WatermarkPage() {
     return (
         <div className="flex h-screen bg-slate-950">
             <Sidebar />
-
             <div className="flex-1 flex flex-col overflow-hidden min-w-0">
                 <main className="flex-1 overflow-y-auto min-w-0">
                     <div className="relative pt-10 pb-8 px-8 min-w-0">

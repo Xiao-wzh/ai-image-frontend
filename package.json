@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "worker:watermark": "npx tsx workers/watermark-worker.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.1",
@@ -47,6 +48,7 @@
     "@volcengine/tos-sdk": "^2.7.6",
     "autoprefixer": "^10.4.20",
     "bcryptjs": "^3.0.3",
+    "bullmq": "^5.66.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
@@ -55,7 +57,7 @@
     "file-saver": "^2.0.5",
     "framer-motion": "^12.23.26",
     "input-otp": "1.4.1",
-    "ioredis": "^5.9.0",
+    "ioredis": "^5.9.1",
     "jszip": "^3.10.1",
     "lucide-react": "^0.454.0",
     "next": "16.0.10",

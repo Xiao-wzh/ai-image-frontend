@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
-import { triggerQueue } from "@/lib/watermark-queue"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function GET(req: NextRequest) {
     try {
-        // Authenticate user
+        // 认证用户
         const session = await auth()
         if (!session?.user?.id) {
             return NextResponse.json(
@@ -17,7 +16,7 @@ export async function GET(req: NextRequest) {
             )
         }
 
-        // Fetch user's tasks ordered by createdAt desc, limit 50
+        // 获取用户的任务，按创建时间倒序，限制50条
         const tasks = await prisma.watermarkTask.findMany({
             where: { userId: session.user.id },
             orderBy: { createdAt: "desc" },
@@ -33,16 +32,13 @@ export async function GET(req: NextRequest) {
             }
         })
 
-        // Trigger queue processor to ensure background processing continues
-        triggerQueue()
-
         return NextResponse.json({
             success: true,
             tasks
         })
 
     } catch (error: unknown) {
-        console.error("[Watermark History] Error:", error)
+        console.error("[去水印历史] 错误:", error)
         const message = error instanceof Error ? error.message : "获取历史记录失败"
         return NextResponse.json(
             { error: message },
