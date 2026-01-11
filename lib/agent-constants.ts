@@ -8,9 +8,9 @@ export const AGENT_LEVEL = {
 
 // 分润比例 (单位: %)
 export const COMMISSION_RATES = {
-    DIRECT: 12,     // 直推奖励
+    DIRECT: 10,     // 直推奖励
     MANAGEMENT: 5,  // 管理奖励 (需要L2+)
-    TOP: 3,         // 顶级奖励 (需要L1)
+    TOP: 5,         // 顶级奖励 (需要L1)
 } as const
 
 // L1 初始授权名额

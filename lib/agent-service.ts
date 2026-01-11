@@ -126,16 +126,16 @@ export async function distributeCommission(
         }
 
         // 计算各级佣金
-        const directCommission = Math.floor(amount * COMMISSION_RATES.DIRECT / 100)      // 12%
+        const directCommission = Math.floor(amount * COMMISSION_RATES.DIRECT / 100)      // 10%
         const managementCommission = Math.floor(amount * COMMISSION_RATES.MANAGEMENT / 100) // 5%
-        const topCommission = Math.floor(amount * COMMISSION_RATES.TOP / 100)             // 3%
+        const topCommission = Math.floor(amount * COMMISSION_RATES.TOP / 100)             // 5%
 
         // 使用事务处理分润
         await prisma.$transaction(async (tx) => {
             const parent = ancestors[0]
             if (!parent) return
 
-            // ============= Level 1: 直推奖励 (12%) =============
+            // ============= Level 1: 直推奖励 (10%) =============
             // 只有代理（L1/L2/L3）才能获得直推奖励，L0 普通用户不参与分润
             if (parent.agentLevel > 0 && directCommission > 0) {
                 await tx.user.update({
@@ -154,7 +154,7 @@ export async function distributeCommission(
                     },
                 })
                 distributed.push({ level: 1, earnerId: parent.id, amount: directCommission, rate: COMMISSION_RATES.DIRECT })
-                console.log(`💰 直推奖励: ${parent.id} (L${parent.agentLevel}) 获得 ${directCommission} (12%)`)
+                console.log(`💰 直推奖励: ${parent.id} (L${parent.agentLevel}) 获得 ${directCommission} (10%)`)
             }
 
             // ============= Level 2: 管理奖励 (5%) =============
@@ -194,7 +194,7 @@ export async function distributeCommission(
                 console.log(`💰 管理奖励: ${managementEarner.id} (L${managementEarner.agentLevel}) 获得 ${managementCommission} (5%)`)
             }
 
-            // ============= Level 3: 顶级奖励 (3%) =============
+            // ============= Level 3: 顶级奖励 (5%) =============
             // 找最近的 L1（可能是 Parent/GrandParent/更上级）
             let topEarner: typeof parent | null = null
             for (let i = 0; i < ancestors.length; i++) {
@@ -222,7 +222,7 @@ export async function distributeCommission(
                     },
                 })
                 distributed.push({ level: 3, earnerId: topEarner.id, amount: topCommission, rate: COMMISSION_RATES.TOP })
-                console.log(`💰 顶级奖励: ${topEarner.id} (L${topEarner.agentLevel}) 获得 ${topCommission} (3%)`)
+                console.log(`💰 顶级奖励: ${topEarner.id} (L${topEarner.agentLevel}) 获得 ${topCommission} (5%)`)
             }
         })
 
