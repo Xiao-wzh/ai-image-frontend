@@ -7,14 +7,14 @@ import { getRedis } from "./redis"
 // 限制配置
 const CONFIG = {
     // IP 限制 (放宽以支持同一局域网多人注册)
-    IP_ATTEMPT_WINDOW: 10 * 60,      // 10 分钟
-    IP_ATTEMPT_LIMIT: 30,            // 10分钟内最多30次尝试 (放宽，同一IP可能有多人)
+    IP_ATTEMPT_WINDOW: 1 * 60 * 60,      // 1 小时
+    IP_ATTEMPT_LIMIT: 30,            // 1小时内最多30次尝试 (放宽，同一IP可能有多人)
     IP_SUCCESS_WINDOW: 24 * 60 * 60,  // 24 小时
-    IP_SUCCESS_LIMIT: 50,             // 24小时内最多50次成功注册 (放宽，支持公司/学校场景)
+    IP_SUCCESS_LIMIT: 20,             // 24小时内最多20次成功注册 (放宽，支持公司/学校场景)
 
     // 设备限制 (保持严格，防止单设备刷号)
     DEVICE_WINDOW: 24 * 60 * 60,      // 24 小时
-    DEVICE_LIMIT: 9,                  // 24小时内每设备最多2次成功注册
+    DEVICE_LIMIT: 5,                  // 24小时内每设备最多5次成功注册
 }
 
 type RateLimitResult = {
@@ -41,13 +41,13 @@ export async function checkIpAttemptLimit(ip: string): Promise<RateLimitResult> 
         console.log(`📊 IP 尝试计数: IP=${ip}, count=${count}/${CONFIG.IP_ATTEMPT_LIMIT}`)
 
         // 暂时禁用 IP 限制
-        // if (count > CONFIG.IP_ATTEMPT_LIMIT) {
-        //     return {
-        //         allowed: false,
-        //         reason: "操作过于频繁，请10分钟后再试",
-        //         remaining: 0,
-        //     }
-        // }
+        if (count > CONFIG.IP_ATTEMPT_LIMIT) {
+            return {
+                allowed: false,
+                reason: "操作过于频繁，请1小时后再试",
+                remaining: 0,
+            }
+        }
 
         return {
             allowed: true,
@@ -74,13 +74,13 @@ export async function checkIpSuccessLimit(ip: string): Promise<RateLimitResult> 
         console.log(`📊 IP 成功计数: IP=${ip}, count=${count}/${CONFIG.IP_SUCCESS_LIMIT}`)
 
         // 暂时禁用 IP 限制
-        // if (count >= CONFIG.IP_SUCCESS_LIMIT) {
-        //     return {
-        //         allowed: false,
-        //         reason: "该IP今日注册次数已达上限",
-        //         remaining: 0,
-        //     }
-        // }
+        if (count >= CONFIG.IP_SUCCESS_LIMIT) {
+            return {
+                allowed: false,
+                reason: "该IP今日注册次数已达上限",
+                remaining: 0,
+            }
+        }
 
         return {
             allowed: true,
