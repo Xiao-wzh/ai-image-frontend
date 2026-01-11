@@ -383,7 +383,8 @@ export default function AgentCenterPage() {
                                                     const res = await fetch("/api/agent/invite-link?type=user")
                                                     const data = await res.json()
                                                     if (data.success) {
-                                                        const baseUrl = typeof window !== 'undefined' ? window.location.origin : SITE_URL
+                                                        // 优先使用 SITE_URL 环境变量
+                                                        const baseUrl = SITE_URL || window.location.origin
                                                         const link = `${baseUrl}/?${data.params}`
                                                         navigator.clipboard.writeText(link)
                                                         toast.success("推广链接已复制")
@@ -418,7 +419,8 @@ export default function AgentCenterPage() {
                                                         const res = await fetch("/api/agent/invite-link?type=agent")
                                                         const data = await res.json()
                                                         if (data.success) {
-                                                            const baseUrl = typeof window !== 'undefined' ? window.location.origin : SITE_URL
+                                                            // 优先使用 SITE_URL 环境变量
+                                                            const baseUrl = SITE_URL || window.location.origin
                                                             const link = `${baseUrl}/?${data.params}`
                                                             navigator.clipboard.writeText(link)
                                                             toast.success("代理招募链接已复制")
