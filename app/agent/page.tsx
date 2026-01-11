@@ -46,6 +46,36 @@ const LEVEL_INFO: Record<number, { label: string; color: string; bgColor: string
     3: { label: "推广大使", color: "text-green-400", bgColor: "bg-green-500/20" },
 }
 
+// 复制到剪贴板（兼容非 HTTPS 环境）
+async function copyToClipboard(text: string): Promise<boolean> {
+    // 优先使用 Clipboard API
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+            await navigator.clipboard.writeText(text)
+            return true
+        } catch (e) {
+            console.warn('Clipboard API 失败，尝试 fallback:', e)
+        }
+    }
+
+    // Fallback: 使用 textarea + execCommand
+    try {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.style.position = 'fixed'
+        textarea.style.left = '-9999px'
+        textarea.style.top = '-9999px'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        const success = document.execCommand('copy')
+        document.body.removeChild(textarea)
+        return success
+    } catch (e) {
+        console.error('Fallback 复制失败:', e)
+        return false
+    }
+}
 type AgentStats = {
     agentLevel: number
     agentBalance: number
@@ -383,19 +413,19 @@ export default function AgentCenterPage() {
                                                     const res = await fetch("/api/agent/invite-link?type=user")
                                                     const data = await res.json()
                                                     if (data.success) {
-                                                        // 优先使用 SITE_URL 环境变量
                                                         const baseUrl = SITE_URL || window.location.origin
-                                                        console.log(baseUrl);
-
                                                         const link = `${baseUrl}/?${data.params}`
-                                                        console.log(link);
-
-                                                        navigator.clipboard.writeText(link)
-                                                        toast.success("推广链接已复制")
+                                                        const copied = await copyToClipboard(link)
+                                                        if (copied) {
+                                                            toast.success("推广链接已复制")
+                                                        } else {
+                                                            toast.error("复制失败，请手动复制: " + link)
+                                                        }
                                                     } else {
-                                                        toast.error(data.error || "生成链接失败.")
+                                                        toast.error(data.error || "生成链接失败")
                                                     }
-                                                } catch {
+                                                } catch (e) {
+                                                    console.error("生成链接失败:", e)
                                                     toast.error("生成链接失败")
                                                 }
                                             }}
@@ -423,17 +453,19 @@ export default function AgentCenterPage() {
                                                         const res = await fetch("/api/agent/invite-link?type=agent")
                                                         const data = await res.json()
                                                         if (data.success) {
-                                                            // 优先使用 SITE_URL 环境变量
                                                             const baseUrl = SITE_URL || window.location.origin
-                                                            console.log(baseUrl);
                                                             const link = `${baseUrl}/?${data.params}`
-                                                            console.log(link);
-                                                            navigator.clipboard.writeText(link)
-                                                            toast.success("代理招募链接已复制")
+                                                            const copied = await copyToClipboard(link)
+                                                            if (copied) {
+                                                                toast.success("代理招募链接已复制")
+                                                            } else {
+                                                                toast.error("复制失败，请手动复制: " + link)
+                                                            }
                                                         } else {
-                                                            toast.error(data.error || "生成链接失败.")
+                                                            toast.error(data.error || "生成链接失败")
                                                         }
-                                                    } catch {
+                                                    } catch (e) {
+                                                        console.error("生成链接失败:", e)
                                                         toast.error("生成链接失败")
                                                     }
                                                 }}
