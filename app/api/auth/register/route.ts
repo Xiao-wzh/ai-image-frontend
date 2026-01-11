@@ -11,17 +11,31 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 // 获取客户端 IP
-function getClientIp(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-for")
-  if (forwarded) {
-    return forwarded.split(",")[0].trim()
-  }
+
+export function getClientIp(req: NextRequest): string {
+  // 1) Cloudflare（如果你有用 CF）
+  // const cfIp = req.headers.get("cf-connecting-ip")
+  // if (cfIp) return normalizeIp(cfIp)
+
+  // 2) 通用反代：X-Forwarded-For（最左边是客户端）
+  const xff = req.headers.get("x-forwarded-for")
+  if (xff) return normalizeIp(xff.split(",")[0].trim())
+
+  // 3) Nginx 常用：X-Real-IP
   const realIp = req.headers.get("x-real-ip")
-  if (realIp) {
-    return realIp
-  }
-  return "127.0.0.1"
+  if (realIp) return normalizeIp(realIp)
+
+  // 4) 兜底：不要返回 127.0.0.1（会把所有人合并！）
+  return "unknown"
 }
+
+function normalizeIp(ip: string): string {
+  const v = ip.trim()
+  // Node/Nginx 常见 IPv6-mapped IPv4：::ffff:1.2.3.4
+  if (v.startsWith("::ffff:")) return v.slice(7)
+  return v
+}
+
 
 // 生成6位随机推广码（大写字母+数字）
 function generateReferralCode(): string {
@@ -55,6 +69,12 @@ async function generateUniqueReferralCode(): Promise<string> {
 }
 
 export async function POST(req: NextRequest) {
+  console.log("headers", {
+  xff: req.headers.get("x-forwarded-for"),
+  real: req.headers.get("x-real-ip"),
+  cf: req.headers.get("cf-connecting-ip"),
+})
+console.log("ip_used", getClientIp(req))
   try {
     const body = await req.json()
     const { email, username, password, code, inviteCode, deviceId, inviteType, inviteSig } = body
