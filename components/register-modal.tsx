@@ -18,15 +18,18 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 interface RegisterModalProps {
   isOpen: boolean
   onClose: () => void
+  initialInviteCode?: string
+  inviteType?: "user" | "agent"
+  inviteSig?: string
 }
 
-export function RegisterModal({ isOpen, onClose }: RegisterModalProps) {
+export function RegisterModal({ isOpen, onClose, initialInviteCode = "", inviteType = "user", inviteSig = "" }: RegisterModalProps) {
   // Register Form State
   const [regEmail, setRegEmail] = useState("")
   const [regUsername, setRegUsername] = useState("")
   const [regPassword, setRegPassword] = useState("")
   const [regCode, setRegCode] = useState("")
-  const [regInviteCode, setRegInviteCode] = useState("")
+  const [regInviteCode, setRegInviteCode] = useState(initialInviteCode)
   const [isSendingCode, setIsSendingCode] = useState(false)
   const [countdown, setCountdown] = useState(0)
   const [isRegistering, setIsRegistering] = useState(false)
@@ -123,6 +126,8 @@ export function RegisterModal({ isOpen, onClose }: RegisterModalProps) {
           password: regPassword,
           code: regCode.trim(),
           inviteCode: regInviteCode.trim() || undefined,
+          inviteType: inviteType,
+          inviteSig: inviteSig, // 传递签名用于服务端验证
           deviceId,
         }),
       })

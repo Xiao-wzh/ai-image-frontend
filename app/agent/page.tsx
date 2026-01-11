@@ -17,6 +17,8 @@ import {
     XCircle,
     Clock,
     ChevronRight,
+    Link,
+    UserPlus,
 } from "lucide-react"
 
 import { Sidebar } from "@/components/sidebar"
@@ -349,7 +351,7 @@ export default function AgentCenterPage() {
                             )}
                         </div>
 
-                        {/* 邀请码 */}
+                        {/* 双向邀请链接 */}
                         {stats?.referralCode && (
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
@@ -357,21 +359,80 @@ export default function AgentCenterPage() {
                                 transition={{ delay: 0.5 }}
                                 className="relative z-10 glass rounded-2xl p-5 border border-white/10 mb-8"
                             >
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <div className="text-sm text-slate-400 mb-1">我的邀请码</div>
-                                        <div className="text-xl font-mono font-bold text-white tracking-wider">
-                                            {stats.referralCode}
+                                <div className="text-sm text-slate-400 mb-4">我的邀请码: <span className="font-mono font-bold text-white">{stats.referralCode}</span></div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* 推广获客链接 - 所有代理 */}
+                                    <div className="bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/20 rounded-xl p-4">
+                                        <div className="flex items-center gap-2 text-emerald-400 mb-2">
+                                            <Link className="w-4 h-4" />
+                                            <span className="font-medium">推广获客链接</span>
                                         </div>
+                                        <p className="text-xs text-slate-400 mb-3">
+                                            邀请用户注册消费，您获{" "}
+                                            <span className="text-emerald-400 font-semibold">
+                                                {isL1 ? "20%" : isL2 ? "17%" : "12%"}
+                                            </span>
+                                            {" "}佣金
+                                        </p>
+                                        <Button
+                                            size="sm"
+                                            onClick={async () => {
+                                                try {
+                                                    const res = await fetch("/api/agent/invite-link?type=user")
+                                                    const data = await res.json()
+                                                    if (data.success) {
+                                                        const link = `${window.location.origin}/?${data.params}`
+                                                        navigator.clipboard.writeText(link)
+                                                        toast.success("推广链接已复制")
+                                                    } else {
+                                                        toast.error(data.error || "生成链接失败")
+                                                    }
+                                                } catch {
+                                                    toast.error("生成链接失败")
+                                                }
+                                            }}
+                                            className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30"
+                                        >
+                                            <Copy className="w-4 h-4 mr-2" />
+                                            复制推广链接
+                                        </Button>
                                     </div>
-                                    <Button
-                                        variant="outline"
-                                        onClick={copyReferralCode}
-                                        className="border-white/10 bg-white/5 hover:bg-white/10 text-white"
-                                    >
-                                        <Copy className="w-4 h-4 mr-2" />
-                                        复制
-                                    </Button>
+
+                                    {/* 招募代理链接 - 仅 L1/L2 可见 */}
+                                    {isManager && (
+                                        <div className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 rounded-xl p-4">
+                                            <div className="flex items-center gap-2 text-yellow-400 mb-2">
+                                                <UserPlus className="w-4 h-4" />
+                                                <span className="font-medium">招募代理链接</span>
+                                            </div>
+                                            <p className="text-xs text-slate-400 mb-3">
+                                                招募 L3 推广员，为您裂变团队
+                                            </p>
+                                            <Button
+                                                size="sm"
+                                                onClick={async () => {
+                                                    try {
+                                                        const res = await fetch("/api/agent/invite-link?type=agent")
+                                                        const data = await res.json()
+                                                        if (data.success) {
+                                                            const link = `${window.location.origin}/?${data.params}`
+                                                            navigator.clipboard.writeText(link)
+                                                            toast.success("代理招募链接已复制")
+                                                        } else {
+                                                            toast.error(data.error || "生成链接失败")
+                                                        }
+                                                    } catch {
+                                                        toast.error("生成链接失败")
+                                                    }
+                                                }}
+                                                className="w-full bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30"
+                                            >
+                                                <Copy className="w-4 h-4 mr-2" />
+                                                复制招募链接
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
                             </motion.div>
                         )}

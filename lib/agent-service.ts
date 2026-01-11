@@ -17,14 +17,15 @@ type CommissionResult = {
 
 /**
  * 绑定代理关系 - 在用户注册时调用
- * 根据邀请人的等级，设置新用户的代理等级
  * 
  * @param newUserId - 新注册用户ID
- * @param inviterId - 邀请人ID (可选)
+ * @param inviterId - 邀请人ID
+ * @param registerType - 注册类型: USER(拉客户) / AGENT(招代理)
  */
 export async function bindAgentRelationship(
     newUserId: string,
-    inviterId: string | null
+    inviterId: string | null,
+    registerType: "USER" | "AGENT" = "USER"
 ): Promise<void> {
     if (!inviterId) return
 
@@ -37,21 +38,21 @@ export async function bindAgentRelationship(
 
         if (!inviter) return
 
-        // 分级处理：
-        // - L1/L2 邀请 → 新用户成为 L3（发展下线代理）
-        // - L3 邀请 → 新用户保持 L0（普通客户，L3 通过用户充值赚取 12% 佣金）
-        // - L0 邀请 → 新用户保持 L0（普通用户互推）
+        // 双向邀请机制：
+        // - 只有当邀请人是 L1/L2 且 registerType === 'AGENT' 时，新用户才成为 L3
+        // - 其他情况（包括 L3 邀请，或 L1/L2 发出的普通邀请），新用户默认为 L0
         const isL1OrL2 = inviter.agentLevel === AGENT_LEVEL.L1 || inviter.agentLevel === AGENT_LEVEL.L2
+        const shouldBeAgent = isL1OrL2 && registerType === "AGENT"
 
-        if (isL1OrL2) {
+        if (shouldBeAgent) {
             await prisma.user.update({
                 where: { id: newUserId },
                 data: { agentLevel: AGENT_LEVEL.L3 },
             })
-            console.log(`✅ 新用户 ${newUserId} 成为 L3 推广大使 (邀请人等级: L${inviter.agentLevel})`)
-        } else if (inviter.agentLevel === AGENT_LEVEL.L3) {
-            // L3 邀请的用户保持 L0，L3 通过佣金赚钱
-            console.log(`✅ L3 代理邀请新客户 ${newUserId}，保持 L0，等待充值佣金`)
+            console.log(`✅ 新用户 ${newUserId} 成为 L3 推广大使 (邀请人等级: L${inviter.agentLevel}, 类型: 招募代理)`)
+        } else if (inviter.agentLevel > 0) {
+            // 代理邀请的普通客户，保持 L0
+            console.log(`✅ 代理邀请新客户 ${newUserId}，保持 L0 (邀请人等级: L${inviter.agentLevel}, 类型: ${registerType})`)
         }
         // L0 邀请的用户也保持 L0（不做修改）
     } catch (error) {
@@ -60,13 +61,43 @@ export async function bindAgentRelationship(
 }
 
 /**
- * 三级分润算法 - 在用户充值成功后调用
- * 分润比例: 12%(直推) + 5%(管理) + 3%(顶级) = 20%
+ * ================================================================================
+ * 三级分润算法 - 级差补齐模型 (Winner Takes All)
+ * ================================================================================
  * 
- * @param userId - 充值用户ID
- * @param amount - 充值金额(积分)
- * @param orderType - 订单类型: CDK / ALIPAY / WECHAT
- * @param orderId - 订单ID(可选)
+ * 【核心规则】
+ * - 总拨比：20%（按实付金额计算，不含赠送积分）
+ * - L0 普通用户作为邀请人时：不参与现金分润（只获得积分奖励，在注册时已处理）
+ * 
+ * 【分润层级】
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ 层级              │ 比例  │ 领取条件                                        │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ Level 1 (直推)    │ 12%   │ 直接上级必拿（必须是代理 L1/L2/L3）              │
+ * │ Level 2 (管理)    │ 5%    │ 向上找最近的 L1/L2；若 Parent 是 L1/L2 则补齐    │
+ * │ Level 3 (顶级)    │ 3%    │ 向上找最近的 L1；若 Parent 是 L1 则补齐          │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * 【场景分润示例】（假设充值 100 元）
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ 场景                       │ L3 获得  │ L2 获得  │ L1 获得  │ 合计        │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ L0 直推用户充值            │ -        │ -        │ -        │ 0（无分润） │
+ * │ L3 直推用户充值            │ 12%      │ 5%       │ 3%       │ 20%        │
+ * │ L2 直推用户充值            │ -        │ 17%      │ 3%       │ 20%        │
+ * │ L1 直推用户充值            │ -        │ -        │ 20%      │ 20%        │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ * 
+ * 【级差补齐说明】
+ * - 如果 Parent 本身就是 L1/L2，则 Parent 直接获得 12% + 5% = 17%
+ * - 如果 Parent 本身就是 L1，则 Parent 直接获得 12% + 5% + 3% = 20%
+ * - 未发放的佣金归平台所有（如上级链中找不到 L1）
+ * 
+ * @param userId - 充值用户 ID
+ * @param amount - 实付金额（分），不含赠送积分
+ * @param orderType - 订单类型：CDK / ALIPAY / WECHAT
+ * @param orderId - 订单 ID（可选）
+ * @returns CommissionResult - 分润结果，包含各级分润详情
  */
 export async function distributeCommission(
     userId: string,
@@ -77,117 +108,121 @@ export async function distributeCommission(
     const distributed: CommissionResult["distributed"] = []
 
     try {
-        // 获取充值用户及其上级链
+        // 获取充值用户的直接上级
         const user = await prisma.user.findUnique({
             where: { id: userId },
-            select: {
-                id: true,
-                invitedById: true,
-            },
+            select: { id: true, invitedById: true },
         })
 
         if (!user || !user.invitedById) {
             return { success: true, distributed } // 无邀请人，正常返回
         }
 
-        // 获取三级上级
-        const ancestors = await getAncestorChain(user.invitedById, 3)
+        // 获取五级上级链（足够找到各级别代理）
+        const ancestors = await getAncestorChain(user.invitedById, 5)
 
         if (ancestors.length === 0) {
             return { success: true, distributed }
         }
 
+        // 计算各级佣金
+        const directCommission = Math.floor(amount * COMMISSION_RATES.DIRECT / 100)      // 12%
+        const managementCommission = Math.floor(amount * COMMISSION_RATES.MANAGEMENT / 100) // 5%
+        const topCommission = Math.floor(amount * COMMISSION_RATES.TOP / 100)             // 3%
+
         // 使用事务处理分润
         await prisma.$transaction(async (tx) => {
-            // Level 1: 直推奖励 (12%) - 给直接上级
-            // 只有代理（L3+）才能获得直推奖励，L0普通用户不参与分润
             const parent = ancestors[0]
-            if (parent && parent.agentLevel >= AGENT_LEVEL.L3) {
-                const commission = Math.floor(amount * COMMISSION_RATES.DIRECT / 100)
-                if (commission > 0) {
-                    await tx.user.update({
-                        where: { id: parent.id },
-                        data: { agentBalance: { increment: commission } },
-                    })
-                    await tx.commissionRecord.create({
-                        data: {
-                            earnerId: parent.id,
-                            sourceUserId: userId,
-                            amount: commission,
-                            rate: COMMISSION_RATES.DIRECT,
-                            level: 1,
-                            orderId: orderId || null,
-                            orderType,
-                        },
-                    })
-                    distributed.push({
-                        level: 1,
+            if (!parent) return
+
+            // ============= Level 1: 直推奖励 (12%) =============
+            // 只有代理（L1/L2/L3）才能获得直推奖励，L0 普通用户不参与分润
+            if (parent.agentLevel > 0 && directCommission > 0) {
+                await tx.user.update({
+                    where: { id: parent.id },
+                    data: { agentBalance: { increment: directCommission } },
+                })
+                await tx.commissionRecord.create({
+                    data: {
                         earnerId: parent.id,
-                        amount: commission,
+                        sourceUserId: userId,
+                        amount: directCommission,
                         rate: COMMISSION_RATES.DIRECT,
-                    })
-                    console.log(`💰 直推奖励: ${parent.id} 获得 ${commission} (12% of ${amount})`)
+                        level: 1,
+                        orderId: orderId || null,
+                        orderType,
+                    },
+                })
+                distributed.push({ level: 1, earnerId: parent.id, amount: directCommission, rate: COMMISSION_RATES.DIRECT })
+                console.log(`💰 直推奖励: ${parent.id} (L${parent.agentLevel}) 获得 ${directCommission} (12%)`)
+            }
+
+            // ============= Level 2: 管理奖励 (5%) =============
+            // 找最近的 L1 或 L2（可能是 Parent 自己，也可能是上级）
+            let managementEarner: typeof parent | null = null
+            if (parent.agentLevel === AGENT_LEVEL.L1 || parent.agentLevel === AGENT_LEVEL.L2) {
+                // Parent 本身就是 L1/L2，级差补齐：Parent 兼得 5%
+                managementEarner = parent
+            } else {
+                // 往上找最近的 L1/L2
+                for (let i = 1; i < ancestors.length; i++) {
+                    const ancestor = ancestors[i]
+                    if (ancestor.agentLevel === AGENT_LEVEL.L1 || ancestor.agentLevel === AGENT_LEVEL.L2) {
+                        managementEarner = ancestor
+                        break
+                    }
                 }
             }
 
-            // Level 2: 管理奖励 (5%) - 给上上级，需要L2+（即 L1 或 L2）
-            const grandParent = ancestors[1]
-            if (grandParent && grandParent.agentLevel >= AGENT_LEVEL.L1 && grandParent.agentLevel <= AGENT_LEVEL.L2) {
-                const commission = Math.floor(amount * COMMISSION_RATES.MANAGEMENT / 100)
-                if (commission > 0) {
-                    await tx.user.update({
-                        where: { id: grandParent.id },
-                        data: { agentBalance: { increment: commission } },
-                    })
-                    await tx.commissionRecord.create({
-                        data: {
-                            earnerId: grandParent.id,
-                            sourceUserId: userId,
-                            amount: commission,
-                            rate: COMMISSION_RATES.MANAGEMENT,
-                            level: 2,
-                            orderId: orderId || null,
-                            orderType,
-                        },
-                    })
-                    distributed.push({
-                        level: 2,
-                        earnerId: grandParent.id,
-                        amount: commission,
+            if (managementEarner && managementCommission > 0) {
+                await tx.user.update({
+                    where: { id: managementEarner.id },
+                    data: { agentBalance: { increment: managementCommission } },
+                })
+                await tx.commissionRecord.create({
+                    data: {
+                        earnerId: managementEarner.id,
+                        sourceUserId: userId,
+                        amount: managementCommission,
                         rate: COMMISSION_RATES.MANAGEMENT,
-                    })
-                    console.log(`💰 管理奖励: ${grandParent.id} 获得 ${commission} (5% of ${amount})`)
+                        level: 2,
+                        orderId: orderId || null,
+                        orderType,
+                    },
+                })
+                distributed.push({ level: 2, earnerId: managementEarner.id, amount: managementCommission, rate: COMMISSION_RATES.MANAGEMENT })
+                console.log(`💰 管理奖励: ${managementEarner.id} (L${managementEarner.agentLevel}) 获得 ${managementCommission} (5%)`)
+            }
+
+            // ============= Level 3: 顶级奖励 (3%) =============
+            // 找最近的 L1（可能是 Parent/GrandParent/更上级）
+            let topEarner: typeof parent | null = null
+            for (let i = 0; i < ancestors.length; i++) {
+                const ancestor = ancestors[i]
+                if (ancestor.agentLevel === AGENT_LEVEL.L1) {
+                    topEarner = ancestor
+                    break
                 }
             }
 
-            // Level 3: 顶级奖励 (3%) - 给上上上级，需要L1
-            const greatGrandParent = ancestors[2]
-            if (greatGrandParent && greatGrandParent.agentLevel === AGENT_LEVEL.L1) {
-                const commission = Math.floor(amount * COMMISSION_RATES.TOP / 100)
-                if (commission > 0) {
-                    await tx.user.update({
-                        where: { id: greatGrandParent.id },
-                        data: { agentBalance: { increment: commission } },
-                    })
-                    await tx.commissionRecord.create({
-                        data: {
-                            earnerId: greatGrandParent.id,
-                            sourceUserId: userId,
-                            amount: commission,
-                            rate: COMMISSION_RATES.TOP,
-                            level: 3,
-                            orderId: orderId || null,
-                            orderType,
-                        },
-                    })
-                    distributed.push({
-                        level: 3,
-                        earnerId: greatGrandParent.id,
-                        amount: commission,
+            if (topEarner && topCommission > 0) {
+                await tx.user.update({
+                    where: { id: topEarner.id },
+                    data: { agentBalance: { increment: topCommission } },
+                })
+                await tx.commissionRecord.create({
+                    data: {
+                        earnerId: topEarner.id,
+                        sourceUserId: userId,
+                        amount: topCommission,
                         rate: COMMISSION_RATES.TOP,
-                    })
-                    console.log(`💰 顶级奖励: ${greatGrandParent.id} 获得 ${commission} (3% of ${amount})`)
-                }
+                        level: 3,
+                        orderId: orderId || null,
+                        orderType,
+                    },
+                })
+                distributed.push({ level: 3, earnerId: topEarner.id, amount: topCommission, rate: COMMISSION_RATES.TOP })
+                console.log(`💰 顶级奖励: ${topEarner.id} (L${topEarner.agentLevel}) 获得 ${topCommission} (3%)`)
             }
         })
 
