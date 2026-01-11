@@ -52,6 +52,7 @@ model User {
   commissionRecordsEarned   CommissionRecord[] @relation("EarnerCommissions")
   commissionRecordsGenerated CommissionRecord[] @relation("SourceCommissions")
   withdrawals               Withdrawal[]
+  watermarkTasks            WatermarkTask[]
 }
 
 // 推广佣金记录
@@ -305,6 +306,25 @@ model Withdrawal {
   createdAt   DateTime @default(now())
 
   user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([status])
+}
+
+/// 去水印任务
+model WatermarkTask {
+  id            String    @id @default(cuid())
+  userId        String
+  originalUrl   String    @db.Text
+  resultUrl     String?   @db.Text
+  status        String    @default("PENDING") // PENDING, PROCESSING, COMPLETED, FAILED
+  errorMsg      String?
+  remoteTaskId  String?   /// 远端 API 任务 ID（避免重复创建）
+  refundedAt    DateTime? /// 退款时间（幂等控制）
+  attemptsMade  Int       @default(0) /// Worker 处理次数
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([status])
