@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
 import { useSession, signOut } from "next-auth/react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
@@ -13,7 +13,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { LogIn, Megaphone } from "lucide-react"
 import { useAnnouncementModal } from "@/hooks/use-announcement-modal"
 
-export default function DashboardPage() {
+// 内部组件：使用 useSearchParams
+function DashboardContent() {
   const { data: session, status } = useSession()
   const searchParams = useSearchParams()
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
@@ -136,5 +137,14 @@ export default function DashboardPage() {
         inviteSig={urlInviteSig}
       />
     </div>
+  )
+}
+
+// 用 Suspense 包裹以支持 useSearchParams
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen bg-slate-950" />}>
+      <DashboardContent />
+    </Suspense>
   )
 }
