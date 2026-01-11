@@ -25,6 +25,7 @@ type RateLimitResult = {
 
 /**
  * 检查 IP 尝试次数限制
+ * ❓ 当前已禁用，只打印日志
  */
 export async function checkIpAttemptLimit(ip: string): Promise<RateLimitResult> {
     try {
@@ -36,15 +37,17 @@ export async function checkIpAttemptLimit(ip: string): Promise<RateLimitResult> 
             await redis.expire(key, CONFIG.IP_ATTEMPT_WINDOW)
         }
 
-        if (count > CONFIG.IP_ATTEMPT_LIMIT) {
-            // 打后端日志查看ip
-            console.log(`IP ${ip} 尝试次数超过限制: ${count}`)
-            return {
-                allowed: false,
-                reason: "操作过于频繁，请10分钟后再试",
-                remaining: 0,
-            }
-        }
+        // 📝 仅打印日志，不做限制
+        console.log(`📊 IP 尝试计数: IP=${ip}, count=${count}/${CONFIG.IP_ATTEMPT_LIMIT}`)
+
+        // 暂时禁用 IP 限制
+        // if (count > CONFIG.IP_ATTEMPT_LIMIT) {
+        //     return {
+        //         allowed: false,
+        //         reason: "操作过于频繁，请10分钟后再试",
+        //         remaining: 0,
+        //     }
+        // }
 
         return {
             allowed: true,
@@ -52,13 +55,13 @@ export async function checkIpAttemptLimit(ip: string): Promise<RateLimitResult> 
         }
     } catch (error) {
         console.error("IP 限流检查失败:", error)
-        // Redis 故障时放行，不影响正常注册
         return { allowed: true }
     }
 }
 
 /**
  * 检查 IP 成功注册次数限制
+ * ❓ 当前已禁用，只打印日志
  */
 export async function checkIpSuccessLimit(ip: string): Promise<RateLimitResult> {
     try {
@@ -67,13 +70,17 @@ export async function checkIpSuccessLimit(ip: string): Promise<RateLimitResult> 
 
         const count = parseInt(await redis.get(key) || "0")
 
-        if (count >= CONFIG.IP_SUCCESS_LIMIT) {
-            return {
-                allowed: false,
-                reason: "该IP今日注册次数已达上限",
-                remaining: 0,
-            }
-        }
+        // 📝 仅打印日志，不做限制
+        console.log(`📊 IP 成功计数: IP=${ip}, count=${count}/${CONFIG.IP_SUCCESS_LIMIT}`)
+
+        // 暂时禁用 IP 限制
+        // if (count >= CONFIG.IP_SUCCESS_LIMIT) {
+        //     return {
+        //         allowed: false,
+        //         reason: "该IP今日注册次数已达上限",
+        //         remaining: 0,
+        //     }
+        // }
 
         return {
             allowed: true,
@@ -119,6 +126,9 @@ export async function checkDeviceLimit(deviceId: string): Promise<RateLimitResul
  * 记录成功注册（IP + 设备）
  */
 export async function recordRegistrationSuccess(ip: string, deviceId?: string) {
+    // 📝 调用日志：检查是否误调用/重复调用
+    console.log(`📊 recordRegistrationSuccess 被调用: IP=${ip}, deviceId=${deviceId || '无'}, 调用堆栈=${new Error().stack?.split('\n')[2]?.trim() || '未知'}`)
+
     try {
         const redis = getRedis()
         const pipeline = redis.pipeline()
@@ -135,7 +145,11 @@ export async function recordRegistrationSuccess(ip: string, deviceId?: string) {
             pipeline.expire(deviceKey, CONFIG.DEVICE_WINDOW)
         }
 
-        await pipeline.exec()
+        const results = await pipeline.exec()
+        const newIpCount = results?.[0]?.[1] || '?'
+        const newDeviceCount = deviceId ? (results?.[2]?.[1] || '?') : 'N/A'
+
+        console.log(`✅ 注册计数已更新: IP=${ip} (count=${newIpCount}), deviceId=${deviceId || '无'} (count=${newDeviceCount})`)
     } catch (error) {
         console.error("记录注册成功失败:", error)
     }

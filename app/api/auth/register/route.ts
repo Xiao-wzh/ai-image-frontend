@@ -74,8 +74,13 @@ export async function POST(req: NextRequest) {
 
     // 0. 频率限制检查
     const clientIp = getClientIp(req)
+
+    // 📝 注册请求日志：打印 IP、设备ID、注册信息
+    console.log(`📝 注册请求: IP=${clientIp}, deviceId=${deviceId || '无'}, email=${email}, username=${username}, inviteCode=${inviteCode || '无'}`)
+
     const rateCheck = await checkRegistrationRateLimit(clientIp, deviceId)
     if (!rateCheck.allowed) {
+      console.log(`⛔ 限流拒绝: IP=${clientIp}, deviceId=${deviceId || '无'}, 原因=${rateCheck.reason}`)
       return NextResponse.json(
         { error: rateCheck.reason || "操作过于频繁" },
         { status: 429 }
