@@ -385,11 +385,15 @@ export default function AgentCenterPage() {
                                                     if (data.success) {
                                                         // 优先使用 SITE_URL 环境变量
                                                         const baseUrl = SITE_URL || window.location.origin
+                                                        console.log(baseUrl);
+
                                                         const link = `${baseUrl}/?${data.params}`
+                                                        console.log(link);
+
                                                         navigator.clipboard.writeText(link)
                                                         toast.success("推广链接已复制")
                                                     } else {
-                                                        toast.error(data.error || "生成链接失败")
+                                                        toast.error(data.error || "生成链接失败.")
                                                     }
                                                 } catch {
                                                     toast.error("生成链接失败")
@@ -421,11 +425,13 @@ export default function AgentCenterPage() {
                                                         if (data.success) {
                                                             // 优先使用 SITE_URL 环境变量
                                                             const baseUrl = SITE_URL || window.location.origin
+                                                            console.log(baseUrl);
                                                             const link = `${baseUrl}/?${data.params}`
+                                                            console.log(link);
                                                             navigator.clipboard.writeText(link)
                                                             toast.success("代理招募链接已复制")
                                                         } else {
-                                                            toast.error(data.error || "生成链接失败")
+                                                            toast.error(data.error || "生成链接失败.")
                                                         }
                                                     } catch {
                                                         toast.error("生成链接失败")
