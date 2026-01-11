@@ -1,3 +1,8 @@
+// ==================== 站点配置 ====================
+
+// 站点基础 URL（用于生成邀请链接等）
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "http://120.48.75.102"
+
 // 商品类型常量与映射 - 所有新增类型仅需在此维护
 // 1. 数据库存储 / API 传输用英文 KEY
 export const ProductType = {

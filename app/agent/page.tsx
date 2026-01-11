@@ -36,6 +36,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { cn } from "@/lib/utils"
 import { AGENT_LEVEL } from "@/lib/agent-constants"
+import { SITE_URL } from "@/lib/constants"
 
 // 代理等级映射 (L1=1 合伙人, L2=2 运营中心, L3=3 推广大使)
 const LEVEL_INFO: Record<number, { label: string; color: string; bgColor: string }> = {
@@ -382,7 +383,8 @@ export default function AgentCenterPage() {
                                                     const res = await fetch("/api/agent/invite-link?type=user")
                                                     const data = await res.json()
                                                     if (data.success) {
-                                                        const link = `${window.location.origin}/?${data.params}`
+                                                        const baseUrl = typeof window !== 'undefined' ? window.location.origin : SITE_URL
+                                                        const link = `${baseUrl}/?${data.params}`
                                                         navigator.clipboard.writeText(link)
                                                         toast.success("推广链接已复制")
                                                     } else {
@@ -416,7 +418,8 @@ export default function AgentCenterPage() {
                                                         const res = await fetch("/api/agent/invite-link?type=agent")
                                                         const data = await res.json()
                                                         if (data.success) {
-                                                            const link = `${window.location.origin}/?${data.params}`
+                                                            const baseUrl = typeof window !== 'undefined' ? window.location.origin : SITE_URL
+                                                            const link = `${baseUrl}/?${data.params}`
                                                             navigator.clipboard.writeText(link)
                                                             toast.success("代理招募链接已复制")
                                                         } else {
