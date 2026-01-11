@@ -110,40 +110,12 @@ export async function distributeCommission(
 
         // 使用事务处理分润
         await prisma.$transaction(async (tx) => {
-            // Level 1: 直推奖励 (12%) - 给直接上级
-            // 只有代理（L3+）才能获得直推奖励，L0普通用户不参与分润
             const parent = ancestors[0]
-            if (parent && parent.agentLevel >= AGENT_LEVEL.L3) {
-                const commission = Math.floor(amount * COMMISSION_RATES.DIRECT / 100)
-                if (commission > 0) {
-                    await tx.user.update({
-                        where: { id: parent.id },
-                        data: { agentBalance: { increment: commission } },
-                    })
-                    await tx.commissionRecord.create({
-                        data: {
-                            earnerId: parent.id,
-                            sourceUserId: userId,
-                            amount: commission,
-                            rate: COMMISSION_RATES.DIRECT,
-                            level: 1,
-                            orderId: orderId || null,
-                            orderType,
-                        },
-                    })
-                    distributed.push({
-                        level: 1,
-                        earnerId: parent.id,
-                        amount: commission,
-                        rate: COMMISSION_RATES.DIRECT,
-                    })
-                    console.log(`💰 直推奖励: ${parent.id} 获得 ${commission} (12% of ${amount})`)
-                }
             if (!parent) return
 
             // ============= Level 1: 直推奖励 (12%) =============
-            // 直接上级必拿 12%
-            if (directCommission > 0) {
+            // 只有代理（L1/L2/L3）才能获得直推奖励，L0 普通用户不参与分润
+            if (parent.agentLevel > 0 && directCommission > 0) {
                 await tx.user.update({
                     where: { id: parent.id },
                     data: { agentBalance: { increment: directCommission } },

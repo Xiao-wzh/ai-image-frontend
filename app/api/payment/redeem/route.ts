@@ -94,8 +94,9 @@ export async function POST(req: NextRequest) {
     }
 
     // 6) 处理三级代理分润（在事务外执行，不影响主流程）
+    // 注意：只按实付积分计算佣金，不包含赠送积分
     try {
-      await distributeCommission(userId, result.total, "CDK", code)
+      await distributeCommission(userId, result.paid, "CDK", code)
     } catch (e) {
       // 分润失败不影响用户兑换成功
       console.error("代理分润处理失败:", e)
