@@ -409,24 +409,14 @@ export default function AgentCenterPage() {
                                         <Button
                                             size="sm"
                                             onClick={async () => {
-                                                try {
-                                                    const res = await fetch("/api/agent/invite-link?type=user")
-                                                    const data = await res.json()
-                                                    if (data.success) {
-                                                        const baseUrl = SITE_URL || window.location.origin
-                                                        const link = `${baseUrl}/?${data.params}`
-                                                        const copied = await copyToClipboard(link)
-                                                        if (copied) {
-                                                            toast.success("推广链接已复制")
-                                                        } else {
-                                                            toast.error("复制失败，请手动复制: " + link)
-                                                        }
-                                                    } else {
-                                                        toast.error(data.error || "生成链接失败")
-                                                    }
-                                                } catch (e) {
-                                                    console.error("生成链接失败:", e)
-                                                    toast.error("生成链接失败")
+                                                // 推广获客链接不需要签名，直接用邀请码即可
+                                                const baseUrl = SITE_URL || window.location.origin
+                                                const link = `${baseUrl}/?inviteCode=${stats.referralCode}`
+                                                const copied = await copyToClipboard(link)
+                                                if (copied) {
+                                                    toast.success("推广链接已复制")
+                                                } else {
+                                                    toast.error("复制失败，请手动复制: " + link)
                                                 }
                                             }}
                                             className="w-full bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 border border-emerald-500/30"

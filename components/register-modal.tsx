@@ -24,6 +24,8 @@ interface RegisterModalProps {
 }
 
 export function RegisterModal({ isOpen, onClose, initialInviteCode = "", inviteType = "user", inviteSig = "" }: RegisterModalProps) {
+  // 有邀请码时默认打开注册页，否则打开登录页
+  const defaultTab = initialInviteCode ? "register" : "login"
   // Register Form State
   const [regEmail, setRegEmail] = useState("")
   const [regUsername, setRegUsername] = useState("")
@@ -227,7 +229,7 @@ export function RegisterModal({ isOpen, onClose, initialInviteCode = "", inviteT
         </DialogHeader>
 
         <div className="p-6 pt-0">
-          <Tabs defaultValue="login" className="w-full">
+          <Tabs defaultValue={defaultTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">登录</TabsTrigger>
               <TabsTrigger value="register">注册</TabsTrigger>
@@ -346,7 +348,8 @@ export function RegisterModal({ isOpen, onClose, initialInviteCode = "", inviteT
                     onChange={(e) => setRegInviteCode(e.target.value.toUpperCase())}
                     placeholder="邀请码 (可选)"
                     maxLength={8}
-                    className="w-full h-12 rounded-xl border border-white/10 bg-white/5 pl-12 pr-4 text-white placeholder:text-slate-500 outline-none focus:border-yellow-500 focus:bg-white/10 focus:ring-2 focus:ring-yellow-500/20 transition-all uppercase"
+                    readOnly={!!initialInviteCode}
+                    className={`w-full h-12 rounded-xl border border-white/10 bg-white/5 pl-12 pr-4 text-white placeholder:text-slate-500 outline-none focus:border-yellow-500 focus:bg-white/10 focus:ring-2 focus:ring-yellow-500/20 transition-all uppercase ${initialInviteCode ? 'cursor-not-allowed opacity-70' : ''}`}
                   />
                 </div>
                 <Button
