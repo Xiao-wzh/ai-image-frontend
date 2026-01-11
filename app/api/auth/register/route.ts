@@ -5,6 +5,7 @@ import { REGISTRATION_BONUS, INVITE_CODE_BONUS } from "@/lib/constants"
 import { normalizeEmail } from "@/lib/normalize-email"
 import { checkRegistrationRateLimit, recordRegistrationSuccess } from "@/lib/rate-limit"
 import { bindAgentRelationship } from "@/lib/agent-service"
+import { verifyInviteSignature } from "@/lib/invite-link"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -56,7 +57,20 @@ async function generateUniqueReferralCode(): Promise<string> {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { email, username, password, code, inviteCode, deviceId } = body
+    const { email, username, password, code, inviteCode, deviceId, inviteType, inviteSig } = body
+
+    // 解析邀请类型: USER (默认，拉客户) 或 AGENT (招代理)
+    // 重要：只有当签名验证通过时才允许 AGENT 类型
+    let registerType: "USER" | "AGENT" = "USER"
+    if (inviteType === "agent" && inviteCode && inviteSig) {
+      // 验证签名，防止用户篡改 URL 参数
+      if (verifyInviteSignature(inviteCode, "agent", inviteSig)) {
+        registerType = "AGENT"
+      } else {
+        console.log(`⚠️ 邀请签名验证失败: inviteCode=${inviteCode}, sig=${inviteSig}`)
+        // 签名无效，当作普通用户处理，不报错
+      }
+    }
 
     // 0. 频率限制检查
     const clientIp = getClientIp(req)
@@ -275,8 +289,8 @@ export async function POST(req: NextRequest) {
       where: { id: verificationCode.id },
     })
 
-    // 10. 绑定代理关系（设置代理等级）
-    await bindAgentRelationship(user.id, inviter?.id || null)
+    // 10. 绑定代理关系（设置代理等级，根据邀请类型）
+    await bindAgentRelationship(user.id, inviter?.id || null, registerType)
 
     console.log(`✅ 用户注册成功: ${user.email} (${user.username})${inviter ? ` - 由 ${inviter.email} 邀请` : ""}`)
 

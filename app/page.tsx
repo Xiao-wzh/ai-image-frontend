@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useSession, signOut } from "next-auth/react"
+import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
 import { Sidebar } from "@/components/sidebar"
 import { UploadZone } from "@/components/upload-zone"
@@ -14,8 +15,21 @@ import { useAnnouncementModal } from "@/hooks/use-announcement-modal"
 
 export default function DashboardPage() {
   const { data: session, status } = useSession()
+  const searchParams = useSearchParams()
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
   const announcementModal = useAnnouncementModal()
+
+  // 从 URL 参数读取邀请码、类型和签名
+  const urlInviteCode = searchParams.get("inviteCode") || ""
+  const urlInviteType = searchParams.get("type") === "agent" ? "agent" : "user"
+  const urlInviteSig = searchParams.get("sig") || ""
+
+  // 如果 URL 带有邀请码，自动打开注册弹框
+  useEffect(() => {
+    if (urlInviteCode && !session?.user) {
+      setIsAuthModalOpen(true)
+    }
+  }, [urlInviteCode, session])
 
   return (
     <div className="flex h-screen bg-slate-950">
@@ -114,10 +128,12 @@ export default function DashboardPage() {
         </main>
       </div>
 
-      {/* Register/Login Modal */}
       <RegisterModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+        initialInviteCode={urlInviteCode}
+        inviteType={urlInviteType}
+        inviteSig={urlInviteSig}
       />
     </div>
   )

@@ -37,6 +37,8 @@ export async function checkIpAttemptLimit(ip: string): Promise<RateLimitResult> 
         }
 
         if (count > CONFIG.IP_ATTEMPT_LIMIT) {
+            // 打后端日志查看ip
+            console.log(`IP ${ip} 尝试次数超过限制: ${count}`)
             return {
                 allowed: false,
                 reason: "操作过于频繁，请10分钟后再试",
