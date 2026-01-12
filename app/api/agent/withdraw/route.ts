@@ -16,6 +16,12 @@ const MIN_WITHDRAW_AMOUNT = 100
  * Body: { amount: number, bankInfo: { type: string, account: string, name: string } }
  */
 export async function POST(req: NextRequest) {
+    // 暂时关闭提现功能
+    return NextResponse.json(
+        { error: "提现功能暂时关闭，请联系负责人" },
+        { status: 503 }
+    )
+
     const session = await auth()
     const userId = session?.user?.id
 

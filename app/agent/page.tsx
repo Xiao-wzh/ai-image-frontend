@@ -329,14 +329,15 @@ export default function AgentCenterPage() {
                                         <div className="text-2xl font-bold text-green-400">
                                             ¥{((stats?.agentBalance || 0) / 100).toFixed(2)}
                                         </div>
-                                        <Button
-                                            size="sm"
-                                            onClick={() => setShowWithdrawDialog(true)}
-                                            disabled={!stats?.agentBalance || stats.agentBalance < 100}
-                                            className="mt-3 w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white hover:opacity-90 text-xs"
-                                        >
-                                            申请提现
-                                        </Button>
+                                        <div title="提现请联系负责人">
+                                            <Button
+                                                size="sm"
+                                                disabled={true}
+                                                className="mt-3 w-full bg-slate-600 text-slate-400 cursor-not-allowed text-xs"
+                                            >
+                                                申请提现
+                                            </Button>
+                                        </div>
                                     </motion.div>
 
                                     {/* 累计收益 */}
@@ -402,7 +403,7 @@ export default function AgentCenterPage() {
                                         <p className="text-xs text-slate-400 mb-3">
                                             邀请用户注册消费，您获{" "}
                                             <span className="text-emerald-400 font-semibold">
-                                                {isL1 ? "20%" : isL2 ? "17%" : "12%"}
+                                                {isL1 ? "20%" : isL2 ? "15%" : "10%"}
                                             </span>
                                             {" "}佣金
                                         </p>

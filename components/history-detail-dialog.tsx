@@ -78,6 +78,7 @@ export function HistoryDetailDialog({
   const [showDiscountConfirm, setShowDiscountConfirm] = useState(false)
   const [showAppealModal, setShowAppealModal] = useState(false)
   const [isSubmittingAppeal, setIsSubmittingAppeal] = useState(false)
+  const [appealReason, setAppealReason] = useState("")
 
   // Watermark states
   const [isWatermarkUnlocked, setIsWatermarkUnlocked] = useState(false)
@@ -281,6 +282,7 @@ export function HistoryDetailDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           generationId: item.id,
+          reason: appealReason.trim() || null,
         }),
       })
       const data = await res.json()
@@ -289,6 +291,7 @@ export function HistoryDetailDialog({
       }
       toast.success("申诉已提交", { description: "请等待管理员审核" })
       setShowAppealModal(false)
+      setAppealReason("") // 重置输入
       onGenerateSuccess()
     } catch (e: any) {
       toast.error(e?.message || "申诉提交失败")
@@ -806,24 +809,30 @@ export function HistoryDetailDialog({
               setShowAppealModal(false)
             }
           }}
-          onMouseDownCapture={(e) => e.stopPropagation()}
-          onPointerDownCapture={(e) => e.stopPropagation()}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             className="glass rounded-2xl p-6 max-w-sm w-full mx-4 border border-white/10 relative pointer-events-auto"
             onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
           >
             <h4 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-orange-400" />
               确认申诉
             </h4>
-            <p className="text-sm text-slate-400 mb-4">
+            <p className="text-sm text-slate-400 mb-3">
               如果生成出来的图片货不对版，可以提交申诉申请退还积分。
               <br />
               <span className="text-orange-400 font-medium">预计退还 {item?.hasUsedDiscountedRetry ? 99 : 199} 积分</span>
             </p>
+            <textarea
+              value={appealReason}
+              onChange={(e) => setAppealReason(e.target.value)}
+              placeholder="请尽量告知哪里不一样，感谢！"
+              rows={3}
+              className="w-full mb-4 p-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-slate-500 text-sm resize-none focus:outline-none focus:border-orange-400/50"
+            />
             <div className="flex gap-3">
               <Button
                 variant="outline"
