@@ -17,6 +17,37 @@ type ReferralStats = {
     totalInvited: number
 }
 
+// 复制到剪贴板（兼容非 HTTPS 环境）
+async function copyToClipboard(text: string): Promise<boolean> {
+    // 优先使用 Clipboard API
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        try {
+            await navigator.clipboard.writeText(text)
+            return true
+        } catch (e) {
+            console.warn('Clipboard API 失败，尝试 fallback:', e)
+        }
+    }
+
+    // Fallback: 使用 textarea + execCommand
+    try {
+        const textarea = document.createElement('textarea')
+        textarea.value = text
+        textarea.style.position = 'fixed'
+        textarea.style.left = '-9999px'
+        textarea.style.top = '-9999px'
+        document.body.appendChild(textarea)
+        textarea.focus()
+        textarea.select()
+        const success = document.execCommand('copy')
+        document.body.removeChild(textarea)
+        return success
+    } catch (e) {
+        console.error('Fallback 复制失败:', e)
+        return false
+    }
+}
+
 export default function ReferralPage() {
     const { data: session } = useSession()
     const router = useRouter()
@@ -47,13 +78,13 @@ export default function ReferralPage() {
 
     const handleCopy = async () => {
         if (!stats?.code) return
-        try {
-            await navigator.clipboard.writeText(stats.code)
+        const success = await copyToClipboard(stats.code)
+        if (success) {
             setCopied(true)
             toast.success("邀请码已复制")
             setTimeout(() => setCopied(false), 2000)
-        } catch {
-            toast.error("复制失败")
+        } else {
+            toast.error("复制失败，请手动复制: " + stats.code)
         }
     }
 
