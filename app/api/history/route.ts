@@ -55,7 +55,6 @@ export async function GET(req: NextRequest) {
           productType: true,
           taskType: true,
           generatedImages: true,
-          // generatedImage: true,
           originalImage: true,
           status: true,
           createdAt: true,

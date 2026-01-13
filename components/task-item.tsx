@@ -78,6 +78,7 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                 : {
                     productName: item.productName,
                     productType: item.productType,
+                    taskType: item.taskType || "MAIN_IMAGE",
                     images: item.originalImage,
                     platformKey: "SHOPEE",
                 }

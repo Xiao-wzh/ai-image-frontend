@@ -24,17 +24,39 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "请先登录" }, { status: 401 })
   }
 
-  // 检查用户并发任务数量限制（最多2个进行中的任务）
-  const MAX_CONCURRENT_TASKS = 2
+  // 并发限制设置：主图 2 个，详情页 1 个
+  const MAX_CONCURRENT_MAIN_IMAGE = 2
+  const MAX_CONCURRENT_DETAIL_PAGE = 1
+
+  // 先解析 body 以获取 taskType（用于并发检查）
+  const preBody = await req.clone().json().catch(() => null)
+  const preTaskType = String(preBody?.taskType || "MAIN_IMAGE").trim().toUpperCase()
+
+  // 如果是重试，需要先查询原始记录获取 taskType
+  let checkTaskType = preTaskType
+  if (preBody?.retryFromId) {
+    const orig = await prisma.generation.findUnique({
+      where: { id: preBody.retryFromId },
+      select: { taskType: true }
+    })
+    checkTaskType = orig?.taskType || "MAIN_IMAGE"
+  }
+
+  // 按任务类型分开统计并发数
   const pendingCount = await prisma.generation.count({
     where: {
       userId,
+      taskType: checkTaskType,
       status: { in: ["PENDING", "PROCESSING"] },
     },
   })
-  if (pendingCount >= MAX_CONCURRENT_TASKS) {
+
+  const maxConcurrent = checkTaskType === "DETAIL_PAGE" ? MAX_CONCURRENT_DETAIL_PAGE : MAX_CONCURRENT_MAIN_IMAGE
+  const taskTypeName = checkTaskType === "DETAIL_PAGE" ? "详情页" : "主图"
+
+  if (pendingCount >= maxConcurrent) {
     return NextResponse.json(
-      { error: `您当前有 ${pendingCount} 个任务正在进行中，请等待完成后再提交新任务（最多同时 ${MAX_CONCURRENT_TASKS} 个）` },
+      { error: `您当前有 ${pendingCount} 个${taskTypeName}任务正在进行中，请等待完成后再提交（${taskTypeName}最多同时 ${maxConcurrent} 个）` },
       { status: 429 }
     )
   }
@@ -213,8 +235,10 @@ export async function POST(req: NextRequest) {
 
     console.log(`[N8N_REQUEST] User: ${userId}, Payload: `, JSON.stringify(n8nPayload, null, 2))
 
+    // 超时设置：主图 6 分钟，详情页 10 分钟
+    const timeoutMs = taskType === "DETAIL_PAGE" ? 600_000 : 360_000
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 360_000)
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
     let n8nRes: Response
     try {

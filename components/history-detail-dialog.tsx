@@ -7,19 +7,25 @@ import { toast } from "sonner"
 import { motion, AnimatePresence } from "framer-motion"
 import JSZip from "jszip"
 import {
-  Download,
-  Grid,
-  Image as ImageIcon,
-  Loader2,
   ChevronLeft,
   ChevronRight,
+  Grid,
+  Image as ImageIcon,
+  Download,
+  Loader2,
+  X,
+  RefreshCw,
   Sparkles as SparklesIcon,
-  AlertTriangle,
+  Flag,
   Lock,
   Unlock,
   Droplets,
   Settings,
   Check,
+  Smartphone,
+  LayoutGrid,
+  Eye,
+  AlertTriangle,
 } from "lucide-react"
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
@@ -88,9 +94,17 @@ export function HistoryDetailDialog({
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null)
   const [loadingTemplates, setLoadingTemplates] = useState(false)
 
+  // Detail Page specific view mode (SCROLL = mobile preview, SLICES = grid of slices)
+  const [detailViewMode, setDetailViewMode] = useState<"SCROLL" | "SLICES">("SCROLL")
+
+  // Preview modal for zooming into a single slice
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
+
   useEffect(() => {
     if (open) {
       setIndex(initialIndex)
+      // Reset detail view mode when opening
+      setDetailViewMode("SCROLL")
       // Default to 'full' view for Detail Pages
       const currentItem = items[initialIndex]
       if (currentItem?.taskType === "DETAIL_PAGE") {
@@ -228,6 +242,7 @@ export function HistoryDetailDialog({
         body: JSON.stringify({
           productName: item.productName,
           productType: item.productType,
+          taskType: item.taskType || "MAIN_IMAGE",
           images: item.originalImage,
           platformKey: "SHOPEE",
         }),
@@ -509,11 +524,46 @@ export function HistoryDetailDialog({
               <div className="text-sm text-green-400 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-green-500" />
                 生成完成
+                {item?.taskType === "DETAIL_PAGE" && (
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 ml-2">
+                    详情页
+                  </span>
+                )}
               </div>
 
-              <div className="flex items-center gap-2 p-1 rounded-xl bg-white/5 border border-white/10">
-                {/* Hide Grid View button for Detail Pages */}
-                {item?.taskType !== "DETAIL_PAGE" && (
+              {/* View Mode Toggle - Different for Detail Pages */}
+              {item?.taskType === "DETAIL_PAGE" ? (
+                <div className="flex items-center gap-2 p-1 rounded-xl bg-white/5 border border-white/10">
+                  <Button
+                    size="sm"
+                    onClick={() => setDetailViewMode("SCROLL")}
+                    className={cn(
+                      "h-8 rounded-lg text-xs",
+                      detailViewMode === "SCROLL"
+                        ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md"
+                        : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    <Smartphone className="w-4 h-4 mr-2" />
+                    预览 (长图)
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    onClick={() => setDetailViewMode("SLICES")}
+                    className={cn(
+                      "h-8 rounded-lg text-xs",
+                      detailViewMode === "SLICES"
+                        ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-md"
+                        : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    <LayoutGrid className="w-4 h-4 mr-2" />
+                    切片 (素材)
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 p-1 rounded-xl bg-white/5 border border-white/10">
                   <Button
                     size="sm"
                     onClick={() => setViewMode("grid")}
@@ -527,25 +577,25 @@ export function HistoryDetailDialog({
                     <Grid className="w-4 h-4 mr-2" />
                     九宫格视图
                   </Button>
-                )}
 
-                <Button
-                  size="sm"
-                  onClick={() => setViewMode("full")}
-                  disabled={!fullImageUrl}
-                  className={cn(
-                    "h-8 rounded-lg text-xs",
-                    viewMode === "full"
-                      ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
-                      : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white",
-                    !fullImageUrl && "opacity-50 cursor-not-allowed",
-                  )}
-                  title={!fullImageUrl ? "该记录没有拼接原图" : item?.taskType === "DETAIL_PAGE" ? "查看详情长图" : "查看拼接原图"}
-                >
-                  <ImageIcon className="w-4 h-4 mr-2" />
-                  {item?.taskType === "DETAIL_PAGE" ? "详情长图" : "拼接原图"}
-                </Button>
-              </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setViewMode("full")}
+                    disabled={!fullImageUrl}
+                    className={cn(
+                      "h-8 rounded-lg text-xs",
+                      viewMode === "full"
+                        ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
+                        : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white",
+                      !fullImageUrl && "opacity-50 cursor-not-allowed",
+                    )}
+                    title={!fullImageUrl ? "该记录没有拼接原图" : "查看拼接原图"}
+                  >
+                    <ImageIcon className="w-4 h-4 mr-2" />
+                    拼接原图
+                  </Button>
+                </div>
+              )}
             </div>
 
             {/* 原始参考图 */}
@@ -567,14 +617,79 @@ export function HistoryDetailDialog({
 
             <AnimatePresence mode="wait">
               <motion.div
-                key={viewMode + (selectedTemplateId || 'none')}
+                key={(item?.taskType === "DETAIL_PAGE" ? detailViewMode : viewMode) + (selectedTemplateId || 'none')}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.25 }}
                 className="mt-4"
               >
-                {viewMode === "grid" ? (
+                {/* Detail Page: SCROLL Mode (Mobile Simulator) */}
+                {item?.taskType === "DETAIL_PAGE" && detailViewMode === "SCROLL" ? (
+                  <div className="w-full bg-slate-900/50 rounded-2xl border border-white/10 p-4 flex justify-center">
+                    <div
+                      className="w-full max-w-[480px] shadow-2xl rounded-xl overflow-hidden overflow-y-auto max-h-[70vh]"
+                      style={{ scrollBehavior: 'smooth' }}
+                    >
+                      {displayImages.map((img, i) => (
+                        <motion.div
+                          key={i}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          transition={{ duration: 0.2, delay: i * 0.02 }}
+                          className="w-full"
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={img}
+                            alt={`Slice ${i + 1}`}
+                            className="w-full h-auto block"
+                            style={{ marginBottom: '-1px' }}
+                          />
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                ) : item?.taskType === "DETAIL_PAGE" && detailViewMode === "SLICES" ? (
+                  /* Detail Page: SLICES Mode (Grid) */
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/40">
+                    {displayImages.map((img, i) => (
+                      <motion.div
+                        key={i}
+                        className="relative aspect-[2/3] group overflow-hidden rounded-xl border border-white/10 bg-black/20"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ duration: 0.2, delay: i * 0.03 }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={img} alt={`Slice ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => downloadOne(img, i)}
+                            className="h-8 bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm"
+                          >
+                            <Download className="w-4 h-4 mr-1" />
+                            下载
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setPreviewImage(img)}
+                            className="h-8 text-white/80 hover:text-white hover:bg-white/10"
+                          >
+                            <Eye className="w-4 h-4 mr-1" />
+                            放大
+                          </Button>
+                        </div>
+                        <div className="absolute bottom-2 right-2 text-[10px] text-white/60 bg-black/40 px-2 py-0.5 rounded">
+                          {i + 1}/{displayImages.length}
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                ) : viewMode === "grid" ? (
+                  /* Main Image: Grid Mode */
                   <div className="grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2">
                     {displayImages.map((img, i) => (
                       <motion.button
@@ -597,13 +712,9 @@ export function HistoryDetailDialog({
                     ))}
                   </div>
                 ) : (
+                  /* Main Image: Full Mode */
                   <motion.div
-                    className={cn(
-                      "relative rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-4",
-                      item?.taskType === "DETAIL_PAGE"
-                        ? "overflow-y-auto max-h-[75vh]"
-                        : "flex items-center justify-center"
-                    )}
+                    className="relative rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 flex items-center justify-center p-4"
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.2 }}
@@ -612,11 +723,7 @@ export function HistoryDetailDialog({
                     <img
                       src={fullImageUrl || ""}
                       alt="Generated Full"
-                      className={cn(
-                        item?.taskType === "DETAIL_PAGE"
-                          ? "w-full h-auto"
-                          : "max-w-full max-h-[70vh] object-contain"
-                      )}
+                      className="max-w-full max-h-[70vh] object-contain"
                     />
                   </motion.div>
                 )}
@@ -877,6 +984,48 @@ export function HistoryDetailDialog({
         </div>,
         document.body
       )}
+
+      {/* Preview Image Modal */}
+      {previewImage && (
+        <PreviewImageModal
+          src={previewImage}
+          onClose={() => setPreviewImage(null)}
+        />
+      )}
     </>
+  )
+}
+
+// Preview Image Modal component - rendered within the parent
+function PreviewImageModal({ src, onClose }: { src: string; onClose: () => void }) {
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.9 }}
+        className="relative max-w-[90vw] max-h-[90vh] overflow-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          className="absolute top-2 right-2 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full"
+        >
+          <X className="w-5 h-5" />
+        </Button>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={src}
+          alt="Preview"
+          className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+        />
+      </motion.div>
+    </div>,
+    document.body
   )
 }
