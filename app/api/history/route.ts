@@ -53,8 +53,9 @@ export async function GET(req: NextRequest) {
           id: true,
           productName: true,
           productType: true,
+          taskType: true,
           generatedImages: true,
-          // generatedImage: true, // 不返回此字段
+          // generatedImage: true,
           originalImage: true,
           status: true,
           createdAt: true,

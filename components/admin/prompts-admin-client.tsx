@@ -1,32 +1,35 @@
 "use client"
 
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState, useCallback } from "react"
 import useSWR from "swr"
 import { toast } from "sonner"
 import {
   Save,
   RotateCcw,
   Loader2,
-  FileCode2,
   Plus,
   Trash2,
-  ToggleLeft,
-  ToggleRight,
-  Filter,
+  Search,
+  Image,
+  FileText,
   User,
   Shield,
+  ChevronRight,
+  Power,
+  PowerOff,
 } from "lucide-react"
-
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 
-type Prompt = {
+// Types
+interface Prompt {
   id: string
   productType: string
+  taskType: string
   description: string | null
   promptTemplate: string
   isActive: boolean
@@ -41,7 +44,7 @@ type Prompt = {
   updatedAt: string
 }
 
-type PlatformNode = {
+interface PlatformNode {
   id: string
   key: string
   label: string
@@ -50,12 +53,12 @@ type PlatformNode = {
   prompts: Prompt[]
 }
 
-type AdminPromptsResponse = {
+interface AdminPromptsResponse {
   success: boolean
   platforms: PlatformNode[]
 }
 
-type AdminUser = {
+interface AdminUser {
   id: string
   email: string
   username: string | null
@@ -64,555 +67,543 @@ type AdminUser = {
   createdAt: string
 }
 
-type UsersResponse = {
+interface UsersResponse {
   success: boolean
   users: AdminUser[]
 }
 
 type Scope = "all" | "system" | "private"
+type TaskType = "MAIN_IMAGE" | "DETAIL_PAGE"
 
 const fetcher = async (url: string) => {
   const res = await fetch(url)
-  const data = await res.json().catch(() => ({}))
-  if (!res.ok) throw new Error(data?.error || `请求失败: ${res.status}`)
-  return data
+  if (!res.ok) throw new Error("加载失败")
+  return res.json()
 }
 
-function userLabel(u?: AdminUser | null) {
-  if (!u) return ""
+const userLabel = (u?: AdminUser | null) => {
+  if (!u) return "未知用户"
   return u.username || u.name || u.email
 }
 
 export function PromptsAdminClient() {
+  // Filters
+  const [taskType, setTaskType] = useState<TaskType>("MAIN_IMAGE")
+  const [activePlatformId, setActivePlatformId] = useState<string | null>(null)
   const [scope, setScope] = useState<Scope>("all")
+  const [searchQuery, setSearchQuery] = useState("")
 
-  const {
-    data,
-    error,
-    isLoading,
-    mutate: mutatePrompts,
-  } = useSWR<AdminPromptsResponse>(`/api/admin/prompts?scope=${scope}`, fetcher)
-
-  const {
-    data: usersData,
-    mutate: mutateUsers,
-    isLoading: isUsersLoading,
-  } = useSWR<UsersResponse>("/api/admin/users", fetcher)
-
-  const users = usersData?.users ?? []
-
-  const platforms = data?.platforms ?? []
-
-  const [platformKey, setPlatformKey] = useState<string>("")
-  const [activePromptId, setActivePromptId] = useState<string>("")
-  const [draft, setDraft] = useState<string>("")
-  const [isSaving, setIsSaving] = useState(false)
-
-  // create state
+  // Editor state
+  const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null)
   const [isCreating, setIsCreating] = useState(false)
-  const [newUserId, setNewUserId] = useState<string>("__SYSTEM__")
-  const [newProductType, setNewProductType] = useState("")
-  const [newDescription, setNewDescription] = useState("")
-  const [newTemplate, setNewTemplate] = useState("")
+  const [editDraft, setEditDraft] = useState("")
+  const [editDescription, setEditDescription] = useState("")
+  const [editProductType, setEditProductType] = useState("")
+  const [editIsActive, setEditIsActive] = useState(true)
+  const [editUserId, setEditUserId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
-  // init selection
+  // Data fetching
+  const { data, error, isLoading, mutate } = useSWR<AdminPromptsResponse>(
+    `/api/admin/prompts?scope=${scope}`,
+    fetcher
+  )
+  const { data: usersData } = useSWR<UsersResponse>("/api/admin/users", fetcher)
+
+  const platforms = data?.platforms || []
+  const users = usersData?.users || []
+
+  // Auto-select first platform
   useEffect(() => {
-    if (!platforms.length) return
-
-    const firstKey = platformKey || platforms[0].key
-    const p = platforms.find((x) => x.key === firstKey) ?? platforms[0]
-
-    setPlatformKey(p.key)
-
-    const firstPrompt = p.prompts[0]
-    if (firstPrompt) {
-      setActivePromptId(firstPrompt.id)
-      setDraft(firstPrompt.promptTemplate)
-    } else {
-      setActivePromptId("")
-      setDraft("")
+    if (platforms.length > 0 && !activePlatformId) {
+      setActivePlatformId(platforms[0].id)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [platforms.length])
+  }, [platforms, activePlatformId])
 
-  const activePlatform = useMemo(() => {
-    return platforms.find((p) => p.key === platformKey) ?? null
-  }, [platforms, platformKey])
+  // Get current platform
+  const currentPlatform = useMemo(() => {
+    return platforms.find((p) => p.id === activePlatformId) || null
+  }, [platforms, activePlatformId])
 
-  const prompts = useMemo(() => {
-    // 禁用项排后；系统/私有可混排（UI 通过标识区分）
-    return (activePlatform?.prompts ?? []).slice().sort((a, b) => {
-      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1
-      // 系统优先
-      const aSys = a.userId === null
-      const bSys = b.userId === null
-      if (aSys !== bSys) return aSys ? -1 : 1
-      return (a.description || a.productType).localeCompare(b.description || b.productType)
-    })
-  }, [activePlatform?.prompts])
+  // Filter prompts by taskType and search
+  const filteredPrompts = useMemo(() => {
+    if (!currentPlatform) return []
+    let prompts = currentPlatform.prompts.filter((p) => p.taskType === taskType)
 
-  const activePrompt = useMemo(() => {
-    return prompts.find((p) => p.id === activePromptId) ?? null
-  }, [prompts, activePromptId])
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      prompts = prompts.filter(
+        (p) =>
+          p.productType.toLowerCase().includes(query) ||
+          (p.description?.toLowerCase().includes(query) ?? false) ||
+          p.promptTemplate.toLowerCase().includes(query)
+      )
+    }
 
-  // when platform changes
+    return prompts
+  }, [currentPlatform, taskType, searchQuery])
+
+  // Get selected prompt
+  const selectedPrompt = useMemo(() => {
+    if (!selectedPromptId) return null
+    return filteredPrompts.find((p) => p.id === selectedPromptId) || null
+  }, [filteredPrompts, selectedPromptId])
+
+  // Sync editor when selection changes
   useEffect(() => {
-    if (!activePlatform) return
-    const p0 = (activePlatform.prompts ?? [])[0]
-    if (!p0) {
-      setActivePromptId("")
-      setDraft("")
-      return
+    if (selectedPrompt && !isCreating) {
+      setEditDraft(selectedPrompt.promptTemplate)
+      setEditDescription(selectedPrompt.description || "")
+      setEditProductType(selectedPrompt.productType)
+      setEditIsActive(selectedPrompt.isActive)
+      setEditUserId(selectedPrompt.userId)
     }
-    setActivePromptId(p0.id)
-    setDraft(p0.promptTemplate)
-  }, [activePlatform?.id])
+  }, [selectedPrompt, isCreating])
 
-  // when prompt changes
+  // Reset selection when filters change
   useEffect(() => {
-    if (!activePrompt) {
-      setDraft("")
-      return
-    }
-    setDraft(activePrompt.promptTemplate)
-  }, [activePrompt?.id])
+    setSelectedPromptId(null)
+    setIsCreating(false)
+  }, [taskType, activePlatformId])
 
-  const dirty = useMemo(() => {
-    if (!activePrompt) return false
-    return draft !== activePrompt.promptTemplate
-  }, [draft, activePrompt])
+  const isDirty = useMemo(() => {
+    if (isCreating) return editDraft.trim().length > 0
+    if (!selectedPrompt) return false
+    return editDraft !== selectedPrompt.promptTemplate
+  }, [isCreating, selectedPrompt, editDraft])
 
-  const onReset = () => {
-    if (!activePrompt) return
-    setDraft(activePrompt.promptTemplate)
-    toast.message("已重置为未保存版本")
-  }
-
-  const onSave = async () => {
-    if (!activePrompt) return
-    if (!draft.trim()) {
+  // Action handlers
+  const handleSave = useCallback(async () => {
+    if (!selectedPrompt || isCreating) return
+    if (!editDraft.trim()) {
       toast.error("Prompt 内容不能为空")
       return
     }
 
-    setIsSaving(true)
+    setSaving(true)
     try {
       const res = await fetch("/api/admin/prompts/update", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: activePrompt.id, promptTemplate: draft }),
+        body: JSON.stringify({ id: selectedPrompt.id, promptTemplate: editDraft }),
       })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error || `保存失败: ${res.status}`)
-
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "保存失败")
       toast.success("保存成功")
-      await mutatePrompts()
+      mutate()
     } catch (e: any) {
-      toast.error(e?.message || "保存失败")
+      toast.error(e.message)
     } finally {
-      setIsSaving(false)
+      setSaving(false)
     }
-  }
+  }, [selectedPrompt, isCreating, editDraft, mutate])
 
-  const onToggleActive = async (prompt: Prompt) => {
-    try {
-      const res = await fetch("/api/admin/prompts/toggle", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: prompt.id, isActive: !prompt.isActive }),
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error || `更新失败: ${res.status}`)
-      toast.success(prompt.isActive ? "已禁用" : "已启用")
-      await mutatePrompts()
-    } catch (e: any) {
-      toast.error(e?.message || "更新失败")
-    }
-  }
-
-  const onDeletePrompt = async (prompt: Prompt) => {
-    const scopeLabel = prompt.userId ? "私有" : "系统"
-    const owner = prompt.userId ? (prompt.user?.email || prompt.user?.username || prompt.user?.name || prompt.userId) : ""
-
-    if (!confirm(`确认删除${scopeLabel} Prompt：${prompt.description || prompt.productType}${owner ? `（${owner}）` : ""}？`)) return
-
-    try {
-      const res = await fetch(`/api/admin/prompts/delete?id=${encodeURIComponent(prompt.id)}`, {
-        method: "DELETE",
-      })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error || `删除失败: ${res.status}`)
-
-      toast.success("已删除")
-      if (prompt.id === activePromptId) {
-        setActivePromptId("")
-        setDraft("")
-      }
-      await mutatePrompts()
-    } catch (e: any) {
-      toast.error(e?.message || "删除失败")
-    }
-  }
-
-  const onCreatePrompt = async () => {
-    if (!activePlatform) return
-
-    const productType = newProductType.trim()
-    const description = newDescription.trim()
-    const promptTemplate = newTemplate.trim()
-
-    const userId = newUserId === "__SYSTEM__" ? null : newUserId
-
-    if (!productType) {
-      toast.error("请输入 productType（例如 MENSWEAR）")
-      return
-    }
-    if (!promptTemplate) {
-      toast.error("请输入 promptTemplate")
-      return
-    }
-    if (userId && !users.find((u) => u.id === userId)) {
-      toast.error("请选择有效用户")
+  const handleCreate = useCallback(async () => {
+    if (!activePlatformId || !editProductType.trim() || !editDraft.trim()) {
+      toast.error("请填写完整信息")
       return
     }
 
-    setIsCreating(true)
+    setSaving(true)
     try {
       const res = await fetch("/api/admin/prompts/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          platformId: activePlatform.id,
-          userId,
-          productType,
-          description: description || null,
-          promptTemplate,
+          platformId: activePlatformId,
+          productType: editProductType.trim(),
+          taskType,
+          description: editDescription.trim() || null,
+          promptTemplate: editDraft.trim(),
+          userId: editUserId,
         }),
       })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(json?.error || `创建失败: ${res.status}`)
-
-      toast.success(userId ? "私有 Prompt 创建成功" : "系统 Prompt 创建成功")
-      setNewProductType("")
-      setNewDescription("")
-      setNewTemplate("")
-      setNewUserId("__SYSTEM__")
-
-      await mutatePrompts()
-
-      const createdId = json?.prompt?.id as string | undefined
-      if (createdId) {
-        setActivePromptId(createdId)
-        setDraft(json.prompt.promptTemplate)
-      }
-    } catch (e: any) {
-      toast.error(e?.message || "创建失败")
-    } finally {
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "创建失败")
+      toast.success("创建成功")
       setIsCreating(false)
+      mutate()
+      setSelectedPromptId(data.prompt?.id || null)
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setSaving(false)
     }
-  }
+  }, [activePlatformId, editProductType, taskType, editDescription, editDraft, editUserId, mutate])
 
-  // if scope changes, clear selection to avoid mismatch
-  useEffect(() => {
-    setActivePromptId("")
-    setDraft("")
-    // refresh users if needed
-    mutateUsers()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope])
+  const handleDelete = useCallback(async () => {
+    if (!selectedPrompt) return
+    if (!confirm("确定删除这条 Prompt？此操作不可恢复。")) return
 
-  if (isLoading) {
-    return (
-      <div className="min-h-[calc(100vh-1px)] bg-slate-950 p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="glass rounded-3xl p-8 border border-white/10">
-            <div className="text-white text-lg font-semibold flex items-center gap-2">
-              <Loader2 className="w-5 h-5 animate-spin" />
-              加载中...
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
+    setDeleting(true)
+    try {
+      const res = await fetch("/api/admin/prompts/delete", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedPrompt.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "删除失败")
+      toast.success("删除成功")
+      setSelectedPromptId(null)
+      mutate()
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setDeleting(false)
+    }
+  }, [selectedPrompt, mutate])
+
+  const handleToggleActive = useCallback(async () => {
+    if (!selectedPrompt) return
+
+    try {
+      const res = await fetch("/api/admin/prompts/toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: selectedPrompt.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "切换失败")
+      toast.success(data.prompt?.isActive ? "已启用" : "已禁用")
+      mutate()
+    } catch (e: any) {
+      toast.error(e.message)
+    }
+  }, [selectedPrompt, mutate])
+
+  const startCreate = useCallback(() => {
+    setIsCreating(true)
+    setSelectedPromptId(null)
+    setEditDraft("")
+    setEditDescription("")
+    setEditProductType("")
+    setEditIsActive(true)
+    setEditUserId(null)
+  }, [])
+
+  const cancelCreate = useCallback(() => {
+    setIsCreating(false)
+    setEditDraft("")
+  }, [])
 
   if (error) {
     return (
-      <div className="min-h-[calc(100vh-1px)] bg-slate-950 p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="glass rounded-3xl p-8 border border-white/10">
-            <div className="text-rose-400 font-semibold">加载失败</div>
-            <div className="text-slate-400 text-sm mt-2">{String((error as any).message || error)}</div>
-            <div className="mt-6">
-              <Button variant="outline" className="border-white/10 bg-white/5 hover:bg-white/10" onClick={() => mutatePrompts()}>
-                重试
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!platforms.length) {
-    return (
-      <div className="min-h-[calc(100vh-1px)] bg-slate-950 p-8">
-        <div className="max-w-6xl mx-auto">
-          <div className="glass rounded-3xl p-8 border border-white/10 text-slate-400">没有可用平台数据</div>
-        </div>
+      <div className="p-8 text-center text-red-400">
+        加载失败: {error.message}
       </div>
     )
   }
 
   return (
-    <div className="min-h-[calc(100vh-1px)] bg-slate-950 p-8">
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
-              <FileCode2 className="w-5 h-5 text-white" />
+    <div className="h-[calc(100vh-120px)] flex flex-col gap-4">
+      {/* Top Control Bar */}
+      <div className="space-y-4 shrink-0">
+        {/* Task Type Toggle */}
+        <Tabs value={taskType} onValueChange={(v) => setTaskType(v as TaskType)}>
+          <TabsList className="bg-slate-800/50 border border-white/10 p-1">
+            <TabsTrigger
+              value="MAIN_IMAGE"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-purple-600 data-[state=active]:text-white px-6 gap-2"
+            >
+              <Image className="w-4 h-4" />
+              电商主图
+            </TabsTrigger>
+            <TabsTrigger
+              value="DETAIL_PAGE"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-pink-600 data-[state=active]:text-white px-6 gap-2"
+            >
+              <FileText className="w-4 h-4" />
+              详情长图
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {/* Platform Tabs */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2">
+          {platforms.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => setActivePlatformId(p.id)}
+              className={cn(
+                "px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap",
+                activePlatformId === p.id
+                  ? "bg-white/10 text-white border border-white/20"
+                  : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-transparent"
+              )}
+            >
+              {p.label}
+              <span className="ml-2 text-xs opacity-60">
+                ({p.prompts.filter((pr) => pr.taskType === taskType).length})
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Content - Split View */}
+      <div className="flex-1 flex gap-4 min-h-0">
+        {/* Left Sidebar - Prompt List */}
+        <div className="w-80 shrink-0 flex flex-col bg-slate-900/50 rounded-xl border border-white/10 overflow-hidden">
+          {/* Sidebar Header */}
+          <div className="p-3 border-b border-white/10 space-y-3">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                placeholder="搜索 prompt..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-slate-500"
+              />
             </div>
-            <div>
-              <div className="text-white text-2xl font-bold">Prompt 管理</div>
-              <div className="text-slate-400 text-sm">包含系统 Prompt 与用户私有 Prompt（仅管理员可见）</div>
+
+            {/* Scope Filter */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setScope("all")}
+                className={cn(
+                  "flex-1 py-1.5 text-xs rounded-lg transition-colors",
+                  scope === "all" ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"
+                )}
+              >
+                全部
+              </button>
+              <button
+                onClick={() => setScope("system")}
+                className={cn(
+                  "flex-1 py-1.5 text-xs rounded-lg transition-colors flex items-center justify-center gap-1",
+                  scope === "system" ? "bg-blue-500/20 text-blue-300" : "text-slate-400 hover:text-white"
+                )}
+              >
+                <Shield className="w-3 h-3" />
+                系统
+              </button>
+              <button
+                onClick={() => setScope("private")}
+                className={cn(
+                  "flex-1 py-1.5 text-xs rounded-lg transition-colors flex items-center justify-center gap-1",
+                  scope === "private" ? "bg-purple-500/20 text-purple-300" : "text-slate-400 hover:text-white"
+                )}
+              >
+                <User className="w-3 h-3" />
+                私有
+              </button>
             </div>
           </div>
 
-          {/* Scope filter */}
-          <div className="glass rounded-2xl border border-white/10 p-3 flex items-center gap-3">
-            <Filter className="w-4 h-4 text-slate-400" />
-            <Select value={scope} onValueChange={(v) => setScope(v as Scope)}>
-              <SelectTrigger className="w-[160px] bg-white/5 border-white/10 text-white">
-                <SelectValue placeholder="筛选范围" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">全部</SelectItem>
-                <SelectItem value="system">仅系统</SelectItem>
-                <SelectItem value="private">仅私有</SelectItem>
-              </SelectContent>
-            </Select>
+          {/* Prompt List */}
+          <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+              </div>
+            ) : filteredPrompts.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 text-sm">
+                暂无 Prompt
+              </div>
+            ) : (
+              filteredPrompts.map((prompt) => (
+                <button
+                  key={prompt.id}
+                  onClick={() => {
+                    setIsCreating(false)
+                    setSelectedPromptId(prompt.id)
+                  }}
+                  className={cn(
+                    "w-full p-3 rounded-lg text-left transition-all group",
+                    selectedPromptId === prompt.id && !isCreating
+                      ? "bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30"
+                      : "hover:bg-white/5 border border-transparent"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-white text-sm truncate">
+                        {prompt.description || prompt.productType}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-400">
+                          {prompt.productType}
+                        </span>
+                        {prompt.userId ? (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">
+                            私有
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">
+                            系统
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span
+                        className={cn(
+                          "w-2 h-2 rounded-full",
+                          prompt.isActive ? "bg-green-500" : "bg-red-500"
+                        )}
+                      />
+                      <ChevronRight className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+
+          {/* Create Button */}
+          <div className="p-3 border-t border-white/10">
+            <Button
+              onClick={startCreate}
+              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+            >
+              <Plus className="w-4 h-4 mr-2" />
+              新建 Prompt
+            </Button>
           </div>
         </div>
 
-        <Tabs value={platformKey} onValueChange={setPlatformKey}>
-          <TabsList className="bg-white/5 border border-white/10 rounded-2xl p-1">
-            {platforms.map((p) => (
-              <TabsTrigger key={p.key} value={p.key} className="rounded-xl">
-                {p.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          {platforms.map((p) => (
-            <TabsContent key={p.key} value={p.key} className="mt-6">
-              <div className="grid grid-cols-1 md:grid-cols-[360px_1fr] gap-4">
-                {/* Left sidebar */}
-                <div className="glass rounded-3xl border border-white/10 overflow-hidden flex flex-col">
-                  <div className="p-4 border-b border-white/10">
-                    <div className="text-white font-semibold">风格列表</div>
-                    <div className="text-xs text-slate-500 mt-1">系统 / 私有 都会显示（可用右上筛选）</div>
-                  </div>
-
-                  {/* Create new prompt */}
-                  <div className="p-4 border-b border-white/10 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs text-slate-400">新增 Prompt</div>
-                      <div className="text-xs text-slate-500">Available vars: ${"${productName}"}</div>
-                    </div>
-
-                    <Select value={newUserId} onValueChange={setNewUserId}>
-                      <SelectTrigger className="bg-white/5 border-white/10 text-white">
-                        <SelectValue placeholder={isUsersLoading ? "加载用户中..." : "选择归属（系统/用户）"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__SYSTEM__">
-                          <span className="inline-flex items-center gap-2">
-                            <Shield className="w-4 h-4" />
-                            系统（userId=null）
-                          </span>
-                        </SelectItem>
-                        {users.map((u) => (
-                          <SelectItem key={u.id} value={u.id}>
-                            <span className="inline-flex items-center gap-2">
-                              <User className="w-4 h-4" />
-                              {userLabel(u)}
-                              {u.role === "ADMIN" ? "（ADMIN）" : ""}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <div className="grid grid-cols-1 gap-2">
-                      <Input
-                        value={newProductType}
-                        onChange={(e) => setNewProductType(e.target.value)}
-                        placeholder="productType（如 MENSWEAR）"
-                        className="bg-white/5 border-white/10 text-white placeholder:text-slate-600"
-                      />
-                      <Input
-                        value={newDescription}
-                        onChange={(e) => setNewDescription(e.target.value)}
-                        placeholder="描述（如 男装，可选）"
-                        className="bg-white/5 border-white/10 text-white placeholder:text-slate-600"
-                      />
-                      <Button
-                        onClick={onCreatePrompt}
-                        disabled={!activePlatform || isCreating}
-                        className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white"
-                      >
-                        {isCreating ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <Plus className="w-4 h-4 mr-2" />
-                        )}
-                        新增
-                      </Button>
-                    </div>
-                    <Textarea
-                      value={newTemplate}
-                      onChange={(e) => setNewTemplate(e.target.value)}
-                      placeholder="promptTemplate（必填）"
-                      className="min-h-[120px] font-mono text-xs bg-black/20 border-white/10 text-white placeholder:text-slate-600"
-                    />
-                  </div>
-
-                  <div className="max-h-[52vh] overflow-auto p-2 space-y-2">
-                    {(p.prompts?.length ?? 0) === 0 ? (
-                      <div className="p-4 text-sm text-slate-500">该平台暂无 Prompt</div>
+        {/* Right Editor */}
+        <div className="flex-1 flex flex-col bg-slate-900/50 rounded-xl border border-white/10 overflow-hidden">
+          {!selectedPrompt && !isCreating ? (
+            <div className="flex-1 flex items-center justify-center text-slate-500">
+              选择一个 Prompt 进行编辑，或点击 "新建 Prompt"
+            </div>
+          ) : (
+            <>
+              {/* Editor Header */}
+              <div className="p-4 border-b border-white/10 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-white">
+                    {isCreating ? "新建 Prompt" : selectedPrompt?.description || selectedPrompt?.productType}
+                  </h3>
+                  <div className="text-xs text-slate-500 mt-1">
+                    {isCreating ? (
+                      `${currentPlatform?.label} / ${taskType === "MAIN_IMAGE" ? "电商主图" : "详情长图"}`
                     ) : (
-                      prompts.map((prompt) => {
-                        const active = prompt.id === activePromptId
-                        const label = prompt.description || prompt.productType
-                        const isPrivate = !!prompt.userId
-                        const owner = isPrivate
-                          ? prompt.user?.email || prompt.user?.username || prompt.user?.name || prompt.userId
-                          : "系统"
-
-                        return (
-                          <div
-                            key={prompt.id}
-                            className={cn(
-                              "rounded-2xl border p-3",
-                              active
-                                ? "bg-gradient-to-r from-blue-600/30 to-purple-600/30 border-purple-500/40"
-                                : "bg-white/5 border-white/10",
-                              !prompt.isActive && "opacity-70",
-                            )}
-                          >
-                            <button type="button" onClick={() => setActivePromptId(prompt.id)} className="w-full text-left">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="min-w-0">
-                                  <div className="text-sm font-semibold truncate text-white">{label}</div>
-                                  <div className="text-xs text-slate-500 mt-1 truncate">{prompt.productType}</div>
-                                  <div className="text-xs text-slate-500 mt-1 truncate">
-                                    {isPrivate ? `私有 · ${owner}` : "系统"}
-                                  </div>
-                                </div>
-                                <div className="text-xs px-2 py-1 rounded-full border border-white/10 bg-white/5 text-slate-300">
-                                  {prompt.isActive ? "启用" : "禁用"}
-                                </div>
-                              </div>
-                            </button>
-
-                            <div className="mt-3 flex items-center gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-white/10 bg-white/5 hover:bg-white/10 text-white"
-                                onClick={() => onToggleActive(prompt)}
-                                title={prompt.isActive ? "禁用" : "启用"}
-                              >
-                                {prompt.isActive ? (
-                                  <ToggleRight className="w-4 h-4 mr-2" />
-                                ) : (
-                                  <ToggleLeft className="w-4 h-4 mr-2" />
-                                )}
-                                {prompt.isActive ? "禁用" : "启用"}
-                              </Button>
-
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="border-white/10 bg-rose-500/10 hover:bg-rose-500/20 text-rose-200"
-                                onClick={() => onDeletePrompt(prompt)}
-                                title="删除"
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                删除
-                              </Button>
-                            </div>
-                          </div>
-                        )
-                      })
+                      `ID: ${selectedPrompt?.id.slice(0, 8)}... | ${selectedPrompt?.userId ? `私有: ${selectedPrompt?.user?.email}` : "系统默认"}`
                     )}
                   </div>
                 </div>
-
-                {/* Editor */}
-                <div className="glass rounded-3xl border border-white/10 overflow-hidden flex flex-col">
-                  <div className="p-4 border-b border-white/10 flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-white font-semibold">
-                        {activePrompt
-                          ? `${activePrompt.description || activePrompt.productType}${activePrompt.isActive ? "" : "（已禁用）"}`
-                          : "请选择左侧风格"}
-                      </div>
-                      <div className="text-xs text-slate-500 mt-1">Available vars: ${"${productName}"}</div>
-                      {activePrompt?.userId && (
-                        <div className="text-xs text-slate-500 mt-1">
-                          私有归属：{activePrompt.user?.email || activePrompt.user?.username || activePrompt.user?.name || activePrompt.userId}
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                  {!isCreating && (
+                    <>
                       <Button
                         variant="outline"
-                        className="border-white/10 bg-white/5 hover:bg-white/10"
-                        disabled={!activePrompt || !dirty || isSaving}
-                        onClick={onReset}
-                        title="重置未保存修改"
-                      >
-                        <RotateCcw className="w-4 h-4 mr-2" />
-                        重置
-                      </Button>
-
-                      <Button
-                        className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white"
-                        disabled={!activePrompt || !dirty || isSaving}
-                        onClick={onSave}
-                      >
-                        {isSaving ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : (
-                          <Save className="w-4 h-4 mr-2" />
+                        size="sm"
+                        onClick={handleToggleActive}
+                        className={cn(
+                          "border-white/10",
+                          selectedPrompt?.isActive
+                            ? "text-green-400 hover:text-green-300"
+                            : "text-red-400 hover:text-red-300"
                         )}
-                        保存修改
+                      >
+                        {selectedPrompt?.isActive ? (
+                          <>
+                            <Power className="w-4 h-4 mr-1" />
+                            启用中
+                          </>
+                        ) : (
+                          <>
+                            <PowerOff className="w-4 h-4 mr-1" />
+                            已禁用
+                          </>
+                        )}
                       </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDelete}
+                        disabled={deleting}
+                        className="border-red-500/30 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      >
+                        {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      </Button>
+                    </>
+                  )}
+                  {isCreating && (
+                    <Button variant="outline" size="sm" onClick={cancelCreate} className="border-white/10 text-slate-400">
+                      取消
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    onClick={isCreating ? handleCreate : handleSave}
+                    disabled={saving || (!isDirty && !isCreating)}
+                    className="bg-gradient-to-r from-blue-600 to-purple-600"
+                  >
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+                    {isCreating ? "创建" : "保存"}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Editor Form */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {isCreating && (
+                  <>
+                    {/* Product Type */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-400 mb-2">产品类型 (productType)</label>
+                      <Input
+                        value={editProductType}
+                        onChange={(e) => setEditProductType(e.target.value.toUpperCase())}
+                        placeholder="例如: MENSWEAR, BEDDING"
+                        className="bg-white/5 border-white/10 text-white"
+                      />
                     </div>
-                  </div>
 
-                  <div className="p-4 flex-1">
-                    <Textarea
-                      value={draft}
-                      onChange={(e) => setDraft(e.target.value)}
-                      placeholder={activePrompt ? "请输入 promptTemplate..." : "请先选择左侧风格"}
-                      disabled={!activePrompt}
-                      className="min-h-[520px] font-mono text-sm bg-black/20 border-white/10 text-white placeholder:text-slate-600"
-                    />
-                    {dirty && <div className="mt-2 text-xs text-amber-400">你有未保存的修改</div>}
-                  </div>
+                    {/* Description */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-400 mb-2">描述 (可选)</label>
+                      <Input
+                        value={editDescription}
+                        onChange={(e) => setEditDescription(e.target.value)}
+                        placeholder="例如: 男装, 寝具"
+                        className="bg-white/5 border-white/10 text-white"
+                      />
+                    </div>
 
-                  <div className="p-4 border-t border-white/10 text-xs text-slate-500 flex items-center justify-between">
-                    <span>保存后会立即影响新生成任务</span>
-                    <span>{activePrompt?.userId ? "用户私有 Prompt" : "系统 Prompt（userId = null）"}</span>
+                    {/* User (for private prompts) */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-400 mb-2">归属用户 (留空为系统默认)</label>
+                      <Select value={editUserId || "_system"} onValueChange={(v) => setEditUserId(v === "_system" ? null : v)}>
+                        <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                          <SelectValue placeholder="系统默认" />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-white/10">
+                          <SelectItem value="_system" className="text-white">系统默认</SelectItem>
+                          {users.map((u) => (
+                            <SelectItem key={u.id} value={u.id} className="text-white">
+                              {userLabel(u)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
+
+                {/* Prompt Template */}
+                <div className="flex-1 flex flex-col">
+                  <label className="block text-sm font-medium text-slate-400 mb-2">Prompt 模板</label>
+                  <Textarea
+                    value={editDraft}
+                    onChange={(e) => setEditDraft(e.target.value)}
+                    placeholder="输入 Prompt 模板内容..."
+                    className="flex-1 min-h-[400px] bg-white/5 border-white/10 text-white font-mono text-sm resize-none"
+                  />
+                  <div className="text-xs text-slate-500 mt-2">
+                    支持变量: <code className="text-blue-400">{'${productName}'}</code>
                   </div>
                 </div>
               </div>
-            </TabsContent>
-          ))}
-        </Tabs>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

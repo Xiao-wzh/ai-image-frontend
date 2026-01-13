@@ -14,6 +14,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   const platformId = String(body?.platformId ?? "").trim()
   const productType = String(body?.productType ?? "").trim()
+  const taskType = String(body?.taskType ?? "MAIN_IMAGE").trim()
   const description = String(body?.description ?? "").trim()
   const promptTemplate = String(body?.promptTemplate ?? "").trim()
   const userIdRaw = body?.userId
@@ -23,12 +24,13 @@ export async function POST(req: NextRequest) {
   if (!productType) return NextResponse.json({ error: "缺少 productType" }, { status: 400 })
   if (!promptTemplate) return NextResponse.json({ error: "promptTemplate 不能为空" }, { status: 400 })
 
-  // 防止重复：同一平台 + 同一 productType + 同一 userId（null 表示系统）只允许一条
+  // 防止重复：同一平台 + 同一 productType + 同一 taskType + 同一 userId（null 表示系统）只允许一条
   const existing = await prisma.productTypePrompt.findFirst({
     where: {
       platformId,
       userId,
       productType,
+      taskType,
     },
     select: { id: true },
   })
@@ -53,6 +55,7 @@ export async function POST(req: NextRequest) {
       platformId,
       userId,
       productType,
+      taskType,
       description: description || null,
       promptTemplate,
       isActive: true,
@@ -62,6 +65,7 @@ export async function POST(req: NextRequest) {
       platformId: true,
       userId: true,
       productType: true,
+      taskType: true,
       description: true,
       promptTemplate: true,
       isActive: true,

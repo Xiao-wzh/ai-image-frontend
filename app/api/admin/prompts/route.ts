@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
         select: {
           id: true,
           productType: true,
+          taskType: true,
           description: true,
           promptTemplate: true,
           isActive: true,

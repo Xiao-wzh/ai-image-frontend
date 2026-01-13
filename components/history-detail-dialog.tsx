@@ -89,8 +89,17 @@ export function HistoryDetailDialog({
   const [loadingTemplates, setLoadingTemplates] = useState(false)
 
   useEffect(() => {
-    if (open) setIndex(initialIndex)
-  }, [open, initialIndex])
+    if (open) {
+      setIndex(initialIndex)
+      // Default to 'full' view for Detail Pages
+      const currentItem = items[initialIndex]
+      if (currentItem?.taskType === "DETAIL_PAGE") {
+        setViewMode("full")
+      } else {
+        setViewMode("grid")
+      }
+    }
+  }, [open, initialIndex, items])
 
   const item = items[index]
 
@@ -503,19 +512,22 @@ export function HistoryDetailDialog({
               </div>
 
               <div className="flex items-center gap-2 p-1 rounded-xl bg-white/5 border border-white/10">
-                <Button
-                  size="sm"
-                  onClick={() => setViewMode("grid")}
-                  className={cn(
-                    "h-8 rounded-lg text-xs",
-                    viewMode === "grid"
-                      ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
-                      : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white",
-                  )}
-                >
-                  <Grid className="w-4 h-4 mr-2" />
-                  九宫格视图
-                </Button>
+                {/* Hide Grid View button for Detail Pages */}
+                {item?.taskType !== "DETAIL_PAGE" && (
+                  <Button
+                    size="sm"
+                    onClick={() => setViewMode("grid")}
+                    className={cn(
+                      "h-8 rounded-lg text-xs",
+                      viewMode === "grid"
+                        ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
+                        : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white",
+                    )}
+                  >
+                    <Grid className="w-4 h-4 mr-2" />
+                    九宫格视图
+                  </Button>
+                )}
 
                 <Button
                   size="sm"
@@ -528,10 +540,10 @@ export function HistoryDetailDialog({
                       : "bg-transparent text-slate-400 hover:bg-white/10 hover:text-white",
                     !fullImageUrl && "opacity-50 cursor-not-allowed",
                   )}
-                  title={!fullImageUrl ? "该记录没有拼接原图" : "查看拼接原图"}
+                  title={!fullImageUrl ? "该记录没有拼接原图" : item?.taskType === "DETAIL_PAGE" ? "查看详情长图" : "查看拼接原图"}
                 >
                   <ImageIcon className="w-4 h-4 mr-2" />
-                  拼接原图
+                  {item?.taskType === "DETAIL_PAGE" ? "详情长图" : "拼接原图"}
                 </Button>
               </div>
             </div>
@@ -586,7 +598,12 @@ export function HistoryDetailDialog({
                   </div>
                 ) : (
                   <motion.div
-                    className="relative rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 flex items-center justify-center p-4"
+                    className={cn(
+                      "relative rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-4",
+                      item?.taskType === "DETAIL_PAGE"
+                        ? "overflow-y-auto max-h-[75vh]"
+                        : "flex items-center justify-center"
+                    )}
                     initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.2 }}
@@ -595,7 +612,11 @@ export function HistoryDetailDialog({
                     <img
                       src={fullImageUrl || ""}
                       alt="Generated Full"
-                      className="max-w-full max-h-[70vh] object-contain"
+                      className={cn(
+                        item?.taskType === "DETAIL_PAGE"
+                          ? "w-full h-auto"
+                          : "max-w-full max-h-[70vh] object-contain"
+                      )}
                     />
                   </motion.div>
                 )}

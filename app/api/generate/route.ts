@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
     let productType: ProductTypeKey
     let platformKey: string
     let imageUrls: string[]
+    let taskType: string = "MAIN_IMAGE"
 
     if (retryFromId) {
       // --- 重试流程 ---
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
       productType = originalGeneration.productType as ProductTypeKey
       imageUrls = originalGeneration.originalImage
       platformKey = "SHOPEE" // 暂时硬编码
+      taskType = originalGeneration.taskType || "MAIN_IMAGE"
     } else {
       // --- 标准流程 ---
       actualCost = STANDARD_COST
@@ -81,6 +83,7 @@ export async function POST(req: NextRequest) {
       productName = String(body?.productName ?? "").trim()
       productType = String(body?.productType ?? "").trim() as ProductTypeKey
       platformKey = String(body?.platformKey ?? "SHOPEE").trim().toUpperCase()
+      taskType = String(body?.taskType ?? "MAIN_IMAGE").trim().toUpperCase()
       const rawImages = body?.images
 
       if (!productName) throw new Error("请填写商品名称")
@@ -164,6 +167,7 @@ export async function POST(req: NextRequest) {
         userId,
         productName,
         productType,
+        taskType,
         originalImage: imageUrls,
         status: "PENDING",
         hasUsedDiscountedRetry: Boolean(retryFromId),
@@ -173,24 +177,29 @@ export async function POST(req: NextRequest) {
 
     const promptRecord =
       (await prisma.productTypePrompt.findFirst({
-        where: { isActive: true, productType, userId, platform: { key: platformKey } },
+        where: { isActive: true, productType, taskType, userId, platform: { key: platformKey } },
         orderBy: { updatedAt: "desc" },
       })) ||
       (await prisma.productTypePrompt.findFirst({
-        where: { isActive: true, productType, userId: null, platform: { key: platformKey } },
+        where: { isActive: true, productType, taskType, userId: null, platform: { key: platformKey } },
         orderBy: { updatedAt: "desc" },
       })) ||
       (await prisma.productTypePrompt.findFirst({
-        where: { isActive: true, productType, userId: null, platform: { key: "GENERAL" } },
+        where: { isActive: true, productType, taskType, userId: null, platform: { key: "GENERAL" } },
         orderBy: { updatedAt: "desc" },
       }))
 
     if (!promptRecord) {
-      throw new Error(`未找到 Prompt 模板：platformKey=${platformKey}, productType=${productType}`)
+      throw new Error(`未找到 Prompt 模板：platformKey=${platformKey}, productType=${productType}, taskType=${taskType}`)
     }
 
-    const webhookUrl = process.env.N8N_GRSAI_WEBHOOK_URL
-    if (!webhookUrl) throw new Error("N8N_GRSAI_WEBHOOK_URL 未配置")
+    // 根据 taskType 选择不同的 webhook
+    const webhookUrl = taskType === "DETAIL_PAGE"
+      ? process.env.N8N_DETAIL_WEBHOOK_URL
+      : process.env.N8N_GRSAI_WEBHOOK_URL
+    if (!webhookUrl) {
+      throw new Error(taskType === "DETAIL_PAGE" ? "N8N_DETAIL_WEBHOOK_URL 未配置" : "N8N_GRSAI_WEBHOOK_URL 未配置")
+    }
 
     const n8nPayload = {
       username: (session?.user as any)?.username ?? (session?.user as any)?.name ?? null,

@@ -13,6 +13,7 @@ import { GenerationResult } from "./generation-result"
 import { useSession } from "next-auth/react"
 import { useLoginModal } from "@/hooks/use-login-modal"
 import { ProductTypeLabel, ProductTypeKey } from "@/lib/constants"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const STANDARD_COST = 199
 const RETRY_COST = 99
@@ -34,6 +35,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const loginModal = useLoginModal()
 
   /* ──────────────── state ──────────────── */
+  const [taskType, setTaskType] = useState<"MAIN_IMAGE" | "DETAIL_PAGE">("MAIN_IMAGE")
   const [platforms, setPlatforms] = useState<PlatformTreeItem[] | null>(null)
   const [platformKey, setPlatformKey] = useState<string>("SHOPEE")
   const [isCascaderOpen, setIsCascaderOpen] = useState(false)
@@ -52,14 +54,22 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     let cancelled = false
     async function load() {
       try {
-        const res = await fetch("/api/config/platforms")
+        const res = await fetch(`/api/config/platforms?taskType=${taskType}`)
         const data = await res.json().catch(() => null)
         if (!res.ok) throw new Error("加载平台配置失败")
         if (!cancelled) {
           const list = Array.isArray(data) ? (data as PlatformTreeItem[]) : []
           setPlatforms(list)
-          const first = list.length > 0 ? list[0].value : "SHOPEE"
-          setPlatformKey(first)
+          // Try to preserve current platformKey if available
+          const found = list.find((p) => p.value === platformKey)
+          if (!found && list.length > 0) {
+            setPlatformKey(list[0].value)
+          }
+          // Reset productType to first available or empty
+          const typesForPlatform = (found || list[0])?.types || []
+          if (productType && !typesForPlatform.find((t) => t.value === productType)) {
+            setProductType(typesForPlatform[0]?.value as ProductTypeKey || "")
+          }
         }
       } catch {
         if (!cancelled) setPlatforms([])
@@ -69,7 +79,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [taskType])
 
   const selectedPlatform = useMemo(() => {
     return (platforms || []).find((p) => p.value === platformKey) || null
@@ -219,6 +229,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           productName: productName.trim(),
           productType,
           platformKey,
+          taskType,
           images: uploadedUrls,
         },
         STANDARD_COST,
@@ -282,6 +293,30 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
               </div>
             </motion.div>
           )}
+        </motion.div>
+
+        {/* Task Type Tabs */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <Tabs value={taskType} onValueChange={(v) => setTaskType(v as "MAIN_IMAGE" | "DETAIL_PAGE")}>
+            <TabsList className="bg-slate-800/50 border border-white/10 p-1">
+              <TabsTrigger
+                value="MAIN_IMAGE"
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-purple-600 data-[state=active]:text-white px-6"
+              >
+                主图生成
+              </TabsTrigger>
+              <TabsTrigger
+                value="DETAIL_PAGE"
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-pink-600 data-[state=active]:text-white px-6"
+              >
+                详情页
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </motion.div>
 
         {/* Form */}
@@ -366,12 +401,12 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                 </div>
 
                 <div className="mt-3">
-                <ImageUploadZone
-                  files={files}
-                  previewUrls={previewUrls}
-                  onFilesChange={handleFilesChange}
-                  maxFiles={8}
-                />
+                  <ImageUploadZone
+                    files={files}
+                    previewUrls={previewUrls}
+                    onFilesChange={handleFilesChange}
+                    maxFiles={8}
+                  />
                 </div>
               </motion.div>
 

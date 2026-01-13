@@ -13,6 +13,7 @@ export type HistoryItem = {
   id: string
   productName: string
   productType: string
+  taskType?: string // MAIN_IMAGE / DETAIL_PAGE
   generatedImages: string[]
   generatedImage?: string | null
   createdAt: string | Date
@@ -44,6 +45,7 @@ export function HistoryCard({
   const status = (item.status || "COMPLETED").toUpperCase()
   const isPending = status === "PENDING"
   const isFailed = status === "FAILED"
+  const isDetailPage = item.taskType === "DETAIL_PAGE"
 
   const handleClick = () => {
     if (isPending) {
@@ -95,7 +97,10 @@ export function HistoryCard({
           <img
             src={cover}
             alt={item.productName || "历史作品"}
-            className="h-full w-full object-cover"
+            className={cn(
+              "h-full w-full",
+              isDetailPage ? "object-cover object-top" : "object-cover"
+            )}
             loading="lazy"
           />
         ) : (
@@ -121,12 +126,24 @@ export function HistoryCard({
 
         <div className="text-xs text-slate-400 mt-1 flex items-center justify-between">
           <span>{formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: zhCN })}</span>
-          {/* 类型中文名 */}
-          {typeLabel && (
-            <span className="opacity-60 text-[10px] border border-white/10 px-1.5 py-0.5 rounded">
-              {typeLabel}
-            </span>
-          )}
+          <div className="flex items-center gap-1">
+            {/* taskType badge */}
+            {isDetailPage ? (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                详情页
+              </span>
+            ) : item.taskType === "MAIN_IMAGE" ? (
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                主图
+              </span>
+            ) : null}
+            {/* 类型中文名 */}
+            {typeLabel && (
+              <span className="opacity-60 text-[10px] border border-white/10 px-1.5 py-0.5 rounded">
+                {typeLabel}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </motion.button>

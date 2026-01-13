@@ -1,10 +1,13 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const taskType = searchParams.get("taskType") || "MAIN_IMAGE"
+
   const platforms = await prisma.platform.findMany({
     where: { isActive: true },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
@@ -13,7 +16,7 @@ export async function GET() {
       key: true,
       label: true,
       prompts: {
-        where: { isActive: true, userId: null },
+        where: { isActive: true, userId: null, taskType },
         select: {
           productType: true,
           description: true,
@@ -23,7 +26,7 @@ export async function GET() {
   })
 
   // distinct productType
-  const tree = platforms.map((p) => {
+  const tree = platforms.map((p: { id: string; key: string; label: string; prompts: { productType: string; description: string | null }[] }) => {
     const m = new Map<string, { label: string; value: string }>()
     for (const t of p.prompts) {
       const value = t.productType
@@ -41,4 +44,3 @@ export async function GET() {
 
   return NextResponse.json(tree)
 }
-

@@ -142,7 +142,10 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                         <img
                             src={cover}
                             alt={item.productName || "任务缩略图"}
-                            className="w-full h-full object-cover"
+                            className={cn(
+                                "w-full h-full object-cover",
+                                item.taskType === "DETAIL_PAGE" && "object-top"
+                            )}
                             loading="lazy"
                         />
                     ) : (
@@ -175,6 +178,16 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                     </div>
 
                     <div className="flex items-center gap-3 text-xs text-slate-400">
+                        {/* taskType badge */}
+                        {item.taskType === "DETAIL_PAGE" ? (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                                详情页
+                            </span>
+                        ) : item.taskType === "MAIN_IMAGE" ? (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                                主图
+                            </span>
+                        ) : null}
                         {typeLabel && (
                             <span className="border border-white/10 px-1.5 py-0.5 rounded text-[10px]">
                                 {typeLabel}

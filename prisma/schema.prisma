@@ -177,6 +177,7 @@ model Generation {
   userId          String?
   productName     String
   productType     String
+  taskType        String   @default("MAIN_IMAGE") /// MAIN_IMAGE / DETAIL_PAGE
   originalImage   String[]
   generatedImage  String?  @db.Text /// 存储完整的、未裁剪的原图 URL
   generatedImages String[] /// 存储九宫格切片图片 URL 数组
@@ -203,6 +204,7 @@ model ProductTypePrompt {
 
   // 业务维度：具体类别 Key (MENSWEAR, BEDDING)
   productType    String
+  taskType       String   @default("MAIN_IMAGE") /// MAIN_IMAGE / DETAIL_PAGE
 
   // 内容
   promptTemplate String   @db.Text
@@ -212,7 +214,7 @@ model ProductTypePrompt {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@index([platformId, productType])
+  @@index([platformId, productType, taskType])
   @@index([userId])
 }
 

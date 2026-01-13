@@ -37,6 +37,7 @@ export async function PUT(req: NextRequest) {
     select: {
       id: true,
       productType: true,
+      taskType: true,
       description: true,
       promptTemplate: true,
       isActive: true,
@@ -49,4 +50,3 @@ export async function PUT(req: NextRequest) {
 
   return NextResponse.json({ success: true, prompt: updated })
 }
-

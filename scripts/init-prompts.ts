@@ -64,11 +64,13 @@ async function main() {
   // 4) 插入系统 prompts
   await prisma.productTypePrompt.createMany({
     data: [
-      // Shopee
+      // ===================== MAIN_IMAGE Prompts =====================
+      // Shopee 男装 - 主图
       {
         userId: null,
         platformId: shopeeId,
         productType: ProductType.MENSWEAR,
+        taskType: "MAIN_IMAGE",
         description: "男装",
         promptTemplate: `生成1張2400×2400像素的9宮格商品主圖（每格精確800×800像素，無白邊、無水印、無額外文字），風格必須符合台灣蝦皮男裝類目最常見的高轉換率主圖設計，包括：
 • 乾淨專業的電商排版
@@ -106,10 +108,12 @@ async function main() {
 5️⃣ 賣點真實合理，不誇張
 6️⃣ **最終僅輸出 1 張 2400×2400 九宮格大圖**`,
       },
+      // Shopee 寝具 - 主图
       {
         userId: null,
         platformId: shopeeId,
         productType: ProductType.BEDDING,
+        taskType: "MAIN_IMAGE",
         description: "寝具",
         promptTemplate: `生成1張2400×2400像素的9宮格商品主圖（每格精確800×800像素，無白邊、無水印、無額外文字）
 
@@ -147,12 +151,12 @@ async function main() {
 • 賣點合理、不造假
 • **最終只輸出 1 張九宮格大圖**`,
       },
-
-      // Amazon
+      // Shopee Sexyspecies - 主图
       {
         userId: null,
         platformId: shopeeId,
         productType: ProductType.SEXY_SPECIES,
+        taskType: "MAIN_IMAGE",
         description: "Sexyspecies",
         promptTemplate: `生成1張2400×2400像素的9宮格商品主圖（每格精確800×800像素，無白邊、無水印、無額外文字），風格和視覺特色包括但不限於：
 粗黑描邊超大標題字體風格
@@ -173,8 +177,8 @@ async function main() {
 要求：
 商品主體（外觀、拼色位置、顏色、布料紋理、設計、車線、logo、版型）必須與我這次上傳的實拍圖100%一致，絕對不能修圖、改變任何細節。
 自動根據上傳的商品圖片智能填入以下9格內容，但所有視覺元素（排版、字體、標註方式、背景）必須與參考圖（圖1）完全一致：
-   - 格1（左上）：主視覺（模特兒穿著正面或側身）+背身小图+颜色缩略图＋粗黑大標題（不要太长）＋1~2个圓形標簽（卖点或做工细节）
-   格2（中上）：材質/成分特寫＋小優勢標籤
+   - 格1（左上）：主視覺（模特兒穿著正面或側身）+背身小图+颜色缩略图＋粗黑大標題（不要太长）＋1~2个圓形標簽（卖点或做工细节）
+   格2（中上）：材質/成分特寫＋小優勢標籤
 格3（右上）：堆疊圖或成分splash＋3～4個圓形優勢icon
 格4（左中）：人物使用情境或觸感展示
 格5（中中）：面料/功能特寫＋優勢文字
@@ -187,15 +191,127 @@ async function main() {
 最終只輸出1張2400×2400的9宮格大圖，不需要任何說明文字。`
       },
 
-      // TikTok：默认留空用于测试空状态（如需要可自行加一条）
-
-      // General fallback
+      // General fallback - 主图
       {
         userId: null,
         platformId: generalId,
         productType: ProductType.MENSWEAR,
+        taskType: "MAIN_IMAGE",
         description: "男装",
         promptTemplate: `（通用兜底）为 \${productName} 生成通用电商九宫格主图，文字清晰、排版干净、卖点真实。`,
+      },
+
+      // ===================== DETAIL_PAGE Prompts =====================
+      // Shopee 男装 - 详情页
+      {
+        userId: null,
+        platformId: shopeeId,
+        productType: ProductType.MENSWEAR,
+        taskType: "DETAIL_PAGE",
+        description: "男装详情页",
+        promptTemplate: `生成一張800×3200像素的竖版商品詳情長圖，風格必須符合台灣蝦皮男裝類目高轉換率詳情頁設計：
+
+**商品名稱：\${productName}**
+
+**設計要求**：
+• 竖版长图，800px宽，总高约3200px
+• 乾淨專業的電商排版
+• 高級感標題區（品牌感強）
+• 清晰的分區模塊設計
+• 商品實拍 + 細節特寫 + 尺寸表
+
+**內容結構（從上到下）**：
+1️⃣ 頂部品牌Banner + 商品名稱
+2️⃣ 模特全身穿著效果圖
+3️⃣ 商品核心賣點（3-4個icon式賣點）
+4️⃣ 面料材質說明 + 特寫圖
+5️⃣ 細節工藝展示（車線、拉鏈、口袋等）
+6️⃣ 多色展示區
+7️⃣ 尺碼對照表
+8️⃣ 洗滌保養說明
+
+**文字要求**：
+• 繁體中文，字體清晰
+• 重點文字加粗描邊
+• 賣點真實不誇張
+
+**最終僅輸出 1 張竖版長圖**`,
+      },
+      // Shopee 寝具 - 详情页
+      {
+        userId: null,
+        platformId: shopeeId,
+        productType: ProductType.BEDDING,
+        taskType: "DETAIL_PAGE",
+        description: "寝具详情页",
+        promptTemplate: `生成一張800×3200像素的竖版商品詳情長圖，風格符合蝦皮寢具類目：
+
+**商品名稱：\${productName}**
+
+**設計要求**：
+• 竖版长图，800px宽，总高约3200px
+• 溫馨舒適的視覺風格
+• 米白/暖色調背景
+• 清晰的模塊分區
+
+**內容結構（從上到下）**：
+1️⃣ 頂部Banner + 商品標題
+2️⃣ 商品主圖展示
+3️⃣ 核心賣點icon區（舒適/透氣/親膚等）
+4️⃣ 材質成分說明 + 特寫
+5️⃣ 使用場景圖
+6️⃣ 規格尺寸表
+7️⃣ 洗滌保養指南
+8️⃣ 品質保證說明
+
+**文字要求**：
+• 繁體中文，溫馨字體風格
+• 賣點真實合理
+
+**最終僅輸出 1 張竖版長圖**`,
+      },
+      // Shopee Sexyspecies - 详情页
+      {
+        userId: null,
+        platformId: shopeeId,
+        productType: ProductType.SEXY_SPECIES,
+        taskType: "DETAIL_PAGE",
+        description: "Sexyspecies详情页",
+        promptTemplate: `生成一張800×3200像素的竖版商品詳情長圖：
+
+**商品名稱：\${productName}**
+
+**設計要求**：
+• 竖版长图，800px宽，总高约3200px
+• 淺灰背景、乾淨燈光氛圍
+• 粗黑描邊標題風格
+• 黃色/粉色手寫體賣點標註
+
+**內容結構（從上到下）**：
+1️⃣ 頂部大標題Banner
+2️⃣ 模特穿著展示（正面+背面）
+3️⃣ 核心賣點區（圓形icon標籤）
+4️⃣ 面料細節特寫 + 優勢標籤
+5️⃣ 做工細節展示
+6️⃣ 多色選擇區
+7️⃣ 尺碼表
+8️⃣ 購買須知
+
+**文字要求**：
+• 繁體中文，極度清晰
+• 粗黑字體 + 描邊
+• 賣點不誇張造假
+
+**最終僅輸出 1 張竖版長圖**`,
+      },
+      // General fallback - 详情页
+      {
+        userId: null,
+        platformId: generalId,
+        productType: ProductType.MENSWEAR,
+        taskType: "DETAIL_PAGE",
+        description: "男装详情页",
+        promptTemplate: `（通用兜底）为 \${productName} 生成通用电商竖版详情长图，800×3200像素，文字清晰、排版干净、卖点真实。`,
       },
     ],
     skipDuplicates: true,
