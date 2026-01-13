@@ -37,14 +37,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { cn } from "@/lib/utils"
+import { cn, downloadImage } from "@/lib/utils"
 import { getWatermarkedUrl, WatermarkParams } from "@/lib/tos-watermark"
 import { WATERMARK_UNLOCK_COST } from "@/lib/constants"
 import type { HistoryItem } from "@/components/history-card"
+import { ImageEditorModal } from "@/components/image-editor-modal"
 
-function sanitizeFilename(name: string) {
-  return name.replace(/[\\/:*?"<>|]/g, "-")
-}
 
 type WatermarkTemplate = {
   id: string
@@ -99,6 +97,13 @@ export function HistoryDetailDialog({
 
   // Preview modal for zooming into a single slice
   const [previewImage, setPreviewImage] = useState<string | null>(null)
+
+  // Image editor modal state
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
+
+  // In-place editing state
+  const [editingIndex, setEditingIndex] = useState<number | null>(null)
 
   useEffect(() => {
     if (open) {
@@ -400,15 +405,7 @@ export function HistoryDetailDialog({
   }
 
   const downloadOne = (imgUrl: string, idx: number) => {
-    const filename = sanitizeFilename(`${productName || "image"}-${idx + 1}.png`)
-    const href = `/api/download-images?url=${encodeURIComponent(imgUrl)}&filename=${encodeURIComponent(filename)}`
-
-    const a = document.createElement("a")
-    a.href = href
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    document.body.removeChild(a)
+    downloadImage(imgUrl, `${productName || "image"}-${idx + 1}`)
   }
 
   return (
@@ -672,7 +669,7 @@ export function HistoryDetailDialog({
                             <Download className="w-4 h-4 mr-1" />
                             下载
                           </Button>
-                          {/* <Button
+                          <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => setPreviewImage(img)}
@@ -680,7 +677,7 @@ export function HistoryDetailDialog({
                           >
                             <Eye className="w-4 h-4 mr-1" />
                             放大
-                          </Button> */}
+                          </Button>
                         </div>
                         <div className="absolute bottom-2 right-2 text-[10px] text-white/60 bg-black/40 px-2 py-0.5 rounded">
                           {i + 1}/{displayImages.length}
@@ -699,15 +696,29 @@ export function HistoryDetailDialog({
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.2, delay: i * 0.03 }}
-                        whileHover={{ scale: 1.03 }}
-                        onClick={() => downloadOne(img, i)}
-                        title="点击下载"
+                        whileHover={editingIndex === i ? undefined : { scale: 1.03 }}
+                        onClick={() => {
+                          if (editingIndex !== null) return // Disable click while editing
+                          setSelectedImage(img)
+                          setSelectedImageIndex(i)
+                        }}
+                        disabled={editingIndex !== null}
+                        title={editingIndex === i ? "重绘中..." : "点击查看/编辑"}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={img} alt={`Generated ${i + 1}`} className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                          <Download className="w-8 h-8 text-white drop-shadow-md" />
-                        </div>
+
+                        {/* Editing overlay */}
+                        {editingIndex === i ? (
+                          <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
+                            <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                            <span className="text-xs text-white/80">重绘中...</span>
+                          </div>
+                        ) : (
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Download className="w-8 h-8 text-white drop-shadow-md" />
+                          </div>
+                        )}
                       </motion.button>
                     ))}
                   </div>
@@ -990,6 +1001,63 @@ export function HistoryDetailDialog({
         <PreviewImageModal
           src={previewImage}
           onClose={() => setPreviewImage(null)}
+        />
+      )}
+
+      {/* Image Editor Modal */}
+      {/* Image Editor Modal */}
+      {selectedImage && selectedImageIndex !== null && (
+        <ImageEditorModal
+          imageUrl={selectedImage}
+          productName={productName}
+          onClose={() => {
+            setSelectedImage(null)
+            setSelectedImageIndex(null)
+          }}
+          onEdit={async (prompt) => {
+            // Close modal first
+            const imgIndex = selectedImageIndex
+            const imgUrl = selectedImage
+            setSelectedImage(null)
+            setSelectedImageIndex(null)
+
+            // Set editing state
+            setEditingIndex(imgIndex)
+
+            try {
+              const res = await fetch("/api/generate/edit", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  generationId: item?.id,
+                  imageIndex: imgIndex,
+                  prompt,
+                  originalImageUrl: imgUrl,
+                }),
+              })
+
+              const data = await res.json()
+
+              if (!res.ok) {
+                throw new Error(data.error || "编辑失败")
+              }
+
+              // Update local state with new image
+              if (data.newImageUrl && item) {
+                const newImages = [...item.generatedImages]
+                newImages[imgIndex] = data.newImageUrl
+                item.generatedImages = newImages
+              }
+
+              toast.success("图片已更新")
+              onGenerateSuccess() // Refresh to get updated credits
+            } catch (err) {
+              const message = err instanceof Error ? err.message : "编辑失败"
+              toast.error(message)
+            } finally {
+              setEditingIndex(null)
+            }
+          }}
         />
       )}
     </>

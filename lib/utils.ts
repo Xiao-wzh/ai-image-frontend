@@ -24,3 +24,28 @@ export function formatTimeToNow(date: string | Date): string {
   const dateObj = typeof date === 'string' ? new Date(date) : date
   return formatDistanceToNow(dateObj, { addSuffix: true, locale: zhCN })
 }
+
+/**
+ * 清理文件名，移除非法字符
+ */
+export function sanitizeFilename(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, "-")
+}
+
+/**
+ * 下载单张图片
+ * @param imgUrl - 图片URL
+ * @param filename - 文件名（不含扩展名）
+ * @param extension - 文件扩展名，默认 "png"
+ */
+export function downloadImage(imgUrl: string, filename: string, extension: string = "png"): void {
+  const sanitized = sanitizeFilename(`${filename}.${extension}`)
+  const href = `/api/download-images?url=${encodeURIComponent(imgUrl)}&filename=${encodeURIComponent(sanitized)}`
+
+  const a = document.createElement("a")
+  a.href = href
+  a.download = sanitized
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
