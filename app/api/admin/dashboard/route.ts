@@ -13,15 +13,16 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: guard.error }, { status: guard.status })
         }
 
-        // 解析日期参数
+        // 解析日期参数 (使用 UTC+8 北京时间)
         const { searchParams } = new URL(req.url)
         const startStr = searchParams.get("start")
         const endStr = searchParams.get("end")
 
         // 默认最近7天
         const now = new Date()
-        const end = endStr ? new Date(endStr + "T23:59:59") : now
-        const start = startStr ? new Date(startStr + "T00:00:00") : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+        // 使用明确的时区偏移 (+08:00)
+        const end = endStr ? new Date(endStr + "T23:59:59+08:00") : now
+        const start = startStr ? new Date(startStr + "T00:00:00+08:00") : new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
         // 查询消费记录
         const records = await prisma.creditRecord.findMany({
@@ -44,10 +45,16 @@ export async function GET(req: NextRequest) {
 
         const dailyStats: Record<string, { aiGeneration: number; removeWatermark: number; addWatermark: number }> = {}
 
+        // 辅助函数：将 UTC 时间转换为北京时间日期字符串
+        const toBeijingDateString = (date: Date) => {
+            const beijingTime = new Date(date.getTime() + 8 * 60 * 60 * 1000)
+            return beijingTime.toISOString().split("T")[0]
+        }
+
         for (const record of records) {
             const cost = Math.abs(record.amount)
             const desc = record.description || ""
-            const date = record.createdAt.toISOString().split("T")[0]
+            const date = toBeijingDateString(record.createdAt)
 
             if (!dailyStats[date]) {
                 dailyStats[date] = { aiGeneration: 0, removeWatermark: 0, addWatermark: 0 }
