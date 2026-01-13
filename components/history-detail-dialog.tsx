@@ -672,7 +672,7 @@ export function HistoryDetailDialog({
                             <Download className="w-4 h-4 mr-1" />
                             下载
                           </Button>
-                          <Button
+                          {/* <Button
                             size="sm"
                             variant="ghost"
                             onClick={() => setPreviewImage(img)}
@@ -680,7 +680,7 @@ export function HistoryDetailDialog({
                           >
                             <Eye className="w-4 h-4 mr-1" />
                             放大
-                          </Button>
+                          </Button> */}
                         </div>
                         <div className="absolute bottom-2 right-2 text-[10px] text-white/60 bg-black/40 px-2 py-0.5 rounded">
                           {i + 1}/{displayImages.length}
