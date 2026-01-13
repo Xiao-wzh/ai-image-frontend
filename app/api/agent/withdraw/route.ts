@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
             // 创建提现记录
             const withdrawal = await tx.withdrawal.create({
                 data: {
-                    userId,
+                    user: { connect: { id: userId } },
                     amount,
                     bankInfo: JSON.stringify(bankInfo),
                     status: "PENDING",
