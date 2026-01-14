@@ -669,7 +669,7 @@ export function HistoryDetailDialog({
                   </div>
                 ) : item?.taskType === "DETAIL_PAGE" && detailViewMode === "SLICES" ? (
                   /* Detail Page: SLICES Mode (Grid) - with edit functionality */
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/40">
+                  <div className={`grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/40 ${previewImage || selectedImage ? "pointer-events-none" : ""}`}>
                     {displayImages.map((img, i) => (
                       <motion.button
                         key={i}
@@ -712,7 +712,7 @@ export function HistoryDetailDialog({
 
                 ) : viewMode === "grid" ? (
                   /* Main Image: Grid Mode */
-                  <div className="grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2">
+                  <div className={`grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2 ${previewImage || selectedImage ? "pointer-events-none" : ""}`}>
                     {displayImages.map((img, i) => (
                       <motion.button
                         key={i}
@@ -1095,20 +1095,44 @@ export function HistoryDetailDialog({
 function PreviewImageModal({ src, onClose }: { src: string; onClose: () => void }) {
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-      onClick={onClose}
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 pointer-events-auto"
+      onPointerDownCapture={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      onPointerUpCapture={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        onClose()
+      }}
     >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        className="relative max-w-[90vw] max-h-[90vh] overflow-auto"
-        onClick={(e) => e.stopPropagation()}
+      <div
+        onPointerDownCapture={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+        onPointerUpCapture={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+        className="relative max-w-[92vw] max-h-[92vh]"
       >
         <Button
           variant="ghost"
           size="icon"
-          onClick={onClose}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onClose()
+          }}
           className="absolute top-2 right-2 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full"
         >
           <X className="w-5 h-5" />
@@ -1117,10 +1141,11 @@ function PreviewImageModal({ src, onClose }: { src: string; onClose: () => void 
         <img
           src={src}
           alt="Preview"
-          className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+          className="max-w-full max-h-[92vh] object-contain rounded-xl shadow-2xl"
         />
-      </motion.div>
+      </div>
     </div>,
     document.body
   )
 }
+

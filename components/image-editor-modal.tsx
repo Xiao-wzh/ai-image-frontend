@@ -49,7 +49,7 @@ export function ImageEditorModal({
 
     return createPortal(
         <div
-            className="fixed inset-0 z-[60] flex flex-col bg-black/95"
+            className="fixed inset-0 z-[100000] flex flex-col bg-black/95 pointer-events-auto isolate"
             onClick={(e) => {
                 if (e.target === e.currentTarget) {
                     onClose()
