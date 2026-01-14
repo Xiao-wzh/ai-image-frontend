@@ -163,7 +163,7 @@ export default function CopywritingPage() {
                     <div className="w-[400px] border-r border-white/5 flex flex-col p-6 space-y-6">
                         {/* Platform Selector */}
                         <div className="space-y-2">
-                            <label className="text-sm text-slate-400 font-medium">选择平台</label>
+                            <label className="text-sm text-slate-400 font-medium">选择平台（暂只支持虾皮）</label>
                             <div className="relative">
                                 <button
                                     type="button"

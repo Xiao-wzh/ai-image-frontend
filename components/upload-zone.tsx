@@ -48,6 +48,14 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [currentGenerationId, setCurrentGenerationId] = useState<string | null>(null)
 
+  // Combo mode state - only visible when taskType is MAIN_IMAGE
+  const [isComboMode, setIsComboMode] = useState(false)
+
+  // Calculate costs
+  const baseCost = taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
+  const comboAddOnCost = costs.DETAIL_PAGE_RETRY_COST
+  const totalCost = isComboMode && taskType === "MAIN_IMAGE" ? baseCost + comboAddOnCost : baseCost
+
   /* ──────────────── load platform config ──────────────── */
   useEffect(() => {
     let cancelled = false
@@ -230,8 +238,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           platformKey,
           taskType,
           images: uploadedUrls,
+          withDetailCombo: isComboMode && taskType === "MAIN_IMAGE",
         },
-        taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST,
+        totalCost,
       )
     } catch (e) {
       // Error is already handled and toasted inside handleGeneration
@@ -245,6 +254,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     productType,
     files,
     platformKey,
+    taskType,
+    isComboMode,
+    totalCost,
     handleGeneration,
   ])
 
@@ -418,6 +430,45 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                 </div>
               </motion.div>
 
+              {/* Combo Offer Card - Only show for MAIN_IMAGE mode */}
+              {taskType === "MAIN_IMAGE" && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.35 }}
+                  className="relative rounded-xl border border-amber-500/50 bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 p-4 mb-4"
+                >
+                  {/* Top Badge */}
+                  <div className="absolute -top-2.5 left-4 px-2 py-0.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full text-white text-[10px] font-bold shadow-lg">
+                    🔥 限时特惠
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 pt-1">
+                    {/* Left: Checkbox + Label */}
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={isComboMode}
+                        onChange={(e) => setIsComboMode(e.target.checked)}
+                        className="w-4 h-4 rounded border-amber-400/50 bg-amber-500/20 text-amber-500 focus:ring-amber-500/50 focus:ring-offset-0 cursor-pointer"
+                      />
+                      <span className="text-sm font-medium text-white">同时生成详情页</span>
+                    </label>
+
+                    {/* Middle: Description */}
+                    <div className="hidden sm:block text-[11px] text-slate-400">
+                      赠送水印解锁 <span className="text-emerald-400 font-medium">(立省 100 积分)</span>
+                    </div>
+
+                    {/* Right: Price */}
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-500 text-sm line-through">{costs.DETAIL_PAGE_STANDARD_COST}</span>
+                      <span className="text-amber-400 text-lg font-bold">+{comboAddOnCost}</span>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
               {/* Generate Button */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
@@ -441,13 +492,13 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                   />
                   <div className="relative flex items-center justify-center gap-2 text-base">
                     <Sparkles className="w-5 h-5" />
-                    <span>生成图像</span>
+                    <span>{isComboMode && taskType === "MAIN_IMAGE" ? "立即生成双份" : "生成图像"}</span>
                   </div>
-                  <div className="relative text-xs opacity-70 mt-1">费用 {taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST} 积分</div>
+                  <div className="relative text-xs opacity-70 mt-1">费用 {totalCost} 积分</div>
                 </Button>
                 <p className="text-xs text-slate-500 text-center mt-3 flex items-center justify-center gap-1">
                   <Sparkles className="w-3 h-3" />
-                  一次生成即得 9 张精选图
+                  {isComboMode && taskType === "MAIN_IMAGE" ? "一次生成主图 + 详情页" : "一次生成即得 9 张精选图"}
                 </p>
               </motion.div>
             </motion.div>

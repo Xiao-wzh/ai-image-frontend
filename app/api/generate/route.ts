@@ -6,6 +6,9 @@ import { getSystemCosts } from "@/lib/system-config"
 import type { SystemCostConfig } from "@/lib/types/config"
 import "dotenv/config"
 
+// Transaction client type
+type TxClient = Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">
+
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
@@ -18,17 +21,79 @@ function getRetryCost(taskType: string, costs: SystemCostConfig): number {
   return taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST
 }
 
+// Helper: Call N8N with timeout
+async function callN8N(
+  webhookUrl: string,
+  payload: any,
+  timeoutMs: number
+): Promise<{ success: true; images: string[]; fullImageUrl: string | null } | { success: false; error: string }> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const res = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+
+    if (!res.ok) {
+      return { success: false, error: `n8n 调用失败: ${res.status} ${res.statusText}` }
+    }
+
+    const rawText = await res.text()
+    if (!rawText) {
+      return { success: false, error: "n8n 响应为空" }
+    }
+
+    let json: any
+    try {
+      json = JSON.parse(rawText)
+    } catch {
+      return { success: false, error: `n8n 响应不是有效 JSON` }
+    }
+
+    const images = json.images as string[]
+    const fullImageUrl = (json.full_image_url as string) || (json.generated_image_url as string) || null
+
+    if (!Array.isArray(images) || images.length === 0) {
+      return { success: false, error: "n8n 响应未包含图片数组" }
+    }
+
+    return { success: true, images, fullImageUrl }
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      return { success: false, error: "N8N 请求超时" }
+    }
+    return { success: false, error: err?.message || String(err) }
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+// Helper: Refund a specific amount
+async function refundCredits(
+  userId: string,
+  amount: number,
+  description: string
+): Promise<void> {
+  await prisma.$transaction(async (tx: TxClient) => {
+    // Refund to paid credits (simpler than tracking bonus)
+    await tx.user.update({
+      where: { id: userId },
+      data: { credits: { increment: amount } },
+    })
+    await tx.creditRecord.create({
+      data: { userId, amount, type: "REFUND", description },
+    })
+  })
+  console.log(`💸 Refunded ${amount} credits to user ${userId}: ${description}`)
+}
+
 export async function POST(req: NextRequest) {
   // Fetch dynamic costs from database
   const costs = await getSystemCosts()
-
-  let generationId: string | null = null
-  let preDeducted = false
-  let actualCost = costs.MAIN_IMAGE_STANDARD_COST
-
-
-  let deductedBonus = 0
-  let deductedPaid = 0
 
   const session = await auth()
   const userId = session?.user?.id || null
@@ -36,20 +101,356 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "请先登录" }, { status: 401 })
   }
 
+  // Parse body
+  const body = await req.json().catch(() => null)
+  if (!body) {
+    return NextResponse.json({ error: "无效请求" }, { status: 400 })
+  }
+
+  const retryFromId = body?.retryFromId as string | undefined
+  const withDetailCombo = Boolean(body?.withDetailCombo)
+
+  console.log(`[GENERATE_API] Received request - retryFromId: ${retryFromId}, withDetailCombo: ${withDetailCombo}`)
+
+  // =============================================
+  // COMBO MODE: Main Image + Detail Page in Parallel
+  // =============================================
+  if (withDetailCombo && !retryFromId) {
+    return handleComboGeneration(body, userId, session, costs)
+  }
+
+  // =============================================
+  // SINGLE TASK MODE (existing logic)
+  // =============================================
+  return handleSingleGeneration(body, userId, session, costs, retryFromId)
+}
+
+// =============================================
+// COMBO GENERATION HANDLER
+// =============================================
+async function handleComboGeneration(
+  body: any,
+  userId: string,
+  session: any,
+  costs: SystemCostConfig
+) {
+  // Parse input
+  const productName = String(body?.productName ?? "").trim()
+  const productType = String(body?.productType ?? "").trim() as ProductTypeKey
+  const platformKey = String(body?.platformKey ?? "SHOPEE").trim().toUpperCase()
+  const rawImages = body?.images
+
+  // Validation
+  if (!productName) {
+    return NextResponse.json({ error: "请填写商品名称" }, { status: 400 })
+  }
+  if (!productType) {
+    return NextResponse.json({ error: "请选择商品类型" }, { status: 400 })
+  }
+
+  // Parse images
+  let imageUrls: string[] = []
+  if (Array.isArray(rawImages)) {
+    imageUrls = rawImages.map((x) => String(x).trim()).filter(Boolean)
+  } else if (typeof rawImages === "string") {
+    try {
+      const parsed = JSON.parse(rawImages)
+      if (Array.isArray(parsed)) {
+        imageUrls = parsed.map((x) => String(x).trim()).filter(Boolean)
+      } else if (rawImages.trim()) {
+        imageUrls = [rawImages.trim()]
+      }
+    } catch {
+      if (rawImages.trim()) imageUrls = [rawImages.trim()]
+    }
+  }
+
+  if (imageUrls.length === 0) {
+    return NextResponse.json({ error: "请至少上传 1 张图片" }, { status: 400 })
+  }
+
+  // Calculate combo cost
+  const mainImageCost = costs.MAIN_IMAGE_STANDARD_COST
+  const detailPageCost = costs.DETAIL_PAGE_RETRY_COST // Discounted detail page for combo
+  const comboCost = mainImageCost + detailPageCost
+
+  console.log(`[COMBO] Total cost: ${comboCost} (Main: ${mainImageCost} + Detail: ${detailPageCost})`)
+
+  // Check concurrency for both task types
+  const [mainPendingCount, detailPendingCount] = await Promise.all([
+    prisma.generation.count({
+      where: { userId, taskType: "MAIN_IMAGE", status: { in: ["PENDING", "PROCESSING"] } },
+    }),
+    prisma.generation.count({
+      where: { userId, taskType: "DETAIL_PAGE", status: { in: ["PENDING", "PROCESSING"] } },
+    }),
+  ])
+
+  if (mainPendingCount >= 2) {
+    return NextResponse.json(
+      { error: `您当前有 ${mainPendingCount} 个主图任务正在进行中，请等待完成后再提交` },
+      { status: 429 }
+    )
+  }
+  if (detailPendingCount >= 1) {
+    return NextResponse.json(
+      { error: `您当前有 ${detailPendingCount} 个详情页任务正在进行中，请等待完成后再提交` },
+      { status: 429 }
+    )
+  }
+
+  // Deduct credits atomically
+  const deductResult = await prisma.$transaction(async (tx: TxClient) => {
+    const userRow = await tx.user.findUnique({
+      where: { id: userId },
+      select: { credits: true, bonusCredits: true },
+    })
+    if (!userRow) {
+      return { ok: false as const, status: 404, error: "用户不存在" }
+    }
+
+    const totalCredits = (userRow.credits ?? 0) + (userRow.bonusCredits ?? 0)
+    if (totalCredits < comboCost) {
+      return {
+        ok: false as const,
+        status: 402,
+        error: `余额不足 (套餐需要 ${comboCost} 积分，当前 ${totalCredits})`,
+      }
+    }
+
+    const deductBonus = Math.min(userRow.bonusCredits || 0, comboCost)
+    const deductPaid = comboCost - deductBonus
+
+    await tx.user.update({
+      where: { id: userId },
+      data: { bonusCredits: { decrement: deductBonus }, credits: { decrement: deductPaid } },
+    })
+
+    await tx.creditRecord.create({
+      data: {
+        userId,
+        amount: -comboCost,
+        type: "CONSUME",
+        description: `套餐生成: ${productName} (主图+详情页)`,
+      },
+    })
+
+    console.log(`[COMBO] Deducted ${comboCost} credits (bonus: ${deductBonus}, paid: ${deductPaid})`)
+    return { ok: true as const, deductBonus, deductPaid }
+  })
+
+  if (!deductResult.ok) {
+    return NextResponse.json({ error: deductResult.error }, { status: deductResult.status })
+  }
+
+  // Create two Generation records
+  const [mainGen, detailGen] = await Promise.all([
+    prisma.generation.create({
+      data: {
+        userId,
+        productName,
+        productType,
+        taskType: "MAIN_IMAGE",
+        originalImage: imageUrls,
+        status: "PENDING",
+        isWatermarkUnlocked: true, // Combo bonus: auto-unlock watermark
+      },
+    }),
+    prisma.generation.create({
+      data: {
+        userId,
+        productName,
+        productType,
+        taskType: "DETAIL_PAGE",
+        originalImage: imageUrls,
+        status: "PENDING",
+        isWatermarkUnlocked: true, // Bonus: auto-unlock watermark for combo
+      },
+    }),
+  ])
+
+  console.log(`[COMBO] Created generations: Main=${mainGen.id}, Detail=${detailGen.id}`)
+
+  // Fetch prompt templates for both
+  const [mainPrompt, detailPrompt] = await Promise.all([
+    // Main Image: Match by productType and platform
+    prisma.productTypePrompt.findFirst({
+      where: { isActive: true, productType, taskType: "MAIN_IMAGE", userId: null, platform: { key: platformKey } },
+      orderBy: { updatedAt: "desc" },
+    }).then((p: any) => p || prisma.productTypePrompt.findFirst({
+      where: { isActive: true, productType, taskType: "MAIN_IMAGE", userId: null, platform: { key: "GENERAL" } },
+      orderBy: { updatedAt: "desc" },
+    })),
+    // Detail Page: Find first DETAIL_PAGE prompt for this platform (ignore productType for combo)
+    prisma.productTypePrompt.findFirst({
+      where: { isActive: true, taskType: "DETAIL_PAGE", userId: null, platform: { key: platformKey } },
+      orderBy: { updatedAt: "desc" },
+    }).then((p: any) => p || prisma.productTypePrompt.findFirst({
+      where: { isActive: true, taskType: "DETAIL_PAGE", userId: null, platform: { key: "GENERAL" } },
+      orderBy: { updatedAt: "desc" },
+    })),
+  ])
+
+  // If prompt is missing, fail the corresponding task and refund
+  const results: Array<{ taskType: string; id: string; status: "COMPLETED" | "FAILED"; error?: string }> = []
+
+  const mainWebhookUrl = process.env.N8N_GRSAI_WEBHOOK_URL
+  const detailWebhookUrl = process.env.N8N_DETAIL_WEBHOOK_URL
+
+  // Prepare tasks
+  const tasks: Array<{
+    taskType: "MAIN_IMAGE" | "DETAIL_PAGE"
+    generationId: string
+    webhookUrl: string | undefined
+    prompt: any
+    cost: number
+    timeoutMs: number
+  }> = []
+
+  if (mainPrompt && mainWebhookUrl) {
+    tasks.push({
+      taskType: "MAIN_IMAGE",
+      generationId: mainGen.id,
+      webhookUrl: mainWebhookUrl,
+      prompt: mainPrompt,
+      cost: mainImageCost,
+      timeoutMs: 360_000,
+    })
+  } else {
+    // Mark as failed and refund immediately
+    await prisma.generation.update({ where: { id: mainGen.id }, data: { status: "FAILED" } })
+    await refundCredits(userId, mainImageCost, "套餐主图生成失败退款 (缺少模板或配置)")
+    results.push({ taskType: "MAIN_IMAGE", id: mainGen.id, status: "FAILED", error: "缺少主图模板或 Webhook 配置" })
+  }
+
+  if (detailPrompt && detailWebhookUrl) {
+    tasks.push({
+      taskType: "DETAIL_PAGE",
+      generationId: detailGen.id,
+      webhookUrl: detailWebhookUrl,
+      prompt: detailPrompt,
+      cost: detailPageCost,
+      timeoutMs: 600_000,
+    })
+  } else {
+    await prisma.generation.update({ where: { id: detailGen.id }, data: { status: "FAILED" } })
+    await refundCredits(userId, detailPageCost, "套餐详情页生成失败退款 (缺少模板或配置)")
+    results.push({ taskType: "DETAIL_PAGE", id: detailGen.id, status: "FAILED", error: "缺少详情页模板或 Webhook 配置" })
+  }
+
+  // Execute remaining tasks in parallel
+  if (tasks.length > 0) {
+    const username = (session?.user as any)?.username ?? (session?.user as any)?.name ?? null
+
+    const n8nPromises = tasks.map((task) => {
+      const payload = {
+        username,
+        generation_id: task.generationId,
+        product_name: productName,
+        product_type: ProductTypePromptKey[productType] || productType,
+        prompt_template: task.prompt.promptTemplate,
+        images: imageUrls,
+        image_count: imageUrls.length,
+      }
+      console.log(`[COMBO] Calling N8N for ${task.taskType}: ${task.webhookUrl}`)
+      return callN8N(task.webhookUrl!, payload, task.timeoutMs)
+    })
+
+    const n8nResults = await Promise.allSettled(n8nPromises)
+
+    // Process results
+    for (let i = 0; i < tasks.length; i++) {
+      const task = tasks[i]
+      const result = n8nResults[i]
+
+      if (result.status === "fulfilled" && result.value.success) {
+        // Success
+        await prisma.generation.update({
+          where: { id: task.generationId },
+          data: {
+            generatedImages: result.value.images,
+            generatedImage: result.value.fullImageUrl,
+            status: "COMPLETED",
+          },
+        })
+        results.push({ taskType: task.taskType, id: task.generationId, status: "COMPLETED" })
+        console.log(`[COMBO] ${task.taskType} completed successfully`)
+      } else {
+        // Failed
+        const errorMsg = result.status === "rejected"
+          ? result.reason?.message || "未知错误"
+          : (result.value as any).error || "未知错误"
+
+        await prisma.generation.update({
+          where: { id: task.generationId },
+          data: { status: "FAILED" },
+        })
+
+        // Refund for this specific task
+        await refundCredits(
+          userId,
+          task.cost,
+          `套餐${task.taskType === "MAIN_IMAGE" ? "主图" : "详情页"}生成失败退款`
+        )
+
+        results.push({ taskType: task.taskType, id: task.generationId, status: "FAILED", error: errorMsg })
+        console.log(`[COMBO] ${task.taskType} failed: ${errorMsg}`)
+      }
+    }
+  }
+
+  // Get updated user credits
+  const updatedUser = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { credits: true, bonusCredits: true },
+  })
+
+  const allSucceeded = results.every((r) => r.status === "COMPLETED")
+  const allFailed = results.every((r) => r.status === "FAILED")
+
+  return NextResponse.json({
+    success: !allFailed,
+    isCombo: true,
+    results,
+    credits: updatedUser?.credits ?? 0,
+    bonusCredits: updatedUser?.bonusCredits ?? 0,
+    totalCredits: (updatedUser?.credits ?? 0) + (updatedUser?.bonusCredits ?? 0),
+    message: allSucceeded
+      ? "套餐生成完成"
+      : allFailed
+        ? "套餐生成失败，积分已退回"
+        : "套餐部分生成成功，失败部分已退款",
+  })
+}
+
+// =============================================
+// SINGLE GENERATION HANDLER (existing logic extracted)
+// =============================================
+async function handleSingleGeneration(
+  body: any,
+  userId: string,
+  session: any,
+  costs: SystemCostConfig,
+  retryFromId?: string
+) {
+  let generationId: string | null = null
+  let preDeducted = false
+  let actualCost = costs.MAIN_IMAGE_STANDARD_COST
+  let deductedBonus = 0
+  let deductedPaid = 0
+
   // 并发限制设置：主图 2 个，详情页 1 个
   const MAX_CONCURRENT_MAIN_IMAGE = 2
   const MAX_CONCURRENT_DETAIL_PAGE = 1
 
-  // 先解析 body 以获取 taskType（用于并发检查）
-  const preBody = await req.clone().json().catch(() => null)
-  const preTaskType = String(preBody?.taskType || "MAIN_IMAGE").trim().toUpperCase()
+  const preTaskType = String(body?.taskType || "MAIN_IMAGE").trim().toUpperCase()
 
   // 如果是重试，需要先查询原始记录获取 taskType
   let checkTaskType = preTaskType
-  if (preBody?.retryFromId) {
+  if (retryFromId) {
     const orig = await prisma.generation.findUnique({
-      where: { id: preBody.retryFromId },
-      select: { taskType: true }
+      where: { id: retryFromId },
+      select: { taskType: true },
     })
     checkTaskType = orig?.taskType || "MAIN_IMAGE"
   }
@@ -72,12 +473,6 @@ export async function POST(req: NextRequest) {
       { status: 429 }
     )
   }
-
-  // 在 try 外部预先解析 body，以便 catch 块可以访问
-  const body = await req.clone().json().catch(() => null)
-  const retryFromId = body?.retryFromId as string | undefined
-
-  console.log(`[GENERATE_API] Received request - retryFromId: ${retryFromId}, body keys: ${Object.keys(body || {})}`)
 
   try {
     let productName: string
@@ -109,7 +504,7 @@ export async function POST(req: NextRequest) {
       productName = originalGeneration.productName
       productType = originalGeneration.productType as ProductTypeKey
       imageUrls = originalGeneration.originalImage
-      platformKey = "SHOPEE" // 暂时硬编码
+      platformKey = "SHOPEE"
     } else {
       // --- 标准流程 ---
       productName = String(body?.productName ?? "").trim()
@@ -119,14 +514,13 @@ export async function POST(req: NextRequest) {
       actualCost = getStandardCost(taskType, costs)
       const rawImages = body?.images
 
-
       if (!productName) throw new Error("请填写商品名称")
       if (!productType) throw new Error("请选择商品类型")
 
       let parsedImages: string[] = []
       if (Array.isArray(rawImages)) {
         parsedImages = rawImages.map((x) => String(x).trim()).filter(Boolean)
-      } else if (typeof rawImages === 'string') {
+      } else if (typeof rawImages === "string") {
         try {
           const parsed = JSON.parse(rawImages)
           if (Array.isArray(parsed)) {
@@ -137,7 +531,7 @@ export async function POST(req: NextRequest) {
         } catch {
           if (rawImages.trim()) parsedImages = [rawImages.trim()]
         }
-      } else if (rawImages && typeof rawImages === 'object') {
+      } else if (rawImages && typeof rawImages === "object") {
         parsedImages = Object.values(rawImages).map((x) => String(x).trim()).filter(Boolean)
       }
 
@@ -148,7 +542,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2) 原子扣费 + 更新
-    const deductResult = await prisma.$transaction(async (tx) => {
+    const deductResult = await prisma.$transaction(async (tx: TxClient) => {
       const userRow = await tx.user.findUnique({ where: { id: userId }, select: { credits: true, bonusCredits: true } })
       if (!userRow) {
         return { ok: false as const, status: 404 as const, error: "用户不存在" }
@@ -228,10 +622,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 根据 taskType 选择不同的 webhook
-    const webhookUrl = taskType === "DETAIL_PAGE"
-      ? process.env.N8N_DETAIL_WEBHOOK_URL
-      // : process.env.N8N_NEW
-    : process.env.N8N_GRSAI_WEBHOOK_URL
+    const webhookUrl = taskType === "DETAIL_PAGE" ? process.env.N8N_DETAIL_WEBHOOK_URL : process.env.N8N_GRSAI_WEBHOOK_URL
     if (!webhookUrl) {
       throw new Error(taskType === "DETAIL_PAGE" ? "N8N_DETAIL_WEBHOOK_URL 未配置" : "N8N_GRSAI_WEBHOOK_URL 未配置")
     }
@@ -250,53 +641,23 @@ export async function POST(req: NextRequest) {
 
     // 超时设置：主图 6 分钟，详情页 10 分钟
     const timeoutMs = taskType === "DETAIL_PAGE" ? 600_000 : 360_000
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
+    const n8nResult = await callN8N(webhookUrl, n8nPayload, timeoutMs)
 
-    let n8nRes: Response
-    try {
-      n8nRes = await fetch(webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(n8nPayload),
-        signal: controller.signal,
-      })
-    } finally {
-      clearTimeout(timeoutId)
+    if (!n8nResult.success) {
+      throw new Error(n8nResult.error)
     }
 
-    if (!n8nRes.ok) {
-      const errorText = await n8nRes.text().catch(() => "")
-      throw new Error(`n8n 调用失败: ${n8nRes.status} ${n8nRes.statusText}`)
-    }
-
-    const rawText = await n8nRes.text().catch(() => "")
-    if (!rawText) {
-      throw new Error("n8n 响应为空")
-    }
-
-    let n8nJson: any
-    try {
-      n8nJson = JSON.parse(rawText)
-    } catch {
-      throw new Error(`n8n 响应不是有效 JSON: ${rawText.slice(0, 200)}`)
-    }
-
-    const generatedImages = n8nJson.images as string[]
-    const fullImageUrl = (n8nJson.full_image_url as string) || (n8nJson.generated_image_url as string) || null
-
-    if (!Array.isArray(generatedImages) || generatedImages.length === 0) {
-      throw new Error("n8n 响应未包含九宫格图片数组 (images)")
-    }
-
-    await prisma.generation.update({ where: { id: pending.id }, data: { generatedImages, generatedImage: fullImageUrl, status: "COMPLETED" } })
+    await prisma.generation.update({
+      where: { id: pending.id },
+      data: { generatedImages: n8nResult.images, generatedImage: n8nResult.fullImageUrl, status: "COMPLETED" },
+    })
 
     const updatedUser = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true, bonusCredits: true } })
 
     return NextResponse.json({
       success: true,
       id: pending.id,
-      generatedImages: generatedImages,
+      generatedImages: n8nResult.images,
       credits: updatedUser?.credits ?? 0,
       bonusCredits: updatedUser?.bonusCredits ?? 0,
       totalCredits: (updatedUser?.credits ?? 0) + (updatedUser?.bonusCredits ?? 0),
@@ -317,21 +678,19 @@ export async function POST(req: NextRequest) {
     if (preDeducted) {
       console.log("🔄 准备执行退款...")
       try {
-        if (userId) {
-          await prisma.$transaction(async (tx) => {
-            await tx.user.update({
-              where: { id: userId },
-              data: { bonusCredits: { increment: deductedBonus }, credits: { increment: deductedPaid } },
-            })
-            await tx.creditRecord.create({
-              data: { userId, amount: actualCost, type: "REFUND", description: retryFromId ? "折扣重试失败退款" : "生成失败退款" },
-            })
-            if (retryFromId) {
-              await tx.generation.update({ where: { id: retryFromId }, data: { hasUsedDiscountedRetry: false } })
-            }
+        await prisma.$transaction(async (tx) => {
+          await tx.user.update({
+            where: { id: userId },
+            data: { bonusCredits: { increment: deductedBonus }, credits: { increment: deductedPaid } },
           })
-          console.log(`💸 生成失败，已退款：bonus=${deductedBonus}，paid=${deductedPaid} 给用户 ${userId}`)
-        }
+          await tx.creditRecord.create({
+            data: { userId, amount: actualCost, type: "REFUND", description: retryFromId ? "折扣重试失败退款" : "生成失败退款" },
+          })
+          if (retryFromId) {
+            await tx.generation.update({ where: { id: retryFromId }, data: { hasUsedDiscountedRetry: false } })
+          }
+        })
+        console.log(`💸 生成失败，已退款：bonus=${deductedBonus}，paid=${deductedPaid} 给用户 ${userId}`)
       } catch (refundErr) {
         console.error("❌ 退款失败:", refundErr)
       }
