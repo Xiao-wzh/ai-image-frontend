@@ -53,7 +53,9 @@ model User {
   commissionRecordsGenerated CommissionRecord[] @relation("SourceCommissions")
   withdrawals               Withdrawal[]
   watermarkTasks            WatermarkTask[]
+  copywritings              Copywriting[]
 }
+
 
 // 推广佣金记录
 model ReferralRecord {
@@ -181,10 +183,12 @@ model Generation {
   originalImage   String[]
   generatedImage  String?  @db.Text /// 存储完整的、未裁剪的原图 URL
   generatedImages String[] /// 存储九宫格切片图片 URL 数组
+  editingImageIndexes Int[] @default([]) /// 正在编辑中的图片索引
   status                   String   @default("PENDING")
   hasUsedDiscountedRetry Boolean @default(false)
   isWatermarkUnlocked    Boolean @default(false) /// 是否已解锁水印功能
   createdAt                DateTime @default(now())
+
 
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
   appeal Appeal? /// One-to-One: A generation can only be appealed once
@@ -340,3 +344,18 @@ model SystemConfig {
   updatedAt   DateTime @updatedAt       /// 最后更新时间
 }
 
+/// 智能文案生成记录
+model Copywriting {
+  id          String   @id @default(cuid())
+  userId      String
+  platform    String   // e.g. "SHOPEE"
+  productName String
+  content     String   @db.Text // Generated markdown
+  cost        Int
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}

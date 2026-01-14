@@ -13,7 +13,9 @@ const DEFAULT_COSTS: SystemCostConfig = {
     DETAIL_PAGE_STANDARD_COST: 199,
     DETAIL_PAGE_RETRY_COST: 99,
     IMAGE_EDIT_COST: 199,
+    COPYWRITING_COST: 99,
 }
+
 
 const fetcher = async (url: string): Promise<SystemCostConfig> => {
     const res = await fetch(url)

@@ -300,7 +300,16 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
         >
-          <Tabs value={taskType} onValueChange={(v) => setTaskType(v as "MAIN_IMAGE" | "DETAIL_PAGE")}>
+          <Tabs value={taskType} onValueChange={(v) => {
+            setTaskType(v as "MAIN_IMAGE" | "DETAIL_PAGE")
+            // Reset to form view when switching tabs during generation
+            if (isSubmitting || generatedImages.length > 0) {
+              setIsSubmitting(false)
+              setGeneratedImages([])
+              setFullImageUrl(null)
+              setCurrentGenerationId(null)
+            }
+          }}>
             <TabsList className="bg-slate-800/50 border border-white/10 p-1">
               <TabsTrigger
                 value="MAIN_IMAGE"

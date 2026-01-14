@@ -12,15 +12,17 @@ import {
  * These should match the original hardcoded values from lib/constants.ts
  */
 export const DEFAULT_COSTS: SystemCostConfig = {
-    WATERMARK_UNLOCK_COST: 100,
-    WATERMARK_ADD_COST: 0,
-    WATERMARK_REMOVE_COST: 100,
-    MAIN_IMAGE_STANDARD_COST: 199,
-    MAIN_IMAGE_RETRY_COST: 99,
-    DETAIL_PAGE_STANDARD_COST: 199,
-    DETAIL_PAGE_RETRY_COST: 99,
-    IMAGE_EDIT_COST: 199,
+    WATERMARK_UNLOCK_COST: 100, // 解锁水印功能消耗积分
+    WATERMARK_ADD_COST: 0, // 添加水印功能消耗积分
+    WATERMARK_REMOVE_COST: 50, // 去除水印功能消耗积分
+    MAIN_IMAGE_STANDARD_COST: 199, // 主图生成标准消耗积分
+    MAIN_IMAGE_RETRY_COST: 99, // 主图重试消耗积分（折扣价）
+    DETAIL_PAGE_STANDARD_COST: 249, // 详情页生成标准消耗积分
+    DETAIL_PAGE_RETRY_COST: 199, // 详情页重试消耗积分（折扣价）
+    IMAGE_EDIT_COST: 45, // 图片编辑（重绘）消耗积分
+    COPYWRITING_COST: 15, // 智能文案生成消耗积分
 }
+
 
 /**
  * Fetch all system costs from database

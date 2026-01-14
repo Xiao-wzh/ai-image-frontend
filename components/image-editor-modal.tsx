@@ -50,7 +50,7 @@ export function ImageEditorModal({
 
     return createPortal(
         <div
-            className="fixed inset-0 z-[60] flex flex-col bg-black/95"
+            className="fixed inset-0 z-[100000] flex flex-col bg-black/95 pointer-events-auto isolate"
             onClick={(e) => {
                 if (e.target === e.currentTarget) {
                     onClose()
@@ -110,7 +110,7 @@ export function ImageEditorModal({
                                 <Textarea
                                     value={prompt}
                                     onChange={(e) => setPrompt(e.target.value)}
-                                    placeholder="输入修改提示词，例如：换成蓝色背景..."
+                                    placeholder="把你想改动的告诉AI，例如：换成蓝色背景..."
                                     rows={2}
                                     className="w-full bg-white/10 border-white/20 text-white placeholder:text-slate-400 focus:border-purple-500/50 resize-none text-sm"
                                 />

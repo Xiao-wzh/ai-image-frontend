@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { createPortal } from "react-dom"
 import { useSession } from "next-auth/react"
 import { toast } from "sonner"
@@ -110,8 +110,12 @@ export function HistoryDetailDialog({
   // In-place editing state
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
 
+  // Track previous open state to detect initial open
+  const prevOpenRef = useRef(false)
+
   useEffect(() => {
-    if (open) {
+    // Only reset when dialog is first opened (open changes from false to true)
+    if (open && !prevOpenRef.current) {
       setIndex(initialIndex)
       // Reset detail view mode when opening
       setDetailViewMode("SCROLL")
@@ -123,9 +127,18 @@ export function HistoryDetailDialog({
         setViewMode("grid")
       }
     }
+    prevOpenRef.current = open
   }, [open, initialIndex, items])
 
+
   const item = items[index]
+
+  // Clear editing state when switching between items
+  useEffect(() => {
+    setEditingIndex(null)
+    setSelectedImage(null)
+    setSelectedImageIndex(null)
+  }, [index])
 
   // Sync watermark unlock state from item
   useEffect(() => {
@@ -133,6 +146,7 @@ export function HistoryDetailDialog({
       setIsWatermarkUnlocked(item.isWatermarkUnlocked ?? false)
     }
   }, [item])
+
 
   // Fetch watermark templates when unlocked
   const fetchTemplates = useCallback(async () => {
@@ -655,7 +669,7 @@ export function HistoryDetailDialog({
                   </div>
                 ) : item?.taskType === "DETAIL_PAGE" && detailViewMode === "SLICES" ? (
                   /* Detail Page: SLICES Mode (Grid) - with edit functionality */
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/40">
+                  <div className={`grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/40 ${previewImage || selectedImage ? "pointer-events-none" : ""}`}>
                     {displayImages.map((img, i) => (
                       <motion.button
                         key={i}
@@ -664,20 +678,20 @@ export function HistoryDetailDialog({
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.2, delay: i * 0.03 }}
-                        whileHover={editingIndex === i ? undefined : { scale: 1.02 }}
+                        whileHover={item?.editingImageIndexes?.includes(i) ? undefined : { scale: 1.02 }}
                         onClick={() => {
-                          if (editingIndex !== null) return
+                          if (item?.editingImageIndexes?.length) return
                           setSelectedImage(img)
                           setSelectedImageIndex(i)
                         }}
-                        disabled={editingIndex !== null}
-                        title={editingIndex === i ? "重绘中..." : "点击查看/编辑"}
+                        disabled={!!item?.editingImageIndexes?.length}
+                        title={item?.editingImageIndexes?.includes(i) ? "重绘中..." : "点击查看/编辑"}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={img} alt={`Slice ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
 
                         {/* Editing overlay */}
-                        {editingIndex === i ? (
+                        {item?.editingImageIndexes?.includes(i) ? (
                           <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
                             <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
                             <span className="text-xs text-white/80">重绘中...</span>
@@ -698,7 +712,7 @@ export function HistoryDetailDialog({
 
                 ) : viewMode === "grid" ? (
                   /* Main Image: Grid Mode */
-                  <div className="grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2">
+                  <div className={`grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2 ${previewImage || selectedImage ? "pointer-events-none" : ""}`}>
                     {displayImages.map((img, i) => (
                       <motion.button
                         key={i}
@@ -707,20 +721,20 @@ export function HistoryDetailDialog({
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.2, delay: i * 0.03 }}
-                        whileHover={editingIndex === i ? undefined : { scale: 1.03 }}
+                        whileHover={item?.editingImageIndexes?.includes(i) ? undefined : { scale: 1.03 }}
                         onClick={() => {
-                          if (editingIndex !== null) return // Disable click while editing
+                          if (item?.editingImageIndexes?.length) return // Disable click while editing
                           setSelectedImage(img)
                           setSelectedImageIndex(i)
                         }}
-                        disabled={editingIndex !== null}
-                        title={editingIndex === i ? "重绘中..." : "点击查看/编辑"}
+                        disabled={!!item?.editingImageIndexes?.length}
+                        title={item?.editingImageIndexes?.includes(i) ? "重绘中..." : "点击查看/编辑"}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={img} alt={`Generated ${i + 1}`} className="w-full h-full object-cover" />
 
                         {/* Editing overlay */}
-                        {editingIndex === i ? (
+                        {item?.editingImageIndexes?.includes(i) ? (
                           <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
                             <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
                             <span className="text-xs text-white/80">重绘中...</span>
@@ -1081,20 +1095,44 @@ export function HistoryDetailDialog({
 function PreviewImageModal({ src, onClose }: { src: string; onClose: () => void }) {
   return createPortal(
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
-      onClick={onClose}
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 pointer-events-auto"
+      onPointerDownCapture={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      onPointerUpCapture={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+      }}
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        onClose()
+      }}
     >
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.9 }}
-        className="relative max-w-[90vw] max-h-[90vh] overflow-auto"
-        onClick={(e) => e.stopPropagation()}
+      <div
+        onPointerDownCapture={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+        onPointerUpCapture={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+        }}
+        className="relative max-w-[92vw] max-h-[92vh]"
       >
         <Button
           variant="ghost"
           size="icon"
-          onClick={onClose}
+          onClick={(e) => {
+            e.preventDefault()
+            e.stopPropagation()
+            onClose()
+          }}
           className="absolute top-2 right-2 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full"
         >
           <X className="w-5 h-5" />
@@ -1103,10 +1141,11 @@ function PreviewImageModal({ src, onClose }: { src: string; onClose: () => void 
         <img
           src={src}
           alt="Preview"
-          className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+          className="max-w-full max-h-[92vh] object-contain rounded-xl shadow-2xl"
         />
-      </motion.div>
+      </div>
     </div>,
     document.body
   )
 }
+

@@ -60,7 +60,9 @@ export async function GET(req: NextRequest) {
           createdAt: true,
           hasUsedDiscountedRetry: true,
           isWatermarkUnlocked: true,
+          editingImageIndexes: true,
           appeal: {
+
             select: {
               id: true,
               status: true,

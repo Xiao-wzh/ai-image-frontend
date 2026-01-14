@@ -18,8 +18,10 @@ export async function POST(req: NextRequest) {
 
     let preDeducted = false
     let deductedBonus = 0
-
     let deductedPaid = 0
+    let editGenerationId: string | undefined
+    let editImageIndex: number | undefined
+
 
     const session = await auth()
     const userId = session?.user?.id || null
@@ -42,6 +44,11 @@ export async function POST(req: NextRequest) {
         if (typeof imageIndex !== "number" || imageIndex < 0) {
             return NextResponse.json({ error: "无效的 imageIndex" }, { status: 400 })
         }
+
+        // Track for cleanup on failure
+        editGenerationId = generationId
+        editImageIndex = imageIndex
+
         if (!prompt?.trim()) {
             return NextResponse.json({ error: "请输入修改提示词" }, { status: 400 })
         }
@@ -52,7 +59,7 @@ export async function POST(req: NextRequest) {
         // Verify ownership
         const generation = await prisma.generation.findUnique({
             where: { id: generationId },
-            select: { userId: true, generatedImages: true, productName: true },
+            select: { userId: true, generatedImages: true, productName: true, editingImageIndexes: true },
         })
 
         if (!generation) {
@@ -116,6 +123,17 @@ export async function POST(req: NextRequest) {
         deductedBonus = deductResult.deductBonus
         deductedPaid = deductResult.deductPaid
 
+        // Mark image as editing in database (persist across page refresh)
+        const currentEditingIndexes = generation.editingImageIndexes || []
+        if (!currentEditingIndexes.includes(imageIndex)) {
+            await prisma.generation.update({
+                where: { id: generationId },
+                data: {
+                    editingImageIndexes: [...currentEditingIndexes, imageIndex],
+                },
+            })
+        }
+
         // Call N8N for image editing
         const webhookUrl = process.env.N8N_EDIT_WEBHOOK_URL
         if (!webhookUrl) {
@@ -175,14 +193,20 @@ export async function POST(req: NextRequest) {
         }
 
 
-        // Update the Generation record - replace image at index
+        // Update the Generation record - replace image at index and clear editing state
         const updatedImages = [...generation.generatedImages]
         updatedImages[imageIndex] = newImageUrl
+
+        // Remove this index from editingImageIndexes
+        const updatedEditingIndexes = (generation.editingImageIndexes || []).filter(
+            (idx: number) => idx !== imageIndex
+        )
 
         await prisma.generation.update({
             where: { id: generationId },
             data: {
                 generatedImages: updatedImages,
+                editingImageIndexes: updatedEditingIndexes,
             },
         })
 
@@ -238,7 +262,29 @@ export async function POST(req: NextRequest) {
             } catch (refundErr) {
                 console.error("[EDIT_API] Refund failed:", refundErr)
             }
+
+            // Also clear editing state on failure
+            try {
+                if (editGenerationId && typeof editImageIndex === "number") {
+                    const currentGen = await prisma.generation.findUnique({
+                        where: { id: editGenerationId },
+                        select: { editingImageIndexes: true },
+                    })
+                    if (currentGen) {
+                        const cleanedIndexes = (currentGen.editingImageIndexes || []).filter(
+                            (idx: number) => idx !== editImageIndex
+                        )
+                        await prisma.generation.update({
+                            where: { id: editGenerationId },
+                            data: { editingImageIndexes: cleanedIndexes },
+                        })
+                    }
+                }
+            } catch (cleanupErr) {
+                console.error("[EDIT_API] Cleanup editing state failed:", cleanupErr)
+            }
         }
+
 
         return NextResponse.json({ error: "编辑失败，积分已退回", message }, { status: 500 })
     }
