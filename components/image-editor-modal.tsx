@@ -8,6 +8,7 @@ import { X, Pencil, Download, Loader2, Sparkles, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { downloadImage } from "@/lib/utils"
+import { useCosts } from "@/hooks/use-costs"
 
 type EditorMode = "VIEW" | "EDIT"
 
@@ -24,8 +25,10 @@ export function ImageEditorModal({
     onClose,
     onEdit,
 }: ImageEditorModalProps) {
+    const { costs } = useCosts()
     const [mode, setMode] = useState<EditorMode>("VIEW")
     const [prompt, setPrompt] = useState("")
+
 
     // Handle save/download current image
     const handleSaveImage = () => {
@@ -116,9 +119,10 @@ export function ImageEditorModal({
                                     className="w-full h-11 rounded-xl bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold shadow-lg shadow-purple-500/30 disabled:opacity-50"
                                 >
                                     <Sparkles className="w-4 h-4 mr-2" />
-                                    立即生成
-                                    <span className="ml-2 text-xs opacity-80">消耗 199 积分</span>
+                                    立即修改（附带画质超清处理）
+                                    <span className="ml-2 text-xs opacity-80">消耗 {costs.IMAGE_EDIT_COST} 积分</span>
                                 </Button>
+
                             </div>
                         </motion.div>
                     )}

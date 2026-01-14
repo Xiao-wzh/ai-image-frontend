@@ -2,18 +2,30 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
 import { ProductTypePromptKey, ProductTypeKey } from "@/lib/constants"
+import { getSystemCosts } from "@/lib/system-config"
+import type { SystemCostConfig } from "@/lib/types/config"
 import "dotenv/config"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const STANDARD_COST = 199
-const RETRY_COST = 99
+// Get cost based on task type (using dynamic costs)
+function getStandardCost(taskType: string, costs: SystemCostConfig): number {
+  return taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
+}
+
+function getRetryCost(taskType: string, costs: SystemCostConfig): number {
+  return taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST
+}
 
 export async function POST(req: NextRequest) {
+  // Fetch dynamic costs from database
+  const costs = await getSystemCosts()
+
   let generationId: string | null = null
   let preDeducted = false
-  let actualCost = STANDARD_COST
+  let actualCost = costs.MAIN_IMAGE_STANDARD_COST
+
 
   let deductedBonus = 0
   let deductedPaid = 0
@@ -76,9 +88,6 @@ export async function POST(req: NextRequest) {
 
     if (retryFromId) {
       // --- 重试流程 ---
-      actualCost = RETRY_COST
-      console.log(`[GENERATE_API] Discount retry mode - setting actualCost to ${RETRY_COST}`)
-
       const originalGeneration = await prisma.generation.findUnique({
         where: { id: retryFromId },
       })
@@ -93,20 +102,23 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: "该记录已使用过折扣重试机会" }, { status: 400 })
       }
 
+      taskType = originalGeneration.taskType || "MAIN_IMAGE"
+      actualCost = getRetryCost(taskType, costs)
+      console.log(`[GENERATE_API] Discount retry mode for ${taskType} - setting actualCost to ${actualCost}`)
+
       productName = originalGeneration.productName
       productType = originalGeneration.productType as ProductTypeKey
       imageUrls = originalGeneration.originalImage
       platformKey = "SHOPEE" // 暂时硬编码
-      taskType = originalGeneration.taskType || "MAIN_IMAGE"
     } else {
       // --- 标准流程 ---
-      actualCost = STANDARD_COST
-
       productName = String(body?.productName ?? "").trim()
       productType = String(body?.productType ?? "").trim() as ProductTypeKey
       platformKey = String(body?.platformKey ?? "SHOPEE").trim().toUpperCase()
       taskType = String(body?.taskType ?? "MAIN_IMAGE").trim().toUpperCase()
+      actualCost = getStandardCost(taskType, costs)
       const rawImages = body?.images
+
 
       if (!productName) throw new Error("请填写商品名称")
       if (!productType) throw new Error("请选择商品类型")

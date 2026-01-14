@@ -331,3 +331,12 @@ model WatermarkTask {
   @@index([userId])
   @@index([status])
 }
+
+/// 系统配置表（Key-Value 动态配置）
+model SystemConfig {
+  key         String   @id              /// 配置键名（唯一标识）
+  value       String                    /// 配置值（存储为字符串）
+  description String?                   /// 配置说明（帮助管理员理解）
+  updatedAt   DateTime @updatedAt       /// 最后更新时间
+}
+

@@ -14,9 +14,7 @@ import { useSession } from "next-auth/react"
 import { useLoginModal } from "@/hooks/use-login-modal"
 import { ProductTypeLabel, ProductTypeKey } from "@/lib/constants"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-
-const STANDARD_COST = 199
-const RETRY_COST = 99
+import { useCosts } from "@/hooks/use-costs"
 
 type PlatformTreeItem = CascaderPlatformItem
 
@@ -32,6 +30,7 @@ interface UploadZoneProps {
 
 export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const { data: session, update } = useSession()
+  const { costs } = useCosts()
   const loginModal = useLoginModal()
 
   /* ──────────────── state ──────────────── */
@@ -232,7 +231,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           taskType,
           images: uploadedUrls,
         },
-        STANDARD_COST,
+        taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST,
       )
     } catch (e) {
       // Error is already handled and toasted inside handleGeneration
@@ -252,7 +251,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const handleDiscountRetry = useCallback(
     async (retryFromId: string) => {
       try {
-        await handleGeneration({ retryFromId }, RETRY_COST)
+        await handleGeneration({ retryFromId }, costs.MAIN_IMAGE_RETRY_COST)
       } catch (e) {
         // Error is handled inside
       }
@@ -435,7 +434,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                     <Sparkles className="w-5 h-5" />
                     <span>生成图像</span>
                   </div>
-                  <div className="relative text-xs opacity-70 mt-1">费用 {STANDARD_COST} 积分</div>
+                  <div className="relative text-xs opacity-70 mt-1">费用 {taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST} 积分</div>
                 </Button>
                 <p className="text-xs text-slate-500 text-center mt-3 flex items-center justify-center gap-1">
                   <Sparkles className="w-3 h-3" />

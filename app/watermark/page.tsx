@@ -21,6 +21,7 @@ import { useSession } from "next-auth/react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Sidebar } from "@/components/sidebar"
+import { useCosts } from "@/hooks/use-costs"
 
 // Types
 interface WatermarkTask {
@@ -98,6 +99,7 @@ async function uploadToTOS(file: File): Promise<string> {
 
 export default function WatermarkPage() {
     const { update: updateSession } = useSession()
+    const { costs } = useCosts()
     const [selectedImages, setSelectedImages] = useState<SelectedImage[]>([])
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [uploadProgress, setUploadProgress] = useState<string>("")
@@ -217,7 +219,7 @@ export default function WatermarkPage() {
         try {
             // ✅ 先检查积分是否足够
             setUploadProgress("检查积分...")
-            const requiredCredits = selectedImages.length * 50
+            const requiredCredits = selectedImages.length * costs.WATERMARK_REMOVE_COST
 
             const sessionRes = await fetch("/api/auth/session")
             const sessionData = await sessionRes.json()
@@ -368,7 +370,7 @@ export default function WatermarkPage() {
                                     </p>
                                 </div>
                                 <Badge variant="outline" className="w-fit bg-amber-500/10 text-amber-400 border-amber-500/30 px-3 py-1.5">
-                                    <span className="text-lg font-bold">50</span>
+                                    <span className="text-lg font-bold">{costs.WATERMARK_REMOVE_COST}</span>
                                     <span className="ml-1">积分/张</span>
                                 </Badge>
                             </div>
@@ -456,7 +458,7 @@ export default function WatermarkPage() {
                                         ) : selectedImages.length > 0 ? (
                                             <>
                                                 <Upload className="w-5 h-5 mr-2" />
-                                                开始去水印 ({selectedImages.length * 50} 积分)
+                                                开始去水印 ({selectedImages.length * costs.WATERMARK_REMOVE_COST} 积分)
                                             </>
                                         ) : (
                                             <>
@@ -465,6 +467,7 @@ export default function WatermarkPage() {
                                             </>
                                         )}
                                     </Button>
+
                                 </div>
                             </div>
 

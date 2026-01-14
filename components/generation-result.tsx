@@ -16,6 +16,7 @@ import JSZip from "jszip"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
+import { useCosts } from "@/hooks/use-costs"
 
 interface GenerationResultProps {
   generationId: string
@@ -36,6 +37,7 @@ export function GenerationResult({
   onDiscountRetry,
   onPreview,
 }: GenerationResultProps) {
+  const { costs } = useCosts()
   const [viewMode, setViewMode] = useState<"grid" | "full">("grid")
   const [isDownloading, setIsDownloading] = useState(false)
   const [hasUsedRetry, setHasUsedRetry] = useState(false)
@@ -249,8 +251,9 @@ export function GenerationResult({
             className="h-12 rounded-xl border-yellow-400/50 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-300 backdrop-blur-sm transition-all group"
           >
             <SparklesIcon className="w-4 h-4 mr-2 transition-transform group-hover:scale-110" />
-            优惠重试 (99积分)
+            优惠重试 ({costs.MAIN_IMAGE_RETRY_COST}积分)
           </Button>
+
         )}
 
         <Button

@@ -26,7 +26,9 @@ import {
   LayoutGrid,
   Eye,
   AlertTriangle,
+  Pencil,
 } from "lucide-react"
+
 
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -39,9 +41,10 @@ import {
 } from "@/components/ui/select"
 import { cn, downloadImage } from "@/lib/utils"
 import { getWatermarkedUrl, WatermarkParams } from "@/lib/tos-watermark"
-import { WATERMARK_UNLOCK_COST } from "@/lib/constants"
+import { useCosts } from "@/hooks/use-costs"
 import type { HistoryItem } from "@/components/history-card"
 import { ImageEditorModal } from "@/components/image-editor-modal"
+
 
 
 type WatermarkTemplate = {
@@ -75,10 +78,12 @@ export function HistoryDetailDialog({
   onGenerateSuccess: () => void
 }) {
   const { data: session } = useSession()
+  const { costs } = useCosts()
   const [index, setIndex] = useState(initialIndex)
   const [viewMode, setViewMode] = useState<"grid" | "full">("grid")
   const [isDownloading, setIsDownloading] = useState(false)
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false)
+
   const [showDiscountConfirm, setShowDiscountConfirm] = useState(false)
   const [showAppealModal, setShowAppealModal] = useState(false)
   const [isSubmittingAppeal, setIsSubmittingAppeal] = useState(false)
@@ -230,8 +235,9 @@ export function HistoryDetailDialog({
     const bonus = (session?.user as any)?.bonusCredits ?? 0
     const total = paid + bonus
 
-    if (total < 199) {
-      toast.error("余额不足", { description: "再次生成需要 199 积分，请先充值" })
+    const standardCost = item.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
+    if (total < standardCost) {
+      toast.error("余额不足", { description: `再次生成需要 ${standardCost} 积分，请先充值` })
       return
     }
 
@@ -463,7 +469,7 @@ export function HistoryDetailDialog({
                     className="h-8 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white"
                   >
                     <Lock className="w-3.5 h-3.5 mr-1.5" />
-                    解锁水印 ({WATERMARK_UNLOCK_COST}积分)
+                    解锁水印 ({costs.WATERMARK_UNLOCK_COST}积分)
                   </Button>
                 ) : (
                   // Unlocked state - show template selector
@@ -648,43 +654,48 @@ export function HistoryDetailDialog({
                     </div>
                   </div>
                 ) : item?.taskType === "DETAIL_PAGE" && detailViewMode === "SLICES" ? (
-                  /* Detail Page: SLICES Mode (Grid) */
+                  /* Detail Page: SLICES Mode (Grid) - with edit functionality */
                   <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/40">
                     {displayImages.map((img, i) => (
-                      <motion.div
+                      <motion.button
                         key={i}
-                        className="relative aspect-[2/3] group overflow-hidden rounded-xl border border-white/10 bg-black/20"
+                        type="button"
+                        className="relative aspect-[2/3] group overflow-hidden rounded-xl border border-white/10 bg-black/20 cursor-pointer"
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         transition={{ duration: 0.2, delay: i * 0.03 }}
+                        whileHover={editingIndex === i ? undefined : { scale: 1.02 }}
+                        onClick={() => {
+                          if (editingIndex !== null) return
+                          setSelectedImage(img)
+                          setSelectedImageIndex(i)
+                        }}
+                        disabled={editingIndex !== null}
+                        title={editingIndex === i ? "重绘中..." : "点击查看/编辑"}
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={img} alt={`Slice ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                          <Button
-                            size="sm"
-                            onClick={() => downloadOne(img, i)}
-                            className="h-8 bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm"
-                          >
-                            <Download className="w-4 h-4 mr-1" />
-                            下载
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => setPreviewImage(img)}
-                            className="h-8 text-white/80 hover:text-white hover:bg-white/10"
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            放大
-                          </Button>
-                        </div>
+
+                        {/* Editing overlay */}
+                        {editingIndex === i ? (
+                          <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
+                            <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                            <span className="text-xs text-white/80">重绘中...</span>
+                          </div>
+                        ) : (
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                            <Pencil className="w-6 h-6 text-white mb-1" />
+                            <span className="text-xs text-white/80">点击编辑</span>
+                          </div>
+                        )}
+
                         <div className="absolute bottom-2 right-2 text-[10px] text-white/60 bg-black/40 px-2 py-0.5 rounded">
                           {i + 1}/{displayImages.length}
                         </div>
-                      </motion.div>
+                      </motion.button>
                     ))}
                   </div>
+
                 ) : viewMode === "grid" ? (
                   /* Main Image: Grid Mode */
                   <div className="grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2">
@@ -715,10 +726,12 @@ export function HistoryDetailDialog({
                             <span className="text-xs text-white/80">重绘中...</span>
                           </div>
                         ) : (
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                            <Download className="w-8 h-8 text-white drop-shadow-md" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                            <Pencil className="w-6 h-6 text-white drop-shadow-md" />
+                            <span className="text-xs text-white/80">点击编辑</span>
                           </div>
                         )}
+
                       </motion.button>
                     ))}
                   </div>
@@ -752,7 +765,7 @@ export function HistoryDetailDialog({
                   className="h-11 rounded-xl border-yellow-400/50 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-300"
                 >
                   <SparklesIcon className="w-4 h-4 mr-2" />
-                  重新生成 (99积分)
+                  重新生成 ({item?.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST}积分)
                 </Button>
               ) : (
                 <Button
@@ -760,7 +773,7 @@ export function HistoryDetailDialog({
                   variant="outline"
                   className="h-11 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white"
                 >
-                  🔄 重新生成 (199积分)
+                  🔄 重新生成 ({item?.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST}积分)
                 </Button>
               )}
 
@@ -827,7 +840,7 @@ export function HistoryDetailDialog({
               解锁水印功能
             </h4>
             <p className="text-sm text-slate-400 mb-4">
-              支付 <span className="text-cyan-400 font-semibold">{WATERMARK_UNLOCK_COST} 积分</span> 解锁本组作品的水印编辑权限。
+              支付 <span className="text-cyan-400 font-semibold">{costs.WATERMARK_UNLOCK_COST} 积分</span> 解锁本组作品的水印编辑权限。
               <br />
               <span className="text-xs text-slate-500">解锁后永久可用，可随时添加或更换水印。</span>
             </p>
@@ -873,7 +886,7 @@ export function HistoryDetailDialog({
           >
             <h4 className="text-lg font-semibold text-white mb-2">确认重新生成</h4>
             <p className="text-sm text-slate-400 mb-4">
-              将使用相同参数重新生成图片，消耗 <span className="text-purple-400 font-semibold">199 积分</span>。
+              将使用相同参数重新生成图片，消耗 <span className="text-purple-400 font-semibold">{item?.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST} 积分</span>。
             </p>
             <div className="flex gap-3">
               <Button
@@ -915,7 +928,7 @@ export function HistoryDetailDialog({
           >
             <h4 className="text-lg font-semibold text-white mb-2">确认优惠重试</h4>
             <p className="text-sm text-slate-400 mb-4">
-              使用优惠价格重新生成图片，消耗 <span className="text-yellow-400 font-semibold">99 积分</span>。
+              使用优惠价格重新生成图片，消耗 <span className="text-yellow-400 font-semibold">{item?.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST} 积分</span>。
               <br />
               <span className="text-xs text-slate-500">（每条记录仅限一次优惠机会）</span>
             </p>

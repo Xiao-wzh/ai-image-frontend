@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { ProductTypeLabel } from "@/lib/constants"
+import { useCosts } from "@/hooks/use-costs"
 import type { HistoryItem } from "@/components/history-card"
 
 interface TaskItemProps {
@@ -22,6 +23,7 @@ interface TaskItemProps {
 
 export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemProps) {
     const { data: session } = useSession()
+    const { costs } = useCosts()
     const [regenerating, setRegenerating] = useState(false)
     const [showConfirm, setShowConfirm] = useState(false)
 
@@ -50,9 +52,12 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
         const bonus = (session?.user as any)?.bonusCredits ?? 0
         const total = paid + bonus
 
-        // Determine cost based on discount availability
+        // Determine cost based on discount availability and task type
         const isDiscountAvailable = !item.hasUsedDiscountedRetry
-        const cost = isDiscountAvailable ? 99 : 199
+        const isDetailPage = item.taskType === "DETAIL_PAGE"
+        const standardCost = isDetailPage ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
+        const retryCost = isDetailPage ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST
+        const cost = isDiscountAvailable ? retryCost : standardCost
 
         if (total < cost) {
             toast.error("余额不足", { description: `重新生成需要 ${cost} 积分，请先充值` })
@@ -237,7 +242,7 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                             <>
                                 <h4 className="text-lg font-semibold text-white mb-2">确认重新生成</h4>
                                 <p className="text-sm text-slate-400 mb-4">
-                                    将使用相同参数重新生成图片，消耗 <span className="text-yellow-400 font-semibold">99 积分</span>。
+                                    将使用相同参数重新生成图片，消耗 <span className="text-yellow-400 font-semibold">{item.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST} 积分</span>。
                                     <br />
                                     <span className="text-xs text-slate-500">（每条记录仅限一次优惠机会）</span>
                                 </p>
@@ -246,7 +251,7 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                             <>
                                 <h4 className="text-lg font-semibold text-white mb-2">确认重新生成</h4>
                                 <p className="text-sm text-slate-400 mb-4">
-                                    将使用相同参数重新生成图片，消耗 <span className="text-purple-400 font-semibold">199 积分</span>。
+                                    将使用相同参数重新生成图片，消耗 <span className="text-purple-400 font-semibold">{item.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST} 积分</span>。
                                 </p>
                             </>
                         )}

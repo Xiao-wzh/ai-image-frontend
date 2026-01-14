@@ -1,15 +1,17 @@
 import { auth } from "@/auth"
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
-import { WATERMARK_UNLOCK_COST } from "@/lib/constants"
+import { getSystemCost } from "@/lib/system-config"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-const UNLOCK_COST = WATERMARK_UNLOCK_COST
-
 export async function POST(req: NextRequest) {
+    // Fetch cost from database
+    const UNLOCK_COST = await getSystemCost("WATERMARK_UNLOCK_COST")
+
     try {
+
         const session = await auth()
         if (!session?.user?.id) {
             return NextResponse.json({ error: "请先登录" }, { status: 401 })

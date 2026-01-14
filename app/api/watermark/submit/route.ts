@@ -2,15 +2,17 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
 import { addWatermarkJobs, WatermarkJobData } from "@/lib/watermark-queue"
+import { getSystemCost } from "@/lib/system-config"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-// 每张图片去水印费用
-const WATERMARK_COST_PER_IMAGE = 50
-
 export async function POST(req: NextRequest) {
+    // Fetch cost from database
+    const WATERMARK_COST_PER_IMAGE = await getSystemCost("WATERMARK_REMOVE_COST")
+
     try {
+
         // 认证用户
         const session = await auth()
         if (!session?.user?.id) {

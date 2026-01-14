@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
+import { getSystemCost } from "@/lib/system-config"
 import "dotenv/config"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-
-const EDIT_COST = 199
 
 /**
  * POST /api/generate/edit
@@ -14,8 +13,12 @@ const EDIT_COST = 199
  * Body: { generationId, imageIndex, prompt, originalImageUrl }
  */
 export async function POST(req: NextRequest) {
+    // Fetch edit cost from database
+    const EDIT_COST = await getSystemCost("IMAGE_EDIT_COST")
+
     let preDeducted = false
     let deductedBonus = 0
+
     let deductedPaid = 0
 
     const session = await auth()
