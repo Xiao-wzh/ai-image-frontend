@@ -1048,8 +1048,12 @@ export function HistoryDetailDialog({
             setSelectedImage(null)
             setSelectedImageIndex(null)
 
-            // Set editing state
+            // Immediately update local editing state for instant UI feedback
             setEditingIndex(imgIndex)
+            if (item) {
+              // Update the item's editingImageIndexes locally for immediate display
+              item.editingImageIndexes = [...(item.editingImageIndexes || []), imgIndex]
+            }
 
             try {
               const res = await fetch("/api/generate/edit", {
@@ -1083,6 +1087,10 @@ export function HistoryDetailDialog({
               toast.error(message)
             } finally {
               setEditingIndex(null)
+              // Remove from editingImageIndexes
+              if (item) {
+                item.editingImageIndexes = (item.editingImageIndexes || []).filter(i => i !== imgIndex)
+              }
             }
           }}
         />

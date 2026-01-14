@@ -230,7 +230,8 @@ export async function POST(req: NextRequest) {
     // 根据 taskType 选择不同的 webhook
     const webhookUrl = taskType === "DETAIL_PAGE"
       ? process.env.N8N_DETAIL_WEBHOOK_URL
-      : process.env.N8N_GRSAI_WEBHOOK_URL
+      // : process.env.N8N_NEW
+    : process.env.N8N_GRSAI_WEBHOOK_URL
     if (!webhookUrl) {
       throw new Error(taskType === "DETAIL_PAGE" ? "N8N_DETAIL_WEBHOOK_URL 未配置" : "N8N_GRSAI_WEBHOOK_URL 未配置")
     }

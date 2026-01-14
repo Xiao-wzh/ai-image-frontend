@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { ProductTypeLabel } from "@/lib/constants"
-import { AlertCircle, Loader2 } from "lucide-react"
+import { AlertCircle, Loader2, Pencil } from "lucide-react"
 
 export type HistoryItem = {
   id: string
@@ -48,6 +48,7 @@ export function HistoryCard({
   const isPending = status === "PENDING"
   const isFailed = status === "FAILED"
   const isDetailPage = item.taskType === "DETAIL_PAGE"
+  const isEditing = (item.editingImageIndexes?.length || 0) > 0
 
   const handleClick = () => {
     if (isPending) {
@@ -118,6 +119,14 @@ export function HistoryCard({
         </div> */}
 
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-t from-black/60 via-black/0 to-black/0" />
+
+        {/* Editing indicator - top left badge */}
+        {isEditing && (
+          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-purple-500/80 backdrop-blur-sm border border-purple-400/30">
+            <Pencil className="w-3 h-3 text-white animate-pulse" />
+            <span className="text-[10px] text-white font-medium">重绘中</span>
+          </div>
+        )}
       </div>
 
       <div className="p-4 w-full">

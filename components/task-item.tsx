@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useSession } from "next-auth/react"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
-import { AlertCircle, Eye, Loader2, RefreshCw } from "lucide-react"
+import { AlertCircle, Eye, Loader2, RefreshCw, Pencil } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 
@@ -31,6 +31,7 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
     const isPending = status === "PENDING" || status === "PROCESSING"
     const isFailed = status === "FAILED"
     const isCompleted = status === "COMPLETED"
+    const isEditing = (item.editingImageIndexes?.length || 0) > 0
 
     const typeLabel = item.productType
         ? (ProductTypeLabel as any)[item.productType] || item.productType
@@ -179,6 +180,13 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                         {isFailed && (
                             <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">
                                 失败
+                            </Badge>
+                        )}
+                        {/* Editing indicator */}
+                        {isEditing && (
+                            <Badge className="bg-purple-500/20 text-purple-400 border-purple-400/30 text-[10px] px-1.5 py-0 flex items-center gap-1">
+                                <Pencil className="w-2.5 h-2.5 animate-pulse" />
+                                重绘中
                             </Badge>
                         )}
                     </div>
