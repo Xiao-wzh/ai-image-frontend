@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser, BarChart3 } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser, BarChart3, FileText } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -21,6 +21,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { icon: Sparkles, label: "AI 生图", href: "/" },
+  { icon: FileText, label: "智能商品描述", href: "/copywriting" },
   { icon: Droplets, label: "水印模板", href: "/settings/watermark" },
   { icon: Eraser, label: "智能去水印", href: "/watermark" },
   { icon: Images, label: "我的作品", href: "/history" },
@@ -31,6 +32,7 @@ const navItems: NavItem[] = [
 
 ]
 
+
 // 管理员专属导航
 const adminItems: NavItem[] = [
   { icon: BarChart3, label: "收入仪表盘", href: "/admin/dashboard" },
@@ -38,6 +40,7 @@ const adminItems: NavItem[] = [
   { icon: ShieldCheck, label: "售后审核", href: "/admin/appeals" },
   { icon: Settings, label: "提示词管理", href: "/admin/prompts" },
   { icon: Megaphone, label: "公告管理", href: "/admin/announcements" },
+  { icon: Crown, label: "价格设置", href: "/admin/settings" },
 ]
 
 export function Sidebar() {

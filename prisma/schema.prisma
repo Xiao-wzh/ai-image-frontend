@@ -53,7 +53,9 @@ model User {
   commissionRecordsGenerated CommissionRecord[] @relation("SourceCommissions")
   withdrawals               Withdrawal[]
   watermarkTasks            WatermarkTask[]
+  copywritings              Copywriting[]
 }
+
 
 // 推广佣金记录
 model ReferralRecord {
@@ -342,3 +344,18 @@ model SystemConfig {
   updatedAt   DateTime @updatedAt       /// 最后更新时间
 }
 
+/// 智能文案生成记录
+model Copywriting {
+  id          String   @id @default(cuid())
+  userId      String
+  platform    String   // e.g. "SHOPEE"
+  productName String
+  content     String   @db.Text // Generated markdown
+  cost        Int
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
