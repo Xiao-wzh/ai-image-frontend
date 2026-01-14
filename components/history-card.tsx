@@ -21,11 +21,13 @@ export type HistoryItem = {
   originalImage: string[]
   hasUsedDiscountedRetry?: boolean
   isWatermarkUnlocked?: boolean
+  editingImageIndexes?: number[] // Images currently being edited
   appeal?: {
     id: string
     status: string
   } | null
 }
+
 
 export function HistoryCard({
   item,
