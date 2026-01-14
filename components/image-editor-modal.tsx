@@ -43,6 +43,7 @@ export function ImageEditorModal({
         }
         // Close modal and delegate to parent
         onEdit(prompt.trim())
+        toast.success("提交成功，请点击详情页查看")
     }
 
     if (typeof document === "undefined") return null
