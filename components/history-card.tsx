@@ -120,6 +120,17 @@ export function HistoryCard({
 
         <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gradient-to-t from-black/60 via-black/0 to-black/0" />
 
+        {/* Task Type Badge - top right corner, always visible */}
+        {isDetailPage ? (
+          <div className="absolute top-2 right-2 px-2 py-1 rounded-full bg-purple-500/90 backdrop-blur-sm border border-purple-400/40">
+            <span className="text-[10px] text-white font-medium">详情页</span>
+          </div>
+        ) : item.taskType === "MAIN_IMAGE" ? (
+          <div className="absolute top-2 right-2 px-2 py-1 rounded-full bg-blue-500/90 backdrop-blur-sm border border-blue-400/40">
+            <span className="text-[10px] text-white font-medium">主图</span>
+          </div>
+        ) : null}
+
         {/* Editing indicator - top left badge */}
         {isEditing && (
           <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-purple-500/80 backdrop-blur-sm border border-purple-400/30">
@@ -128,6 +139,7 @@ export function HistoryCard({
           </div>
         )}
       </div>
+
 
       <div className="p-4 w-full">
         {/* 标题：强制单行截断 */}

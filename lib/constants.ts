@@ -95,3 +95,22 @@ export const GENERATION_STANDARD_COST = MAIN_IMAGE_STANDARD_COST
 
 // @deprecated 使用 MAIN_IMAGE_RETRY_COST 或 DETAIL_PAGE_RETRY_COST
 export const GENERATION_RETRY_COST = MAIN_IMAGE_RETRY_COST
+
+// ==================== 输出语言配置 ====================
+
+// 生成图片中文字的语言选项
+export const GENERATION_LANGUAGES = [
+  { label: "简体中文", value: "Chinese" },
+  { label: "繁体中文", value: "TraditionalChinese" },
+  { label: "俄文", value: "Russian" },
+  { label: "英文", value: "English" },
+  { label: "日文", value: "Japanese" },
+  { label: "韩文", value: "Korean" },
+  { label: "泰文", value: "Thai" },
+  { label: "越南文", value: "Vietnamese" },
+] as const
+
+// 传递给N8N的是label（中文名称）
+export type GenerationLanguage = (typeof GENERATION_LANGUAGES)[number]["label"]
+export const DEFAULT_OUTPUT_LANGUAGE: GenerationLanguage = "简体中文"
+

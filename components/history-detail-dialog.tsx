@@ -70,12 +70,14 @@ export function HistoryDetailDialog({
   items,
   initialIndex,
   onGenerateSuccess,
+  onItemsChange,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
   items: HistoryItem[]
   initialIndex: number
   onGenerateSuccess: () => void
+  onItemsChange?: (updatedItems: HistoryItem[]) => void
 }) {
   const { data: session } = useSession()
   const { costs } = useCosts()
@@ -1053,6 +1055,8 @@ export function HistoryDetailDialog({
             if (item) {
               // Update the item's editingImageIndexes locally for immediate display
               item.editingImageIndexes = [...(item.editingImageIndexes || []), imgIndex]
+              // Notify parent to trigger re-render of the items list
+              onItemsChange?.([...items])
             }
 
             try {

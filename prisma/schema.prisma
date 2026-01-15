@@ -187,12 +187,14 @@ model Generation {
   status                   String   @default("PENDING")
   hasUsedDiscountedRetry Boolean @default(false)
   isWatermarkUnlocked    Boolean @default(false) /// 是否已解锁水印功能
+  outputLanguage         String  @default("中文") /// 输出文字语言
   createdAt                DateTime @default(now())
 
 
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
   appeal Appeal? /// One-to-One: A generation can only be appealed once
 }
+
 
 /// 商品类型与提示词模板映射表
 model ProductTypePrompt {

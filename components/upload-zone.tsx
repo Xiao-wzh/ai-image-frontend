@@ -12,7 +12,7 @@ import { GenerationLoading } from "./generation-loading"
 import { GenerationResult } from "./generation-result"
 import { useSession } from "next-auth/react"
 import { useLoginModal } from "@/hooks/use-login-modal"
-import { ProductTypeLabel, ProductTypeKey } from "@/lib/constants"
+import { ProductTypeLabel, ProductTypeKey, GENERATION_LANGUAGES, GenerationLanguage, DEFAULT_OUTPUT_LANGUAGE } from "@/lib/constants"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCosts } from "@/hooks/use-costs"
 
@@ -50,6 +50,10 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
 
   // Combo mode state - only visible when taskType is MAIN_IMAGE
   const [isComboMode, setIsComboMode] = useState(false)
+
+  // Output language state - 用label不用value
+  const [outputLanguage, setOutputLanguage] = useState<GenerationLanguage>(DEFAULT_OUTPUT_LANGUAGE)
+  const [isLanguageOpen, setIsLanguageOpen] = useState(false)
 
   // Calculate costs
   const baseCost = taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
@@ -239,6 +243,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           taskType,
           images: uploadedUrls,
           withDetailCombo: isComboMode && taskType === "MAIN_IMAGE",
+          outputLanguage,
         },
         totalCost,
       )
@@ -257,6 +262,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     taskType,
     isComboMode,
     totalCost,
+    outputLanguage,
     handleGeneration,
   ])
 
@@ -408,6 +414,51 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                     placeholder="例如：银河猫咪贴纸"
                     className="w-full h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500 focus:bg-white/10 focus:ring-2 focus:ring-blue-500/20 transition-all backdrop-blur-sm"
                   />
+                </motion.div>
+
+                {/* Language Selector */}
+                <motion.div
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.25 }}
+                  className="md:col-span-2"
+                >
+                  <label className="block text-sm font-medium text-slate-300 mb-2">输出文字语言</label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setIsLanguageOpen(!isLanguageOpen)}
+                      className="w-full flex items-center justify-between h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white hover:bg-white/10 transition-all backdrop-blur-sm"
+                    >
+                      <span>{outputLanguage}</span>
+                      <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isLanguageOpen ? "rotate-180" : ""}`} />
+                    </button>
+                    <AnimatePresence>
+                      {isLanguageOpen && (
+                        <motion.div
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -10 }}
+                          className="absolute z-50 mt-2 w-full bg-slate-800 border border-white/10 rounded-xl overflow-hidden shadow-xl"
+                        >
+                          {GENERATION_LANGUAGES.map(lang => (
+                            <button
+                              key={lang.label}
+                              type="button"
+                              onClick={() => {
+                                setOutputLanguage(lang.label)
+                                setIsLanguageOpen(false)
+                              }}
+                              className={`w-full px-4 py-2.5 text-left text-sm hover:bg-white/10 transition-colors ${outputLanguage === lang.label ? "bg-blue-500/20 text-blue-400" : "text-white"
+                                }`}
+                            >
+                              {lang.label}
+                            </button>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </motion.div>
               </div>
 

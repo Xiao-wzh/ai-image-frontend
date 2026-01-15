@@ -45,6 +45,7 @@ type Appeal = {
         productName: string
         productType: string
         productTypeDescription?: string | null
+        outputLanguage?: string | null
         generatedImages: string[]
         generatedImage: string | null
         originalImage: string[]
@@ -306,6 +307,7 @@ export default function AdminAppealsPage() {
                                         <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">用户</th>
                                         <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">原图</th>
                                         <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">类型</th>
+                                        <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">语言</th>
                                         <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">生成结果</th>
                                         <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">申诉原因</th>
                                         <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">退款</th>
@@ -367,6 +369,11 @@ export default function AdminAppealsPage() {
                                                     <div className="text-xs text-slate-500">
                                                         {appeal.generation.hasUsedDiscountedRetry ? "优惠重试" : "正常生成"}
                                                     </div>
+                                                </td>
+
+                                                {/* Language */}
+                                                <td className="p-4">
+                                                    <span className="text-xs text-slate-300">{appeal.generation.outputLanguage || "中文"}</span>
                                                 </td>
 
                                                 {/* Generated Result */}

@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
                             id: true,
                             productName: true,
                             productType: true,
+                            outputLanguage: true,
                             generatedImages: true,
                             generatedImage: true,
                             originalImage: true,
@@ -50,6 +51,7 @@ export async function GET(req: NextRequest) {
                             createdAt: true,
                         },
                     },
+
                 },
             }),
             prisma.appeal.count({ where }),

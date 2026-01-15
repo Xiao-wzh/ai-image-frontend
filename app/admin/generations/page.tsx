@@ -37,6 +37,7 @@ type Generation = {
     originalImage: string[]
     generatedImage: string | null
     generatedImages: string[]
+    outputLanguage: string | null
     createdAt: string
     user: UserOption | null
 }
@@ -458,9 +459,10 @@ export default function AdminGenerationsPage() {
                     <div className="grid grid-cols-12 gap-4 p-4 border-b border-white/10 text-xs text-slate-400 font-medium">
                         <div className="col-span-2">用户</div>
                         <div className="col-span-2">产品</div>
+                        <div className="col-span-1">语言</div>
                         <div className="col-span-2">原图</div>
                         <div className="col-span-2">九宫格</div>
-                        <div className="col-span-2">状态</div>
+                        <div className="col-span-1">状态</div>
                         <div className="col-span-2">时间</div>
                     </div>
 
@@ -507,6 +509,11 @@ export default function AdminGenerationsPage() {
                                         <Badge variant="outline" className="text-xs mt-1 border-white/20 text-slate-400">
                                             {getProductTypeLabel(item.productType)}
                                         </Badge>
+                                    </div>
+
+                                    {/* Language */}
+                                    <div className="col-span-1">
+                                        <span className="text-xs text-slate-300">{item.outputLanguage || "中文"}</span>
                                     </div>
 
                                     {/* Original Images */}
@@ -565,7 +572,7 @@ export default function AdminGenerationsPage() {
                                     </div>
 
                                     {/* Status */}
-                                    <div className="col-span-2">
+                                    <div className="col-span-1">
                                         {getStatusBadge(item.status)}
                                     </div>
 

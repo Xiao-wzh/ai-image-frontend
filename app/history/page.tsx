@@ -220,12 +220,35 @@ export default function GalleryPage() {
                                 </div>
                               </div>
 
+                              {/* Task Type Badge - top left */}
+                              {item.taskType === "DETAIL_PAGE" ? (
+                                <div className="absolute top-3 left-3 px-2 py-1 rounded-lg bg-purple-500/90 backdrop-blur-sm text-xs text-white font-medium">
+                                  详情页
+                                </div>
+                              ) : item.taskType === "MAIN_IMAGE" ? (
+                                <div className="absolute top-3 left-3 px-2 py-1 rounded-lg bg-blue-500/90 backdrop-blur-sm text-xs text-white font-medium">
+                                  主图
+                                </div>
+                              ) : null}
+
+                              {/* Editing indicator - bottom left */}
+                              {(item.editingImageIndexes?.length || 0) > 0 && (
+                                <div className="absolute bottom-3 left-3 flex items-center gap-1 px-2 py-1 rounded-lg bg-orange-500/90 backdrop-blur-sm border border-orange-400/40">
+                                  <svg className="w-3 h-3 text-white animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                  </svg>
+                                  <span className="text-[10px] text-white font-medium">重绘中</span>
+                                </div>
+                              )}
+
                               {/* Image count badge */}
                               <div className="absolute top-3 right-3 px-2 py-1 rounded-lg bg-black/50 backdrop-blur-sm text-xs text-white flex items-center gap-1">
                                 <ImageIcon className="w-3 h-3" />
                                 <span>{item.generatedImages?.length || 9}</span>
                               </div>
+
                             </div>
+
 
                             {/* Info */}
                             <div className="p-4">
@@ -277,8 +300,8 @@ export default function GalleryPage() {
                               key={pageNum}
                               onClick={() => setPage(pageNum)}
                               className={`w-10 h-10 rounded-xl text-sm font-medium transition-all ${page === pageNum
-                                  ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/25"
-                                  : "text-slate-400 hover:bg-white/10 hover:text-white"
+                                ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg shadow-purple-500/25"
+                                : "text-slate-400 hover:bg-white/10 hover:text-white"
                                 }`}
                             >
                               {pageNum}
@@ -315,6 +338,7 @@ export default function GalleryPage() {
         items={items}
         initialIndex={activeIndex}
         onGenerateSuccess={handleRefresh}
+        onItemsChange={setItems}
       />
     </div>
   )

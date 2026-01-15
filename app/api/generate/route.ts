@@ -138,6 +138,7 @@ async function handleComboGeneration(
   const productName = String(body?.productName ?? "").trim()
   const productType = String(body?.productType ?? "").trim() as ProductTypeKey
   const platformKey = String(body?.platformKey ?? "SHOPEE").trim().toUpperCase()
+  const outputLanguage = String(body?.outputLanguage ?? "简体中文").trim()
   const rawImages = body?.images
 
   // Validation
@@ -254,6 +255,7 @@ async function handleComboGeneration(
         originalImage: imageUrls,
         status: "PENDING",
         isWatermarkUnlocked: true, // Combo bonus: auto-unlock watermark
+        outputLanguage,
       },
     }),
     prisma.generation.create({
@@ -265,6 +267,7 @@ async function handleComboGeneration(
         originalImage: imageUrls,
         status: "PENDING",
         isWatermarkUnlocked: true, // Bonus: auto-unlock watermark for combo
+        outputLanguage,
       },
     }),
   ])
@@ -351,6 +354,7 @@ async function handleComboGeneration(
         prompt_template: task.prompt.promptTemplate,
         images: imageUrls,
         image_count: imageUrls.length,
+        output_language: outputLanguage,
       }
       console.log(`[COMBO] Calling N8N for ${task.taskType}: ${task.webhookUrl}`)
       return callN8N(task.webhookUrl!, payload, task.timeoutMs)
@@ -480,6 +484,7 @@ async function handleSingleGeneration(
     let platformKey: string
     let imageUrls: string[]
     let taskType: string = "MAIN_IMAGE"
+    let outputLanguage: string = "简体中文"
 
     if (retryFromId) {
       // --- 重试流程 ---
@@ -505,12 +510,14 @@ async function handleSingleGeneration(
       productType = originalGeneration.productType as ProductTypeKey
       imageUrls = originalGeneration.originalImage
       platformKey = "SHOPEE"
+      outputLanguage = originalGeneration.outputLanguage || "简体中文"
     } else {
       // --- 标准流程 ---
       productName = String(body?.productName ?? "").trim()
       productType = String(body?.productType ?? "").trim() as ProductTypeKey
       platformKey = String(body?.platformKey ?? "SHOPEE").trim().toUpperCase()
       taskType = String(body?.taskType ?? "MAIN_IMAGE").trim().toUpperCase()
+      outputLanguage = String(body?.outputLanguage ?? "简体中文").trim()
       actualCost = getStandardCost(taskType, costs)
       const rawImages = body?.images
 
@@ -599,6 +606,7 @@ async function handleSingleGeneration(
         originalImage: imageUrls,
         status: "PENDING",
         hasUsedDiscountedRetry: Boolean(retryFromId),
+        outputLanguage,
       },
     })
     generationId = pending.id
@@ -635,6 +643,7 @@ async function handleSingleGeneration(
       prompt_template: promptRecord.promptTemplate,
       images: imageUrls,
       image_count: imageUrls.length,
+      output_language: outputLanguage,
     }
 
     console.log(`[N8N_REQUEST] User: ${userId}, Payload: `, JSON.stringify(n8nPayload, null, 2))
