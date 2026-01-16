@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { requireAdmin } from "@/lib/check-admin"
 import prisma from "@/lib/prisma"
+import { transformGenerationUrls } from "@/lib/cdnUrl"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -78,13 +79,13 @@ export async function GET(req: NextRequest) {
             productTypeDescriptions.map(p => [p.productType, p.description])
         )
 
-        // Enrich appeals with productType description
+        // Enrich appeals with productType description and transform image URLs
         const enrichedAppeals = appeals.map(appeal => ({
             ...appeal,
-            generation: {
+            generation: transformGenerationUrls({
                 ...appeal.generation,
                 productTypeDescription: descriptionMap.get(appeal.generation.productType) || null,
-            },
+            }),
         }))
 
         // Get counts by status for dashboard

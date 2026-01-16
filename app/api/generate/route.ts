@@ -4,7 +4,9 @@ import prisma from "@/lib/prisma"
 import { ProductTypePromptKey, ProductTypeKey } from "@/lib/constants"
 import { getSystemCosts } from "@/lib/system-config"
 import type { SystemCostConfig } from "@/lib/types/config"
+import { toCdnUrlArray } from "@/lib/cdnUrl"
 import "dotenv/config"
+
 
 // Transaction client type
 type TxClient = Omit<typeof prisma, "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends">
@@ -666,11 +668,12 @@ async function handleSingleGeneration(
     return NextResponse.json({
       success: true,
       id: pending.id,
-      generatedImages: n8nResult.images,
+      generatedImages: toCdnUrlArray(n8nResult.images),
       credits: updatedUser?.credits ?? 0,
       bonusCredits: updatedUser?.bonusCredits ?? 0,
       totalCredits: (updatedUser?.credits ?? 0) + (updatedUser?.bonusCredits ?? 0),
     })
+
   } catch (err: any) {
     const message = err?.message || String(err)
     const errName = err?.name

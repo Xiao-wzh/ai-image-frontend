@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
+import { transformGenerationUrls } from "@/lib/cdnUrl"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -133,9 +134,15 @@ export async function GET(req: NextRequest) {
             },
         })
 
+        // Transform image URLs to CDN
+        const transformedAppeals = appeals.map(appeal => ({
+            ...appeal,
+            generation: transformGenerationUrls(appeal.generation),
+        }))
+
         return NextResponse.json({
             success: true,
-            appeals,
+            appeals: transformedAppeals,
             isAdmin,
         })
     } catch (err: any) {

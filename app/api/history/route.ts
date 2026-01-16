@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
+import { transformGenerationUrlsList } from "@/lib/cdnUrl"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -73,9 +74,12 @@ export async function GET(req: NextRequest) {
       prisma.generation.count({ where }),
     ])
 
+    // 转换图片 URL 为 CDN 域名
+    const transformedItems = transformGenerationUrlsList(items)
+
     return NextResponse.json({
       success: true,
-      items,
+      items: transformedItems,
       page: {
         limit,
         offset,
@@ -83,6 +87,7 @@ export async function GET(req: NextRequest) {
         hasMore: offset + items.length < total,
       },
     })
+
   } catch (err: any) {
     const message = err?.message || String(err)
     console.error("❌ history API 错误:", message)
