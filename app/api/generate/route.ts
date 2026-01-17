@@ -613,8 +613,22 @@ async function handleSingleGeneration(
     })
     generationId = pending.id
 
-    const promptRecord =
+    // For DETAIL_PAGE: ignore productType, find first prompt for platform
+    // For MAIN_IMAGE: match productType as before
+    const promptRecord = taskType === "DETAIL_PAGE"
+      ? (await prisma.productTypePrompt.findFirst({
+        where: { isActive: true, taskType: "DETAIL_PAGE", userId, platform: { key: platformKey } },
+        orderBy: { updatedAt: "desc" },
+      })) ||
       (await prisma.productTypePrompt.findFirst({
+        where: { isActive: true, taskType: "DETAIL_PAGE", userId: null, platform: { key: platformKey } },
+        orderBy: { updatedAt: "desc" },
+      })) ||
+      (await prisma.productTypePrompt.findFirst({
+        where: { isActive: true, taskType: "DETAIL_PAGE", userId: null, platform: { key: "GENERAL" } },
+        orderBy: { updatedAt: "desc" },
+      }))
+      : (await prisma.productTypePrompt.findFirst({
         where: { isActive: true, productType, taskType, userId, platform: { key: platformKey } },
         orderBy: { updatedAt: "desc" },
       })) ||

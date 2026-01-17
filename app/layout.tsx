@@ -1,6 +1,5 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Plus_Jakarta_Sans } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import { Toaster } from "sonner"
 import { ThemeProvider } from "next-themes"
@@ -10,12 +9,6 @@ import { LoginModalRoot } from "@/components/login-modal-root"
 import { AnnouncementModalProvider } from "@/hooks/use-announcement-modal"
 import { AnnouncementModalRoot } from "@/components/announcement-modal-root"
 import "./globals.css"
-
-const plusJakartaSans = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  variable: "--font-plus-jakarta",
-  display: "swap",
-})
 
 export const metadata: Metadata = {
   title: "AI 图像生成器 - 仪表盘",
@@ -47,7 +40,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN" suppressHydrationWarning>
-      <body className={`${plusJakartaSans.variable} font-sans antialiased`}>
+      <body className="font-sans antialiased">
         <SessionProvider>
           <LoginModalProviderClient>
             <AnnouncementModalProvider>
