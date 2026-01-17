@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
+import { keyToCdnUrl } from "@/lib/cdnUrl"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -32,9 +33,16 @@ export async function GET(req: NextRequest) {
             }
         })
 
+        // Transform keys to CDN URLs
+        const transformedTasks = tasks.map(task => ({
+            ...task,
+            originalUrl: keyToCdnUrl(task.originalUrl),
+            resultUrl: task.resultUrl ? keyToCdnUrl(task.resultUrl) : null,
+        }))
+
         return NextResponse.json({
             success: true,
-            tasks
+            tasks: transformedTasks
         })
 
     } catch (error: unknown) {

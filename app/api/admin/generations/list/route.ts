@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
+import { transformGenerationUrlsList } from "@/lib/cdnUrl"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -97,8 +98,11 @@ export async function GET(req: NextRequest) {
 
         const totalPages = Math.ceil(total / limit)
 
+        // Transform image keys to CDN URLs
+        const transformedData = transformGenerationUrlsList(data)
+
         return NextResponse.json({
-            data,
+            data: transformedData,
             total,
             totalPages,
             page,

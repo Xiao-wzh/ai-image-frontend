@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
 import { getSystemCost } from "@/lib/system-config"
+import { extractObjectKey, keyToCdnUrl } from "@/lib/cdnUrl"
 import "dotenv/config"
 
 export const runtime = "nodejs"
@@ -193,9 +194,12 @@ export async function POST(req: NextRequest) {
         }
 
 
+        // Extract key from URL before saving
+        const newImageKey = extractObjectKey(newImageUrl) as string
+
         // Update the Generation record - replace image at index and clear editing state
         const updatedImages = [...generation.generatedImages]
-        updatedImages[imageIndex] = newImageUrl
+        updatedImages[imageIndex] = newImageKey
 
         // Remove this index from editingImageIndexes
         const updatedEditingIndexes = (generation.editingImageIndexes || []).filter(
@@ -221,7 +225,7 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            newImageUrl,
+            newImageUrl: keyToCdnUrl(newImageKey),
             imageIndex,
             credits: updatedUser?.credits ?? 0,
             bonusCredits: updatedUser?.bonusCredits ?? 0,

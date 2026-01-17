@@ -4,7 +4,7 @@ import prisma from "@/lib/prisma"
 import { ProductTypePromptKey, ProductTypeKey } from "@/lib/constants"
 import { getSystemCosts } from "@/lib/system-config"
 import type { SystemCostConfig } from "@/lib/types/config"
-import { toCdnUrlArray } from "@/lib/cdnUrl"
+import { toCdnUrlArray, extractObjectKey, keyToCdnUrl } from "@/lib/cdnUrl"
 import "dotenv/config"
 
 
@@ -370,12 +370,15 @@ async function handleComboGeneration(
       const result = n8nResults[i]
 
       if (result.status === "fulfilled" && result.value.success) {
-        // Success
+        // Success - extract keys from URLs before saving
+        const imageKeys = result.value.images.map(url => extractObjectKey(url) as string)
+        const fullImageKey = result.value.fullImageUrl ? extractObjectKey(result.value.fullImageUrl) as string : null
+
         await prisma.generation.update({
           where: { id: task.generationId },
           data: {
-            generatedImages: result.value.images,
-            generatedImage: result.value.fullImageUrl,
+            generatedImages: imageKeys,
+            generatedImage: fullImageKey,
             status: "COMPLETED",
           },
         })
@@ -672,9 +675,13 @@ async function handleSingleGeneration(
       throw new Error(n8nResult.error)
     }
 
+    // Extract keys from URLs before saving
+    const imageKeys = n8nResult.images.map(url => extractObjectKey(url) as string)
+    const fullImageKey = n8nResult.fullImageUrl ? extractObjectKey(n8nResult.fullImageUrl) as string : null
+
     await prisma.generation.update({
       where: { id: pending.id },
-      data: { generatedImages: n8nResult.images, generatedImage: n8nResult.fullImageUrl, status: "COMPLETED" },
+      data: { generatedImages: imageKeys, generatedImage: fullImageKey, status: "COMPLETED" },
     })
 
     const updatedUser = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true, bonusCredits: true } })
@@ -682,7 +689,7 @@ async function handleSingleGeneration(
     return NextResponse.json({
       success: true,
       id: pending.id,
-      generatedImages: toCdnUrlArray(n8nResult.images),
+      generatedImages: imageKeys.map(key => keyToCdnUrl(key)),
       credits: updatedUser?.credits ?? 0,
       bonusCredits: updatedUser?.bonusCredits ?? 0,
       totalCredits: (updatedUser?.credits ?? 0) + (updatedUser?.bonusCredits ?? 0),

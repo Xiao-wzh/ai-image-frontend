@@ -24,6 +24,52 @@ export function toCdnUrl(url: string | null | undefined): string | null | undefi
 }
 
 /**
+ * 从完整 URL 中提取对象 Key (保留查询参数如 x-tos-process)
+ * 支持 TOS 原站 URL、CDN URL，或已经是 key 的情况
+ * @param url 完整 URL 或 key
+ * @returns 对象 key (不含域名，但保留查询参数)
+ */
+export function extractObjectKey(url: string | null | undefined): string | null | undefined {
+    if (!url) return url
+
+    // 已经是 key（不包含 http）
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        return url
+    }
+
+    try {
+        const urlObj = new URL(url)
+        // 返回路径部分 + 查询参数，去掉开头的 /
+        const pathname = urlObj.pathname.startsWith('/') ? urlObj.pathname.slice(1) : urlObj.pathname
+        // 保留查询参数（如 ?x-tos-process=image/crop,...）
+        return pathname + urlObj.search
+    } catch {
+        // URL 解析失败，返回原值
+        return url
+    }
+}
+
+/**
+ * 将对象 Key 转换为 CDN URL
+ * 兼容两种情况：
+ * 1. 新格式：纯 key -> https://CDN_HOST/key
+ * 2. 旧格式：完整 URL -> 替换为 CDN 域名
+ * @param keyOrUrl 对象 key 或完整 URL
+ * @returns CDN URL
+ */
+export function keyToCdnUrl(keyOrUrl: string | null | undefined): string | null | undefined {
+    if (!keyOrUrl) return keyOrUrl
+
+    // 已经是完整 URL，走旧的替换逻辑
+    if (keyOrUrl.startsWith('http://') || keyOrUrl.startsWith('https://')) {
+        return toCdnUrl(keyOrUrl)
+    }
+
+    // 纯 key，拼接 CDN 域名
+    return `https://${CDN_HOST}/${keyOrUrl}`
+}
+
+/**
  * 处理可能包含多个 URL 的字符串（如 originalImage 字段）
  * 将其中所有 TOS 原站域名替换为 CDN 域名
  * @param value 原始字符串
@@ -78,8 +124,9 @@ export function toCdnUrlArray(value: any): any {
 }
 
 /**
- * 转换 Generation 记录中的所有图片 URL
+ * 转换 Generation 记录中的所有图片 URL/Key
  * 统一处理 originalImage, generatedImage, generatedImages 字段
+ * 兼容新格式(key)和旧格式(完整URL)
  * @param record Generation 记录对象
  * @returns 转换后的记录对象（新对象，不修改原对象）
  */
@@ -91,20 +138,22 @@ export function transformGenerationUrls<T>(record: T): T {
     // originalImage 可能是 string 或 string[]
     if ("originalImage" in result && result.originalImage !== undefined) {
         if (Array.isArray(result.originalImage)) {
-            result.originalImage = result.originalImage.map((url: string) => toCdnUrl(url))
+            result.originalImage = result.originalImage.map((url: string) => keyToCdnUrl(url))
         } else if (typeof result.originalImage === "string") {
-            result.originalImage = toCdnUrlString(result.originalImage)
+            result.originalImage = keyToCdnUrl(result.originalImage)
         }
     }
 
-    // generatedImage 是单个 string
+    // generatedImage 是单个 string (可能是 key 或 URL)
     if ("generatedImage" in result && result.generatedImage !== undefined) {
-        result.generatedImage = toCdnUrl(result.generatedImage)
+        result.generatedImage = keyToCdnUrl(result.generatedImage)
     }
 
-    // generatedImages 是 string[] 或 JSON string
+    // generatedImages 是 string[] (可能是 keys 或 URLs)
     if ("generatedImages" in result && result.generatedImages !== undefined) {
-        result.generatedImages = toCdnUrlArray(result.generatedImages)
+        if (Array.isArray(result.generatedImages)) {
+            result.generatedImages = result.generatedImages.map((item: string) => keyToCdnUrl(item))
+        }
     }
 
     return result as T
