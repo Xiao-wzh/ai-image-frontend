@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/check-admin"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-export async function PUT(req: NextRequest) {
+async function handleToggle(req: NextRequest) {
   const guard = await requireAdmin()
   if (!guard.ok) {
     return NextResponse.json({ error: guard.error }, { status: guard.status })
@@ -36,3 +36,11 @@ export async function PUT(req: NextRequest) {
   return NextResponse.json({ success: true, prompt: updated })
 }
 
+// Support both PUT and POST methods
+export async function PUT(req: NextRequest) {
+  return handleToggle(req)
+}
+
+export async function POST(req: NextRequest) {
+  return handleToggle(req)
+}

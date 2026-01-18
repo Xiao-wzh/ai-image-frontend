@@ -11,8 +11,8 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: guard.error }, { status: guard.status })
   }
 
-  const { searchParams } = new URL(req.url)
-  const id = String(searchParams.get("id") ?? "").trim()
+  const body = await req.json().catch(() => null)
+  const id = String(body?.id ?? "").trim()
   if (!id) return NextResponse.json({ error: "缺少 id" }, { status: 400 })
 
   const exists = await prisma.productTypePrompt.findUnique({

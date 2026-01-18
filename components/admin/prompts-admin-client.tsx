@@ -262,7 +262,7 @@ export function PromptsAdminClient() {
       const res = await fetch("/api/admin/prompts/toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: selectedPrompt.id }),
+        body: JSON.stringify({ id: selectedPrompt.id, isActive: !selectedPrompt.isActive }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "切换失败")

@@ -23,6 +23,13 @@ function getRetryCost(taskType: string, costs: SystemCostConfig): number {
   return taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST
 }
 
+// Helper: Fill prompt template with variables
+function fillPromptTemplate(template: string, productName: string, language: string): string {
+  return template
+    .replace(/\$\{productName\}/g, productName)
+    .replace(/\$\{language\}/g, language)
+}
+
 // Helper: Call N8N with timeout
 async function callN8N(
   webhookUrl: string,
@@ -299,7 +306,11 @@ async function handleComboGeneration(
   // If prompt is missing, fail the corresponding task and refund
   const results: Array<{ taskType: string; id: string; status: "COMPLETED" | "FAILED"; error?: string }> = []
 
-  const mainWebhookUrl = process.env.N8N_GRSAI_WEBHOOK_URL
+  // Select webhook URL based on prompt content
+  // If main image prompt starts with "你是", use AUTO webhook, otherwise use GRSAI webhook
+  const mainWebhookUrl = mainPrompt?.promptTemplate?.startsWith("你是")
+    ? process.env.N8N_AUTO_WEBHOOK_URL
+    : process.env.N8N_GRSAI_WEBHOOK_URL
   const detailWebhookUrl = process.env.N8N_DETAIL_WEBHOOK_URL
 
   // Prepare tasks
@@ -348,12 +359,15 @@ async function handleComboGeneration(
     const username = (session?.user as any)?.username ?? (session?.user as any)?.name ?? null
 
     const n8nPromises = tasks.map((task) => {
+      // Fill in template variables before sending
+      const filledPrompt = fillPromptTemplate(task.prompt.promptTemplate, productName, outputLanguage)
+
       const payload = {
         username,
         generation_id: task.generationId,
         product_name: productName,
         product_type: ProductTypePromptKey[productType] || productType,
-        prompt_template: task.prompt.promptTemplate,
+        prompt_template: filledPrompt,
         images: imageUrls,
         image_count: imageUrls.length,
         output_language: outputLanguage,
@@ -648,18 +662,31 @@ async function handleSingleGeneration(
       throw new Error(`未找到 Prompt 模板：platformKey=${platformKey}, productType=${productType}, taskType=${taskType}`)
     }
 
-    // 根据 taskType 选择不同的 webhook
-    const webhookUrl = taskType === "DETAIL_PAGE" ? process.env.N8N_DETAIL_WEBHOOK_URL : process.env.N8N_GRSAI_WEBHOOK_URL
-    if (!webhookUrl) {
-      throw new Error(taskType === "DETAIL_PAGE" ? "N8N_DETAIL_WEBHOOK_URL 未配置" : "N8N_GRSAI_WEBHOOK_URL 未配置")
+    // 根据 taskType 和提示词内容选择不同的 webhook
+    // MAIN_IMAGE: 提示词以"你是"开头用 AUTO，否则用 GRSAI
+    // DETAIL_PAGE: 用 DETAIL webhook
+    let webhookUrl: string | undefined
+    if (taskType === "DETAIL_PAGE") {
+      webhookUrl = process.env.N8N_DETAIL_WEBHOOK_URL
+    } else {
+      // MAIN_IMAGE - check prompt content
+      webhookUrl = promptRecord.promptTemplate.startsWith("你是")
+        ? process.env.N8N_AUTO_WEBHOOK_URL
+        : process.env.N8N_GRSAI_WEBHOOK_URL
     }
+    if (!webhookUrl) {
+      throw new Error(taskType === "DETAIL_PAGE" ? "N8N_DETAIL_WEBHOOK_URL 未配置" : "N8N 主图 Webhook 未配置")
+    }
+
+    // Fill in template variables before sending
+    const filledPrompt = fillPromptTemplate(promptRecord.promptTemplate, productName, outputLanguage)
 
     const n8nPayload = {
       username: (session?.user as any)?.username ?? (session?.user as any)?.name ?? null,
       generation_id: generationId,
       product_name: productName,
       product_type: ProductTypePromptKey[productType] || productType,
-      prompt_template: promptRecord.promptTemplate,
+      prompt_template: filledPrompt,
       images: imageUrls,
       image_count: imageUrls.length,
       output_language: outputLanguage,
