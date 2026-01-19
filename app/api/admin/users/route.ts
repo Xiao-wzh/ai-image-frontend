@@ -8,6 +8,9 @@ export const dynamic = "force-dynamic"
 type SortField = "createdAt" | "credits" | "totalConsumed"
 type SortOrder = "asc" | "desc"
 
+const DEFAULT_PAGE_SIZE = 20
+const MAX_PAGE_SIZE = 100
+
 export async function GET(req: NextRequest) {
   const guard = await requireAdmin()
   if (!guard.ok) {
@@ -15,17 +18,39 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url)
+
+  // Pagination params
+  const page = Math.max(Number(searchParams.get("page") || 1), 1)
+  const limit = Math.min(Math.max(Number(searchParams.get("limit") || DEFAULT_PAGE_SIZE), 1), MAX_PAGE_SIZE)
+
+  // Filter and sort params
   const status = searchParams.get("status") // "active" | "inactive" | null (all)
   const sortBy = (searchParams.get("sortBy") || "createdAt") as SortField
   const sortOrder = (searchParams.get("sortOrder") || "desc") as SortOrder
-  const limit = Math.min(Number(searchParams.get("limit") || 200), 500)
-  const offset = Math.max(Number(searchParams.get("offset") || 0), 0)
+  const search = searchParams.get("search")?.trim() || ""
 
   // 48 hours ago threshold
   const activeThreshold = new Date(Date.now() - 48 * 60 * 60 * 1000)
 
-  // Fetch users with their credit records
-  const users = await prisma.user.findMany({
+  // Build where clause for search
+  const whereClause = search ? {
+    OR: [
+      { email: { contains: search, mode: "insensitive" as const } },
+      { username: { contains: search, mode: "insensitive" as const } },
+      { name: { contains: search, mode: "insensitive" as const } },
+    ],
+  } : {}
+
+  // For computed field sorting (credits, totalConsumed), we need to:
+  // 1. Fetch ALL matching users
+  // 2. Compute the values
+  // 3. Sort
+  // 4. Paginate in memory
+  // For createdAt sorting, we can use Prisma directly
+
+  // Fetch ALL users matching the search criteria (for proper sorting)
+  const allUsers = await prisma.user.findMany({
+    where: whereClause,
     orderBy: sortBy === "createdAt" ? [{ createdAt: sortOrder }] : [{ createdAt: "desc" }],
     select: {
       id: true,
@@ -36,22 +61,18 @@ export async function GET(req: NextRequest) {
       credits: true,
       bonusCredits: true,
       createdAt: true,
-      // Get most recent credit consumption record
       creditRecords: {
         where: { amount: { lt: 0 } },
         orderBy: { createdAt: "desc" },
         select: { createdAt: true, amount: true },
       },
     },
-    take: limit,
-    skip: offset,
   })
 
   // Transform to include lastActiveAt and totalConsumed
-  const usersWithActivity = users.map(user => {
+  const usersWithActivity = allUsers.map(user => {
     const lastCreditRecord = user.creditRecords[0]
     const lastActiveAt = lastCreditRecord?.createdAt || null
-    // Sum all negative amounts (consumption)
     const totalConsumed = user.creditRecords.reduce((sum, r) => sum + Math.abs(r.amount), 0)
     const { creditRecords, ...rest } = user
     return {
@@ -71,8 +92,10 @@ export async function GET(req: NextRequest) {
     filteredUsers = usersWithActivity.filter(u => !u.isActive)
   }
 
-  // Sort by credits or totalConsumed (in-memory since Prisma can't aggregate)
-  if (sortBy === "credits") {
+  // Sort by the selected field (now sorting ALL data before pagination)
+  if (sortBy === "createdAt") {
+    // Already sorted by Prisma
+  } else if (sortBy === "credits") {
     filteredUsers.sort((a, b) => {
       const diff = a.totalCredits - b.totalCredits
       return sortOrder === "desc" ? -diff : diff
@@ -84,15 +107,30 @@ export async function GET(req: NextRequest) {
     })
   }
 
+  // Calculate total for pagination (after filtering)
+  const totalCount = filteredUsers.length
+
+  // Paginate in memory
+  const skip = (page - 1) * limit
+  const paginatedUsers = filteredUsers.slice(skip, skip + limit)
+
   // Get counts for stats
   const activeCount = usersWithActivity.filter(u => u.isActive).length
   const inactiveCount = usersWithActivity.filter(u => !u.isActive).length
 
+  const totalPages = Math.ceil(totalCount / limit)
+
   return NextResponse.json({
     success: true,
-    users: filteredUsers,
+    users: paginatedUsers,
+    pagination: {
+      total: totalCount,
+      page,
+      limit,
+      totalPages,
+    },
     stats: {
-      total: users.length,
+      total: allUsers.length,
       active: activeCount,
       inactive: inactiveCount,
     },

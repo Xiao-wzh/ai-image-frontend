@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { motion } from "framer-motion"
 import {
     Users,
@@ -15,6 +15,8 @@ import {
     ChevronDown,
     Gift,
     Loader2,
+    ChevronLeft,
+    ChevronRight,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -68,6 +70,13 @@ type Stats = {
     inactive: number
 }
 
+type Pagination = {
+    total: number
+    page: number
+    limit: number
+    totalPages: number
+}
+
 type SortField = "createdAt" | "credits" | "totalConsumed"
 type SortOrder = "asc" | "desc"
 
@@ -90,12 +99,15 @@ function formatTimeAgo(dateString: string | null): string {
 export default function AdminUsersPage() {
     const [users, setUsers] = useState<User[]>([])
     const [stats, setStats] = useState<Stats | null>(null)
+    const [pagination, setPagination] = useState<Pagination | null>(null)
     const [loading, setLoading] = useState(true)
     const [statusFilter, setStatusFilter] = useState<string>("all")
     const [searchQuery, setSearchQuery] = useState("")
     const [copied, setCopied] = useState(false)
     const [sortBy, setSortBy] = useState<SortField>("createdAt")
     const [sortOrder, setSortOrder] = useState<SortOrder>("desc")
+    const [currentPage, setCurrentPage] = useState(1)
+    const pageSize = 20
 
     // Gift credits state
     const [giftOpen, setGiftOpen] = useState(false)
@@ -108,9 +120,12 @@ export default function AdminUsersPage() {
         setLoading(true)
         try {
             const params = new URLSearchParams()
+            params.set("page", String(currentPage))
+            params.set("limit", String(pageSize))
             if (statusFilter !== "all") params.set("status", statusFilter)
             params.set("sortBy", sortBy)
             params.set("sortOrder", sortOrder)
+            if (searchQuery.trim()) params.set("search", searchQuery.trim())
 
             const res = await fetch(`/api/admin/users?${params.toString()}`)
             if (!res.ok) throw new Error("获取失败")
@@ -118,34 +133,57 @@ export default function AdminUsersPage() {
             const data = await res.json()
             setUsers(data.users || [])
             setStats(data.stats || null)
+            setPagination(data.pagination || null)
         } catch (err) {
             toast.error("获取用户列表失败")
         } finally {
             setLoading(false)
         }
-    }, [statusFilter, sortBy, sortOrder])
+    }, [statusFilter, sortBy, sortOrder, currentPage, searchQuery])
 
     useEffect(() => {
         fetchUsers()
     }, [fetchUsers])
 
-    // Filter by search query locally
-    const filteredUsers = users.filter(user => {
-        if (!searchQuery) return true
-        const q = searchQuery.toLowerCase()
-        return (
-            user.email.toLowerCase().includes(q) ||
-            user.username?.toLowerCase().includes(q) ||
-            user.name?.toLowerCase().includes(q)
-        )
-    })
+    // Track if this is initial mount
+    const isInitialMount = useRef(true)
+    const prevSortBy = useRef(sortBy)
+    const prevSortOrder = useRef(sortOrder)
+    const prevStatusFilter = useRef(statusFilter)
+
+    // Reset to page 1 only when filters/sort actually change (not on mount)
+    useEffect(() => {
+        if (isInitialMount.current) {
+            isInitialMount.current = false
+            return
+        }
+        // Only reset if the values actually changed
+        if (prevSortBy.current !== sortBy || prevSortOrder.current !== sortOrder || prevStatusFilter.current !== statusFilter) {
+            setCurrentPage(1)
+            prevSortBy.current = sortBy
+            prevSortOrder.current = sortOrder
+            prevStatusFilter.current = statusFilter
+        }
+    }, [statusFilter, sortBy, sortOrder])
+
+    // Debounce search - reset page when search changes
+    useEffect(() => {
+        if (isInitialMount.current) return
+        const timer = setTimeout(() => {
+            setCurrentPage(1)
+        }, 300)
+        return () => clearTimeout(timer)
+    }, [searchQuery])
+
+    // Users are now filtered server-side, use directly
+    const displayUsers = users
 
     // Copy emails feature
     const copyEmails = () => {
-        const emails = filteredUsers.map(u => u.email).join("\n")
+        const emails = displayUsers.map(u => u.email).join("\n")
         navigator.clipboard.writeText(emails).then(() => {
             setCopied(true)
-            toast.success(`已复制 ${filteredUsers.length} 个邮箱到剪贴板`)
+            toast.success(`已复制 ${displayUsers.length} 个邮箱到剪贴板`)
             setTimeout(() => setCopied(false), 2000)
         }).catch(() => {
             toast.error("复制失败")
@@ -317,14 +355,14 @@ export default function AdminUsersPage() {
                             onClick={copyEmails}
                             variant="outline"
                             className="bg-slate-800 border-slate-700 hover:bg-slate-700 whitespace-nowrap"
-                            disabled={filteredUsers.length === 0}
+                            disabled={displayUsers.length === 0}
                         >
                             {copied ? (
                                 <Check className="w-4 h-4 mr-2 text-green-400" />
                             ) : (
                                 <Copy className="w-4 h-4 mr-2" />
                             )}
-                            复制邮箱 ({filteredUsers.length})
+                            复制邮箱 ({displayUsers.length})
                         </Button>
                     </div>
 
@@ -380,14 +418,14 @@ export default function AdminUsersPage() {
                                             <TableCell><Skeleton className="h-4 w-24 bg-slate-700" /></TableCell>
                                         </TableRow>
                                     ))
-                                ) : filteredUsers.length === 0 ? (
+                                ) : displayUsers.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={7} className="text-center py-8 text-slate-400">
                                             暂无数据
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    filteredUsers.map((user) => (
+                                    displayUsers.map((user) => (
                                         <TableRow
                                             key={user.id}
                                             className="border-b border-white/5 hover:bg-white/5 transition-colors"
@@ -456,13 +494,43 @@ export default function AdminUsersPage() {
                         </Table>
                     </div>
 
-                    {/* Footer info */}
-                    <div className="text-center text-sm text-slate-500">
-                        显示 {filteredUsers.length} 个用户
-                        {statusFilter !== "all" && ` (筛选: ${statusFilter === "active" ? "活跃" : "沉睡"})`}
-                    </div>
+                    {/* Pagination Controls */}
+                    {pagination && (
+                        <div className="flex items-center justify-between bg-slate-900/50 border border-white/10 rounded-xl p-4">
+                            <div className="text-sm text-slate-400">
+                                共 <span className="text-white font-medium">{pagination.total}</span> 个用户，
+                                第 <span className="text-purple-400">{pagination.page}</span> / {pagination.totalPages} 页
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                    disabled={currentPage <= 1 || loading}
+                                    className="bg-slate-800 border-slate-700 hover:bg-slate-700"
+                                >
+                                    <ChevronLeft className="w-4 h-4 mr-1" />
+                                    上一页
+                                </Button>
+                                <div className="px-3 py-1 bg-slate-800 rounded-lg text-sm text-white">
+                                    {currentPage}
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setCurrentPage(p => Math.min(pagination.totalPages, p + 1))}
+                                    disabled={currentPage >= pagination.totalPages || loading}
+                                    className="bg-slate-800 border-slate-700 hover:bg-slate-700"
+                                >
+                                    下一页
+                                    <ChevronRight className="w-4 h-4 ml-1" />
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </main>
+
 
             {/* Gift Credits Dialog */}
             <Dialog open={giftOpen} onOpenChange={setGiftOpen}>
