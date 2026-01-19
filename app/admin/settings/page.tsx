@@ -78,7 +78,7 @@ export default function AdminSettingsPage() {
     }
 
     return (
-        <div className="flex min-h-screen bg-slate-950">
+        <div className="flex h-screen bg-slate-950">
             <Sidebar />
             <main className="flex-1 p-6 md:p-8 overflow-y-auto">
                 <div className="max-w-4xl mx-auto space-y-8">
@@ -157,8 +157,8 @@ export default function AdminSettingsPage() {
                                                 onClick={() => handleSave(config.key)}
                                                 disabled={saving === config.key || !hasChanged(config.key)}
                                                 className={`w-20 ${hasChanged(config.key)
-                                                        ? "bg-purple-600 hover:bg-purple-700"
-                                                        : "bg-slate-700 text-slate-500"
+                                                    ? "bg-purple-600 hover:bg-purple-700"
+                                                    : "bg-slate-700 text-slate-500"
                                                     }`}
                                             >
                                                 {saving === config.key ? (

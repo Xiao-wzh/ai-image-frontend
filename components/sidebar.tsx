@@ -101,9 +101,9 @@ export function Sidebar() {
 
   return (
     <>
-      <aside className="w-[240px] bg-slate-900/50 backdrop-blur-xl border-r border-white/5 flex flex-col">
+      <aside className="w-[240px] h-full bg-slate-900/50 backdrop-blur-xl border-r border-white/5 flex flex-col">
         {/* Logo */}
-        <div className="p-6 border-b border-white/5">
+        <div className="p-6 border-b border-white/5 flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg glow-blue">
               <Sparkles className="w-5 h-5 text-white" />
@@ -114,8 +114,8 @@ export function Sidebar() {
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1">
+        {/* Navigation - scrollable */}
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
             const isActive =
               pathname === item.href ||
@@ -199,8 +199,8 @@ export function Sidebar() {
           </div>
         </div> */}
 
-        {/* User Info */}
-        <div className="p-4 border-t border-white/5">
+        {/* User Info - fixed at bottom */}
+        <div className="p-4 border-t border-white/5 flex-shrink-0">
           <div className="glass rounded-xl p-4">
             {status === "loading" ? (
               /* Loading State */

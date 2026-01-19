@@ -12,7 +12,7 @@ export default async function AdminAnnouncementsPage() {
     }
 
     return (
-        <div className="flex min-h-screen bg-slate-950">
+        <div className="flex h-screen bg-slate-950">
             <Sidebar />
             <main className="flex-1 overflow-y-auto">
                 <AnnouncementsAdminClient />

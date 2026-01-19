@@ -135,7 +135,7 @@ export default function AdminDashboardPage() {
     )
 
     return (
-        <div className="flex min-h-screen bg-slate-950">
+        <div className="flex h-screen bg-slate-950">
             <Sidebar />
             <main className="flex-1 p-6 md:p-8 overflow-y-auto">
                 <div className="max-w-7xl mx-auto space-y-8">
