@@ -79,6 +79,11 @@ export default function AdminAppealsPage() {
     const [rejectNote, setRejectNote] = useState("")
     const [processing, setProcessing] = useState<string | null>(null)
 
+    // Approve dialog
+    const [approveOpen, setApproveOpen] = useState(false)
+    const [approvingAppeal, setApprovingAppeal] = useState<Appeal | null>(null)
+    const [approveNote, setApproveNote] = useState("")
+
     const fetchAppeals = useCallback(async () => {
         try {
             const params = new URLSearchParams()
@@ -101,26 +106,28 @@ export default function AdminAppealsPage() {
         fetchAppeals()
     }, [fetchAppeals])
 
-    const handleApprove = async (appeal: Appeal) => {
-        if (!confirm(`确认通过申诉？将退还 ${appeal.refundAmount} 积分给用户 ${appeal.user.email}`)) {
-            return
-        }
+    const handleApprove = async () => {
+        if (!approvingAppeal) return
 
-        setProcessing(appeal.id)
+        setProcessing(approvingAppeal.id)
         try {
             const res = await fetch("/api/admin/appeals/resolve", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    appealId: appeal.id,
+                    appealId: approvingAppeal.id,
                     action: "APPROVE",
+                    adminNote: approveNote.trim() || undefined,
                 }),
             })
 
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || "操作失败")
 
-            toast.success(`申诉已通过，已退还 ${appeal.refundAmount} 积分`)
+            toast.success(`申诉已通过，已退还 ${approvingAppeal.refundAmount} 积分`)
+            setApproveOpen(false)
+            setApprovingAppeal(null)
+            setApproveNote("")
             fetchAppeals()
         } catch (err: any) {
             toast.error(err.message || "操作失败")
@@ -129,9 +136,15 @@ export default function AdminAppealsPage() {
         }
     }
 
+    const openApproveDialog = (appeal: Appeal) => {
+        setApprovingAppeal(appeal)
+        setApproveNote("")
+        setApproveOpen(true)
+    }
+
     const handleReject = async () => {
         if (!rejectingAppeal) return
-        if (rejectNote.trim().length < 5) {
+        if (rejectNote.trim().length < 3) {
             toast.error("拒绝理由至少需要5个字符")
             return
         }
@@ -419,12 +432,13 @@ export default function AdminAppealsPage() {
                                                 {/* Status */}
                                                 <td className="p-4">
                                                     {statusBadge(appeal.status)}
-                                                    {appeal.status === "REJECTED" && appeal.adminNote && (
+                                                    {appeal.status !== "PENDING" && appeal.adminNote && (
                                                         <div className="text-xs text-slate-500 mt-1 truncate max-w-[120px]" title={appeal.adminNote}>
                                                             {appeal.adminNote}
                                                         </div>
                                                     )}
                                                 </td>
+
 
                                                 {/* Date */}
                                                 <td className="p-4">
@@ -441,7 +455,7 @@ export default function AdminAppealsPage() {
                                                     {appeal.status === "PENDING" ? (
                                                         <div className="flex gap-2">
                                                             <Button
-                                                                onClick={() => handleApprove(appeal)}
+                                                                onClick={() => openApproveDialog(appeal)}
                                                                 disabled={processing === appeal.id}
                                                                 size="sm"
                                                                 className="bg-green-600 hover:bg-green-700 text-white text-xs"
@@ -533,8 +547,51 @@ export default function AdminAppealsPage() {
                         </div>
                     </DialogContent>
                 </Dialog>
+
+                {/* Approve Dialog */}
+                <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
+                    <DialogContent className="max-w-md bg-slate-950 border-white/10">
+                        <DialogHeader>
+                            <DialogTitle className="text-white">通过申诉</DialogTitle>
+                        </DialogHeader>
+                        <div className="mt-4 space-y-4">
+                            <div className="text-sm text-slate-300">
+                                确认通过申诉？将退还 <span className="text-green-400 font-medium">{approvingAppeal?.refundAmount}</span> 积分给用户 <span className="text-purple-400">{approvingAppeal?.user.email}</span>
+                            </div>
+                            <div>
+                                <label className="text-sm text-slate-400 block mb-2">备注（可选）</label>
+                                <textarea
+                                    value={approveNote}
+                                    onChange={(e) => setApproveNote(e.target.value)}
+                                    placeholder="可填写审核备注..."
+                                    className="w-full h-20 px-3 py-2 rounded-xl bg-slate-900 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-green-500/50 resize-none"
+                                />
+                            </div>
+                            <div className="flex gap-3 justify-end">
+                                <Button
+                                    onClick={() => setApproveOpen(false)}
+                                    variant="outline"
+                                    className="border-white/10 text-slate-400 hover:text-white"
+                                >
+                                    取消
+                                </Button>
+                                <Button
+                                    onClick={handleApprove}
+                                    disabled={processing === approvingAppeal?.id}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                    {processing === approvingAppeal?.id ? (
+                                        <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                    ) : null}
+                                    确认通过
+                                </Button>
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
             </main>
         </div>
     )
 }
+
 
