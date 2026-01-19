@@ -24,10 +24,11 @@ function getRetryCost(taskType: string, costs: SystemCostConfig): number {
 }
 
 // Helper: Fill prompt template with variables
-function fillPromptTemplate(template: string, productName: string, language: string): string {
+function fillPromptTemplate(template: string, productName: string, language: string, detailBatch: string): string {
   return template
     .replace(/\$\{productName\}/g, productName)
     .replace(/\$\{language\}/g, language)
+    .replace(/\$\{detailBatch\}/g, detailBatch)
 }
 
 // Helper: Call N8N with timeout
@@ -360,7 +361,7 @@ async function handleComboGeneration(
 
     const n8nPromises = tasks.map((task) => {
       // Fill in template variables before sending
-      const filledPrompt = fillPromptTemplate(task.prompt.promptTemplate, productName, outputLanguage)
+      const filledPrompt = fillPromptTemplate(task.prompt.promptTemplate, productName, outputLanguage, task.prompt.detailBatch)
 
       const payload = {
         username,
@@ -679,7 +680,7 @@ async function handleSingleGeneration(
     }
 
     // Fill in template variables before sending
-    const filledPrompt = fillPromptTemplate(promptRecord.promptTemplate, productName, outputLanguage)
+    const filledPrompt = fillPromptTemplate(promptRecord.promptTemplate, productName, outputLanguage, "A")
 
     const n8nPayload = {
       username: (session?.user as any)?.username ?? (session?.user as any)?.name ?? null,

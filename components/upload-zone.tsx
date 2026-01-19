@@ -55,6 +55,10 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const [outputLanguage, setOutputLanguage] = useState<GenerationLanguage>(DEFAULT_OUTPUT_LANGUAGE)
   const [isLanguageOpen, setIsLanguageOpen] = useState(false)
 
+  // Detail batch state - A for first 6 screens, B for last 6 screens
+  const [detailBatch, setDetailBatch] = useState<"A" | "B">("A")
+  const [isDetailBatchOpen, setIsDetailBatchOpen] = useState(false)
+
   // Calculate costs
   const baseCost = taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
   const comboAddOnCost = costs.DETAIL_PAGE_RETRY_COST
@@ -244,6 +248,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           images: uploadedUrls,
           withDetailCombo: isComboMode && taskType === "MAIN_IMAGE",
           outputLanguage,
+          detailBatch: taskType === "DETAIL_PAGE" ? detailBatch : undefined,
         },
         totalCost,
       )
@@ -263,6 +268,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     isComboMode,
     totalCost,
     outputLanguage,
+    detailBatch,
     handleGeneration,
   ])
 
@@ -460,6 +466,59 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                     </AnimatePresence>
                   </div>
                 </motion.div>
+
+                {/* Detail Batch Selector - only show for detail page */}
+                {taskType === "DETAIL_PAGE" && (
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.3 }}
+                    className="md:col-span-1"
+                  >
+                    <label className="block text-sm font-medium text-slate-300 mb-2">生成批次</label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setIsDetailBatchOpen(!isDetailBatchOpen)}
+                        className="w-full flex items-center justify-between h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white hover:bg-white/10 transition-all backdrop-blur-sm"
+                      >
+                        <span>{detailBatch === "A" ? "前六屏" : "后六屏"}</span>
+                        <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform ${isDetailBatchOpen ? "rotate-180" : ""}`} />
+                      </button>
+                      <AnimatePresence>
+                        {isDetailBatchOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: -10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
+                            className="absolute z-50 mt-2 w-full bg-slate-800 border border-white/10 rounded-xl overflow-hidden shadow-xl"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDetailBatch("A")
+                                setIsDetailBatchOpen(false)
+                              }}
+                              className={`w-full px-4 py-2.5 text-left text-sm hover:bg-white/10 transition-colors ${detailBatch === "A" ? "bg-purple-500/20 text-purple-400" : "text-white"}`}
+                            >
+                              前六屏
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setDetailBatch("B")
+                                setIsDetailBatchOpen(false)
+                              }}
+                              className={`w-full px-4 py-2.5 text-left text-sm hover:bg-white/10 transition-colors ${detailBatch === "B" ? "bg-purple-500/20 text-purple-400" : "text-white"}`}
+                            >
+                              后六屏
+                            </button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </motion.div>
+                )}
               </div>
 
               {/* Upload Zone */}
@@ -503,7 +562,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                         onChange={(e) => setIsComboMode(e.target.checked)}
                         className="w-4 h-4 rounded border-amber-400/50 bg-amber-500/20 text-amber-500 focus:ring-amber-500/50 focus:ring-offset-0 cursor-pointer"
                       />
-                      <span className="text-sm font-medium text-white">同时生成详情页</span>
+                      <span className="text-sm font-medium text-white">同时生成详情页（默认前六屏）</span>
                     </label>
 
                     {/* Middle: Description */}
