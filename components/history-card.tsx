@@ -21,6 +21,7 @@ export type HistoryItem = {
   originalImage: string[]
   hasUsedDiscountedRetry?: boolean
   isWatermarkUnlocked?: boolean
+  outputLanguage?: string // Output language for regeneration
   editingImageIndexes?: number[] // Images currently being edited
   appeal?: {
     id: string

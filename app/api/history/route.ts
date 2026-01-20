@@ -61,6 +61,7 @@ export async function GET(req: NextRequest) {
           createdAt: true,
           hasUsedDiscountedRetry: true,
           isWatermarkUnlocked: true,
+          outputLanguage: true,
           editingImageIndexes: true,
           appeal: {
 

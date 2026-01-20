@@ -87,6 +87,7 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                     taskType: item.taskType || "MAIN_IMAGE",
                     images: item.originalImage,
                     platformKey: "SHOPEE",
+                    outputLanguage: item.outputLanguage || "繁体中文",
                 }
 
             const res = await fetch("/api/generate", {

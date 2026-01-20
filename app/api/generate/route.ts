@@ -341,6 +341,15 @@ async function handleComboGeneration(
   }
 
   if (detailPrompt && detailWebhookUrl) {
+    // Update detail generation with actual productType from the prompt
+    if (detailPrompt.productType && detailPrompt.productType !== productType) {
+      await prisma.generation.update({
+        where: { id: detailGen.id },
+        data: { productType: detailPrompt.productType },
+      })
+      console.log(`[COMBO] Updated detail generation productType: ${productType} -> ${detailPrompt.productType}`)
+    }
+
     tasks.push({
       taskType: "DETAIL_PAGE",
       generationId: detailGen.id,
