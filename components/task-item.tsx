@@ -33,9 +33,10 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
     const isCompleted = status === "COMPLETED"
     const isEditing = (item.editingImageIndexes?.length || 0) > 0
 
-    const typeLabel = item.productType
-        ? (ProductTypeLabel as any)[item.productType] || item.productType
-        : ""
+    const typeLabel = item.productTypeDescription
+        || (item.productType ? (ProductTypeLabel as any)[item.productType] : null)
+        || item.productType
+        || ""
 
     // Get cover image based on status
     const getCoverImage = () => {

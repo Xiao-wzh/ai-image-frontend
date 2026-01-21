@@ -75,8 +75,33 @@ export async function GET(req: NextRequest) {
       prisma.generation.count({ where }),
     ])
 
+    // Get unique productTypes and fetch their descriptions
+    const productTypes = [...new Set(items.map(g => g.productType).filter(Boolean))] as string[]
+    const productTypeDescriptions = await prisma.productTypePrompt.findMany({
+      where: {
+        productType: { in: productTypes },
+        isActive: true,
+      },
+      select: {
+        productType: true,
+        description: true,
+      },
+      distinct: ['productType'],
+    })
+
+    // Create a map for quick lookup
+    const descriptionMap = new Map(
+      productTypeDescriptions.map(p => [p.productType, p.description])
+    )
+
+    // Enrich items with productTypeDescription
+    const enrichedItems = items.map(item => ({
+      ...item,
+      productTypeDescription: descriptionMap.get(item.productType) || null,
+    }))
+
     // 转换图片 URL 为 CDN 域名
-    const transformedItems = transformGenerationUrlsList(items)
+    const transformedItems = transformGenerationUrlsList(enrichedItems)
 
     return NextResponse.json({
       success: true,

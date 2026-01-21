@@ -13,6 +13,7 @@ export type HistoryItem = {
   id: string
   productName: string
   productType: string
+  productTypeDescription?: string | null // Chinese name from database
   taskType?: string // MAIN_IMAGE / DETAIL_PAGE
   generatedImages: string[]
   generatedImage?: string | null
@@ -41,9 +42,10 @@ export function HistoryCard({
 }) {
   const cover = item.generatedImages?.[0]
 
-  const typeLabel = item.productType
-    ? (ProductTypeLabel as any)[item.productType] || item.productType
-    : ""
+  const typeLabel = item.productTypeDescription
+    || (item.productType ? (ProductTypeLabel as any)[item.productType] : null)
+    || item.productType
+    || ""
 
   const status = (item.status || "COMPLETED").toUpperCase()
   const isPending = status === "PENDING"
