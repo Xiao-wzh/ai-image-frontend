@@ -18,6 +18,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sidebar } from "@/components/sidebar"
+import { ProductTypeLabel } from "@/lib/constants"
 import {
     Dialog,
     DialogContent,
@@ -377,7 +378,7 @@ export default function AdminAppealsPage() {
                                                 {/* Product Type / Platform */}
                                                 <td className="p-4">
                                                     <div className="text-sm text-white">
-                                                        {appeal.generation.productTypeDescription || appeal.generation.productType || "-"}
+                                                        {appeal.generation.productTypeDescription || (ProductTypeLabel as any)[appeal.generation.productType] || appeal.generation.productType || "-"}
                                                     </div>
                                                     <div className="text-xs text-slate-500">
                                                         {appeal.generation.hasUsedDiscountedRetry ? "优惠重试" : "正常生成"}

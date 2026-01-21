@@ -14,6 +14,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ProductTypeLabel } from "@/lib/constants"
 
 type UserOption = {
     id: string
@@ -33,6 +34,7 @@ type Generation = {
     id: string
     productName: string
     productType: string
+    productTypeDescription: string | null
     status: string
     originalImage: string[]
     generatedImage: string | null
@@ -224,16 +226,19 @@ export default function AdminGenerationsPage() {
         return <Badge className={`${config.color} border`}>{config.label}</Badge>
     }
 
-    // Get product type label
-    const getProductTypeLabel = (key: string) => {
-        const found = filteredProductTypes.find(t => t.key === key)
+    // Get product type label - prefer description from API
+    const getProductTypeLabel = (item: Generation) => {
+        // First: use description from database (via API)
+        if (item.productTypeDescription) return item.productTypeDescription
+        // Second: search in platforms config
+        const found = filteredProductTypes.find(t => t.key === item.productType)
         if (found) return found.label
-        // Search all platforms
         for (const p of platforms) {
-            const pr = p.prompts.find(pr => pr.productType === key)
+            const pr = p.prompts.find(pr => pr.productType === item.productType)
             if (pr) return pr.productTypeLabel
         }
-        return key
+        // Fallback to ProductTypeLabel constants
+        return (ProductTypeLabel as any)[item.productType] || item.productType
     }
 
     return (
@@ -507,7 +512,7 @@ export default function AdminGenerationsPage() {
                                     <div className="col-span-2">
                                         <div className="text-sm text-white truncate" title={item.productName}>{item.productName}</div>
                                         <Badge variant="outline" className="text-xs mt-1 border-white/20 text-slate-400">
-                                            {getProductTypeLabel(item.productType)}
+                                            {getProductTypeLabel(item)}
                                         </Badge>
                                     </div>
 

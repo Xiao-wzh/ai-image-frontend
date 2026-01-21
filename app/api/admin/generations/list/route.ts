@@ -96,10 +96,35 @@ export async function GET(req: NextRequest) {
             prisma.generation.count({ where }),
         ])
 
+        // Get unique productTypes and fetch their descriptions
+        const productTypes = [...new Set(data.map(g => g.productType).filter(Boolean))] as string[]
+        const productTypeDescriptions = await prisma.productTypePrompt.findMany({
+            where: {
+                productType: { in: productTypes },
+                isActive: true,
+            },
+            select: {
+                productType: true,
+                description: true,
+            },
+            distinct: ['productType'],
+        })
+
+        // Create a map for quick lookup
+        const descriptionMap = new Map(
+            productTypeDescriptions.map(p => [p.productType, p.description])
+        )
+
+        // Enrich data with productTypeDescription
+        const enrichedData = data.map(g => ({
+            ...g,
+            productTypeDescription: descriptionMap.get(g.productType) || null,
+        }))
+
         const totalPages = Math.ceil(total / limit)
 
         // Transform image keys to CDN URLs
-        const transformedData = transformGenerationUrlsList(data)
+        const transformedData = transformGenerationUrlsList(enrichedData)
 
         return NextResponse.json({
             data: transformedData,
