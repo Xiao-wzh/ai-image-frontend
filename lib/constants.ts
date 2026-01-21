@@ -108,6 +108,10 @@ export const GENERATION_LANGUAGES = [
   { label: "韩文", value: "Korean" },
   { label: "泰文", value: "Thai" },
   { label: "越南文", value: "Vietnamese" },
+  // 印尼  巴西  葡萄牙
+  { label: "印尼", value: "Indonesia"},
+  { label: "巴西", value: "Brazil"},
+  { label: "葡萄牙", value: "Portugal"},
 ] as const
 
 // 传递给N8N的是label（中文名称）
