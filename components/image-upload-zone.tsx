@@ -1,10 +1,11 @@
 "use client"
 
 import { useCallback } from "react"
-import { useDropzone } from "react-dropzone"
+import { useDropzone, FileRejection } from "react-dropzone"
 import { motion, AnimatePresence } from "framer-motion"
 import { Upload, X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { toast } from "sonner"
 
 interface ImageUploadZoneProps {
   files: File[]
@@ -30,10 +31,18 @@ export function ImageUploadZone({
     [files, maxFiles, onFilesChange]
   )
 
+  const onDropRejected = useCallback((fileRejections: FileRejection[]) => {
+    if (fileRejections.length > 0) {
+      toast.error("不支持该格式文件，请上传 JPG、PNG 格式图片")
+    }
+  }, [])
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
+    onDropRejected,
     accept: {
-      "image/*": [".png", ".jpg", ".jpeg"],
+      "image/png": [".png"],
+      "image/jpeg": [".jpg", ".jpeg"],
     },
     maxFiles: maxFiles - files.length,
     disabled: files.length >= maxFiles,
