@@ -8,6 +8,7 @@ import { Sidebar } from "@/components/sidebar"
 import { UploadZone } from "@/components/upload-zone"
 import { RegisterModal } from "@/components/register-modal"
 import { UserAccountNav } from "@/components/user-account-nav"
+import { TopBanner } from "@/components/top-banner"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { LogIn, Megaphone } from "lucide-react"
@@ -36,6 +37,7 @@ function DashboardContent() {
     <div className="flex h-screen bg-slate-950">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
+        <TopBanner />
         {/* Header with Auth */}
         <header className="absolute top-0 right-0 p-6 z-10 flex items-center gap-3">
           {/* Announcement Button */}

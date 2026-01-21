@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Search, Sparkles, Image as ImageIcon, Download, Eye, ChevronLeft, ChevronRight } from "lucide-react"
 
 import { Sidebar } from "@/components/sidebar"
+import { TopBanner } from "@/components/top-banner"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { HistoryCard, type HistoryItem } from "@/components/history-card"
@@ -87,6 +88,7 @@ export default function GalleryPage() {
       <Sidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <TopBanner />
         <main className="flex-1 overflow-y-auto min-w-0">
           <div className="relative pt-10 pb-8 px-8 min-w-0">
             {/* Aurora gradient background */}

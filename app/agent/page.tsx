@@ -22,6 +22,7 @@ import {
 } from "lucide-react"
 
 import { Sidebar } from "@/components/sidebar"
+import { TopBanner } from "@/components/top-banner"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
@@ -247,6 +248,7 @@ export default function AgentCenterPage() {
         <div className="flex h-screen bg-slate-950">
             <Sidebar />
             <div className="flex-1 flex flex-col overflow-hidden">
+                <TopBanner />
                 <main className="flex-1 overflow-y-auto">
                     {/* Hero Background */}
                     <div className="relative pt-8 pb-8 px-8">

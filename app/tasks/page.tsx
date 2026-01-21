@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { ListTodo, RefreshCw, Search, ChevronLeft, ChevronRight, Filter } from "lucide-react"
 
 import { Sidebar } from "@/components/sidebar"
+import { TopBanner } from "@/components/top-banner"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { TaskItem } from "@/components/task-item"
@@ -136,6 +137,7 @@ export default function TasksPage() {
             <Sidebar />
 
             <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+                <TopBanner />
                 <main className="flex-1 overflow-y-auto min-w-0">
                     <div className="relative pt-10 pb-8 px-8 min-w-0">
                         {/* Aurora gradient background */}
@@ -312,8 +314,8 @@ export default function TasksPage() {
                                                             key={pageNum}
                                                             onClick={() => setPage(pageNum)}
                                                             className={`w-8 h-8 rounded-lg text-sm transition-all ${page === pageNum
-                                                                    ? "bg-purple-600 text-white"
-                                                                    : "text-slate-400 hover:bg-white/10 hover:text-white"
+                                                                ? "bg-purple-600 text-white"
+                                                                : "text-slate-400 hover:bg-white/10 hover:text-white"
                                                                 }`}
                                                         >
                                                             {pageNum}

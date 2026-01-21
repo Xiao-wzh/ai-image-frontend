@@ -436,8 +436,8 @@ export function AnnouncementsAdminClient() {
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="NORMAL">普通</SelectItem>
-                                                <SelectItem value="PINNED">置顶</SelectItem>
+                                                <SelectItem value="NORMAL">🔔 普通弹窗 (Modal)</SelectItem>
+                                                <SelectItem value="PINNED">📢 顶部飘屏 (Top Banner)</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
