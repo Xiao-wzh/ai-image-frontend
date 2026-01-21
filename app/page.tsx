@@ -39,7 +39,7 @@ function DashboardContent() {
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopBanner />
         {/* Header with Auth */}
-        <header className="absolute top-0 right-0 p-6 z-10 flex items-center gap-3">
+        <header className="absolute top-0 right-0 p-6 z-50 flex items-center gap-3">
           {/* Announcement Button */}
           <motion.div
             initial={{ opacity: 0, x: 20 }}
