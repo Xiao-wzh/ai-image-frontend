@@ -33,7 +33,7 @@ export function ImageUploadZone({
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      "image/*": [".png", ".jpg", ".jpeg", ".webp"],
+      "image/*": [".png", ".jpg", ".jpeg"],
     },
     maxFiles: maxFiles - files.length,
     disabled: files.length >= maxFiles,
@@ -103,7 +103,7 @@ export function ImageUploadZone({
                     : "拖拽图片到此处或点击上传"}
                 </p>
                 <p className="text-sm text-slate-500 mt-1">
-                  支持 JPG、PNG、WEBP 格式，最多 {maxFiles} 张
+                  支持 JPG、PNG 格式，最多 {maxFiles} 张
                 </p>
               </div>
 
@@ -149,7 +149,7 @@ export function ImageUploadZone({
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.2 } }}
-                    transition={{ 
+                    transition={{
                       layout: { type: "spring", stiffness: 300, damping: 30 },
                       opacity: { duration: 0.2 },
                       scale: { duration: 0.2 }
