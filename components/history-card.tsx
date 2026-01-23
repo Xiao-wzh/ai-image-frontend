@@ -15,6 +15,9 @@ export type HistoryItem = {
   productType: string
   productTypeDescription?: string | null // Chinese name from database
   taskType?: string // MAIN_IMAGE / DETAIL_PAGE
+  mode?: string // CREATIVE / CLONE
+  features?: string // 卖点（克隆模式）
+  refImages?: string[] // 参考图（克隆模式）
   generatedImages: string[]
   generatedImage?: string | null
   createdAt: string | Date

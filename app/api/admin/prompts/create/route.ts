@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
   const platformId = String(body?.platformId ?? "").trim()
   const productType = String(body?.productType ?? "").trim()
   const taskType = String(body?.taskType ?? "MAIN_IMAGE").trim()
+  const mode = String(body?.mode ?? "CREATIVE").trim().toUpperCase()
   const description = String(body?.description ?? "").trim()
   const promptTemplate = String(body?.promptTemplate ?? "").trim()
   const userIdRaw = body?.userId
@@ -23,14 +24,16 @@ export async function POST(req: NextRequest) {
   if (!platformId) return NextResponse.json({ error: "缺少 platformId" }, { status: 400 })
   if (!productType) return NextResponse.json({ error: "缺少 productType" }, { status: 400 })
   if (!promptTemplate) return NextResponse.json({ error: "promptTemplate 不能为空" }, { status: 400 })
+  if (!["CREATIVE", "CLONE"].includes(mode)) return NextResponse.json({ error: "mode 必须是 CREATIVE 或 CLONE" }, { status: 400 })
 
-  // 防止重复：同一平台 + 同一 productType + 同一 taskType + 同一 userId（null 表示系统）只允许一条
+  // 防止重复：同一平台 + 同一 productType + 同一 taskType + 同一 mode + 同一 userId（null 表示系统）只允许一条
   const existing = await prisma.productTypePrompt.findFirst({
     where: {
       platformId,
       userId,
       productType,
       taskType,
+      mode,
     },
     select: { id: true },
   })
@@ -56,6 +59,7 @@ export async function POST(req: NextRequest) {
       userId,
       productType,
       taskType,
+      mode,
       description: description || null,
       promptTemplate,
       isActive: true,
@@ -66,6 +70,7 @@ export async function POST(req: NextRequest) {
       userId: true,
       productType: true,
       taskType: true,
+      mode: true,
       description: true,
       promptTemplate: true,
       isActive: true,

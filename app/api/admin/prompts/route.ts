@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
           id: true,
           productType: true,
           taskType: true,
+          mode: true,
           description: true,
           promptTemplate: true,
           isActive: true,

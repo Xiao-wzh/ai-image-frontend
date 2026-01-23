@@ -30,6 +30,7 @@ interface Prompt {
   id: string
   productType: string
   taskType: string
+  mode: string  // 添加 mode 字段
   description: string | null
   promptTemplate: string
   isActive: boolean
@@ -89,6 +90,7 @@ const userLabel = (u?: AdminUser | null) => {
 export function PromptsAdminClient() {
   // Filters
   const [taskType, setTaskType] = useState<TaskType>("MAIN_IMAGE")
+  const [promptMode, setPromptMode] = useState<"CREATIVE" | "CLONE">("CREATIVE")  // New: mode filter
   const [activePlatformId, setActivePlatformId] = useState<string | null>(null)
   const [scope, setScope] = useState<Scope>("all")
   const [searchQuery, setSearchQuery] = useState("")
@@ -99,6 +101,7 @@ export function PromptsAdminClient() {
   const [editDraft, setEditDraft] = useState("")
   const [editDescription, setEditDescription] = useState("")
   const [editProductType, setEditProductType] = useState("")
+  const [editMode, setEditMode] = useState<"CREATIVE" | "CLONE">("CREATIVE")  // New: mode for create/edit
   const [editIsActive, setEditIsActive] = useState(true)
   const [editUserId, setEditUserId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -126,10 +129,12 @@ export function PromptsAdminClient() {
     return platforms.find((p) => p.id === activePlatformId) || null
   }, [platforms, activePlatformId])
 
-  // Filter prompts by taskType and search
+  // Filter prompts by taskType, mode, and search
   const filteredPrompts = useMemo(() => {
     if (!currentPlatform) return []
-    let prompts = currentPlatform.prompts.filter((p) => p.taskType === taskType)
+    let prompts = currentPlatform.prompts.filter(
+      (p) => p.taskType === taskType && (p.mode || "CREATIVE") === promptMode
+    )
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
@@ -142,7 +147,7 @@ export function PromptsAdminClient() {
     }
 
     return prompts
-  }, [currentPlatform, taskType, searchQuery])
+  }, [currentPlatform, taskType, promptMode, searchQuery])
 
   // Get selected prompt
   const selectedPrompt = useMemo(() => {
@@ -165,7 +170,7 @@ export function PromptsAdminClient() {
   useEffect(() => {
     setSelectedPromptId(null)
     setIsCreating(false)
-  }, [taskType, activePlatformId])
+  }, [taskType, activePlatformId, promptMode])  // 添加 promptMode 到依赖
 
   const isDirty = useMemo(() => {
     if (isCreating) return editDraft.trim().length > 0
@@ -214,6 +219,7 @@ export function PromptsAdminClient() {
           platformId: activePlatformId,
           productType: editProductType.trim(),
           taskType,
+          mode: editMode,
           description: editDescription.trim() || null,
           promptTemplate: editDraft.trim(),
           userId: editUserId,
@@ -230,7 +236,7 @@ export function PromptsAdminClient() {
     } finally {
       setSaving(false)
     }
-  }, [activePlatformId, editProductType, taskType, editDescription, editDraft, editUserId, mutate])
+  }, [activePlatformId, editProductType, taskType, editMode, editDescription, editDraft, editUserId, mutate])
 
   const handleDelete = useCallback(async () => {
     if (!selectedPrompt) return
@@ -279,9 +285,10 @@ export function PromptsAdminClient() {
     setEditDraft("")
     setEditDescription("")
     setEditProductType("")
+    setEditMode(promptMode)  // Use current mode filter
     setEditIsActive(true)
     setEditUserId(null)
-  }, [])
+  }, [promptMode])
 
   const cancelCreate = useCallback(() => {
     setIsCreating(false)
@@ -316,6 +323,24 @@ export function PromptsAdminClient() {
             >
               <FileText className="w-4 h-4" />
               详情长图
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
+        {/* Mode Toggle - Creative vs Clone */}
+        <Tabs value={promptMode} onValueChange={(v) => setPromptMode(v as "CREATIVE" | "CLONE")}>
+          <TabsList className="bg-slate-800/50 border border-white/10 p-1">
+            <TabsTrigger
+              value="CREATIVE"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white px-5"
+            >
+              ✨ 创意模式
+            </TabsTrigger>
+            <TabsTrigger
+              value="CLONE"
+              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-600 data-[state=active]:to-orange-600 data-[state=active]:text-white px-5"
+            >
+              ⚡ 克隆模式
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -545,6 +570,24 @@ export function PromptsAdminClient() {
               <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {isCreating && (
                   <>
+                    {/* Mode Display */}
+                    <div className="p-3 rounded-lg bg-gradient-to-r from-slate-800/50 to-slate-700/50 border border-white/10">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-400">创建模式:</span>
+                        <span className={cn(
+                          "px-3 py-1 rounded-full text-xs font-semibold",
+                          editMode === "CREATIVE" 
+                            ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white"
+                            : "bg-gradient-to-r from-amber-600 to-orange-600 text-white"
+                        )}>
+                          {editMode === "CREATIVE" ? "✨ 创意模式" : "⚡ 克隆模式"}
+                        </span>
+                        <span className="text-xs text-slate-500 ml-auto">
+                          (由当前选中的标签决定)
+                        </span>
+                      </div>
+                    </div>
+
                     {/* Product Type */}
                     <div>
                       <label className="block text-sm font-medium text-slate-400 mb-2">产品类型 (productType)</label>

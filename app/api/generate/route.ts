@@ -24,11 +24,20 @@ function getRetryCost(taskType: string, costs: SystemCostConfig): number {
 }
 
 // Helper: Fill prompt template with variables
-function fillPromptTemplate(template: string, productName: string, language: string, detailBatch: string): string {
+function fillPromptTemplate(
+  template: string,
+  productName: string,
+  language: string,
+  detailBatch: string,
+  features?: string,
+  refImageCount?: number
+): string {
   return template
     .replace(/\$\{productName\}/g, productName)
     .replace(/\$\{language\}/g, language)
     .replace(/\$\{detailBatch\}/g, detailBatch)
+    .replace(/\$\{features\}/g, features || "")
+    .replace(/\$\{numberOfReferenceImages\}/g, String(refImageCount || 0))
 }
 
 // Helper: Call N8N with timeout
@@ -473,8 +482,8 @@ async function handleSingleGeneration(
   let deductedPaid = 0
 
   // 并发限制设置：主图 2 个，详情页 1 个
-  const MAX_CONCURRENT_MAIN_IMAGE = 2
-  const MAX_CONCURRENT_DETAIL_PAGE = 1
+  const MAX_CONCURRENT_MAIN_IMAGE = 10
+  const MAX_CONCURRENT_DETAIL_PAGE = 10
 
   const preTaskType = String(body?.taskType || "MAIN_IMAGE").trim().toUpperCase()
 
@@ -514,13 +523,17 @@ async function handleSingleGeneration(
     let imageUrls: string[]
     let taskType: string = "MAIN_IMAGE"
     let outputLanguage: string = "简体中文"
+    let mode: string = "CREATIVE"  // Clone Mode support
+    let features: string = ""      // 卖点 (Clone Mode)
+    let refImages: string[] = []   // 参考图 (Clone Mode)
 
     if (retryFromId) {
       // --- 重试流程 ---
       const originalGeneration = await prisma.generation.findUnique({
         where: { id: retryFromId },
       })
-
+      console.log("----查询出来的重试对象：" + originalGeneration?.mode);
+      
       if (!originalGeneration) {
         return NextResponse.json({ error: "重试的原始记录不存在" }, { status: 404 })
       }
@@ -540,6 +553,9 @@ async function handleSingleGeneration(
       imageUrls = originalGeneration.originalImage
       platformKey = "SHOPEE"
       outputLanguage = originalGeneration.outputLanguage || "简体中文"
+      mode = originalGeneration.mode || "CREATIVE"  // 从原始记录获取模式
+      features = originalGeneration.features || ""  // 从原始记录获取卖点
+      refImages = originalGeneration.refImages || []  // 从原始记录获取参考图
     } else {
       // --- 标准流程 ---
       productName = String(body?.productName ?? "").trim()
@@ -547,10 +563,14 @@ async function handleSingleGeneration(
       platformKey = String(body?.platformKey ?? "SHOPEE").trim().toUpperCase()
       taskType = String(body?.taskType ?? "MAIN_IMAGE").trim().toUpperCase()
       outputLanguage = String(body?.outputLanguage ?? "简体中文").trim()
+      mode = String(body?.mode ?? "CREATIVE").trim().toUpperCase()
+      features = String(body?.features ?? "").trim()
       actualCost = getStandardCost(taskType, costs)
       const rawImages = body?.images
+      const rawRefImages = body?.refImages
 
       if (!productName) throw new Error("请填写商品名称")
+      // productType is now required for both modes (for proper prompt lookup)
       if (!productType) throw new Error("请选择商品类型")
 
       let parsedImages: string[] = []
@@ -575,6 +595,25 @@ async function handleSingleGeneration(
         throw new Error("请至少上传 1 张图片")
       }
       imageUrls = parsedImages
+
+      // Parse reference images for Clone Mode
+      if (mode === "CLONE" && rawRefImages) {
+        if (Array.isArray(rawRefImages)) {
+          refImages = rawRefImages.map((x) => String(x).trim()).filter(Boolean)
+        } else if (typeof rawRefImages === "string") {
+          try {
+            const parsed = JSON.parse(rawRefImages)
+            if (Array.isArray(parsed)) {
+              refImages = parsed.map((x) => String(x).trim()).filter(Boolean)
+            }
+          } catch {
+            if (rawRefImages.trim()) refImages = [rawRefImages.trim()]
+          }
+        }
+        if (refImages.length === 0) {
+          throw new Error("克隆模式需要至少上传 1 张参考图")
+        }
+      }
     }
 
     // 2) 原子扣费 + 更新
@@ -630,8 +669,11 @@ async function handleSingleGeneration(
       data: {
         userId,
         productName,
-        productType,
+        productType, // Save actual productType (now required for both modes)
         taskType,
+        mode,
+        features: features || null,
+        refImages,
         originalImage: imageUrls,
         status: "PENDING",
         hasUsedDiscountedRetry: Boolean(retryFromId),
@@ -642,35 +684,148 @@ async function handleSingleGeneration(
 
     // For DETAIL_PAGE: ignore productType, find first prompt for platform
     // For MAIN_IMAGE: match productType as before
-    const promptRecord = taskType === "DETAIL_PAGE"
-      ? (await prisma.productTypePrompt.findFirst({
-        where: { isActive: true, taskType: "DETAIL_PAGE", userId, platform: { key: platformKey } },
+    // For CLONE mode: find prompts with mode='CLONE', with fallback to CLONE_GENERAL
+    let promptRecord: any = null
+
+    console.log(`[PROMPT_LOOKUP] Starting prompt lookup with params:`, {
+      platformKey,
+      productType,
+      taskType,
+      mode,
+      userId,
+    })
+
+    if (mode === "CLONE") {
+      console.log(`[PROMPT_LOOKUP] CLONE mode - trying 5 fallback steps...`)
+      
+      // Clone Mode: First try to find a prompt matching the specific productType
+      // Step 1: Try to find specific productType Clone prompt for user
+      const step1Params = { isActive: true, mode: "CLONE", productType, taskType, userId, platform: { key: platformKey } }
+      console.log(`[PROMPT_LOOKUP] Step 1 - User specific:`, step1Params)
+      promptRecord = await prisma.productTypePrompt.findFirst({
+        where: step1Params,
         orderBy: { updatedAt: "desc" },
-      })) ||
-      (await prisma.productTypePrompt.findFirst({
-        where: { isActive: true, taskType: "DETAIL_PAGE", userId: null, platform: { key: platformKey } },
+      })
+      if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 1`)
+      
+      // Step 2: Try specific productType Clone prompt (system default)
+      if (!promptRecord) {
+        const step2Params = { isActive: true, mode: "CLONE", productType, taskType, userId: null, platform: { key: platformKey } }
+        console.log(`[PROMPT_LOOKUP] Step 2 - System specific:`, step2Params)
+        promptRecord = await prisma.productTypePrompt.findFirst({
+          where: step2Params,
+          orderBy: { updatedAt: "desc" },
+        })
+        if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 2`)
+      }
+      
+      // Step 3: Fallback to CLONE_GENERAL for user on the platform
+      if (!promptRecord) {
+        const step3Params = { isActive: true, mode: "CLONE", productType: "CLONE_GENERAL", taskType, userId, platform: { key: platformKey } }
+        console.log(`[PROMPT_LOOKUP] Step 3 - User CLONE_GENERAL:`, step3Params)
+        promptRecord = await prisma.productTypePrompt.findFirst({
+          where: step3Params,
+          orderBy: { updatedAt: "desc" },
+        })
+        if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 3`)
+      }
+      
+      // Step 4: Fallback to CLONE_GENERAL (system default) on the platform
+      if (!promptRecord) {
+        const step4Params = { isActive: true, mode: "CLONE", productType: "CLONE_GENERAL", taskType, userId: null, platform: { key: platformKey } }
+        console.log(`[PROMPT_LOOKUP] Step 4 - System CLONE_GENERAL on platform:`, step4Params)
+        promptRecord = await prisma.productTypePrompt.findFirst({
+          where: step4Params,
+          orderBy: { updatedAt: "desc" },
+        })
+        if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 4`)
+      }
+      
+      // Step 5: Fallback to CLONE_GENERAL on GENERAL platform
+      if (!promptRecord) {
+        const step5Params = { isActive: true, mode: "CLONE", productType: "CLONE_GENERAL", taskType, userId: null, platform: { key: "GENERAL" } }
+        console.log(`[PROMPT_LOOKUP] Step 5 - System CLONE_GENERAL on GENERAL:`, step5Params)
+        promptRecord = await prisma.productTypePrompt.findFirst({
+          where: step5Params,
+          orderBy: { updatedAt: "desc" },
+        })
+        if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 5`)
+      }
+    } else if (taskType === "DETAIL_PAGE") {
+      console.log(`[PROMPT_LOOKUP] CREATIVE mode - DETAIL_PAGE - trying 3 fallback steps...`)
+      
+      const step1Params = { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", userId, platform: { key: platformKey } }
+      console.log(`[PROMPT_LOOKUP] Step 1 - User specific:`, step1Params)
+      promptRecord = await prisma.productTypePrompt.findFirst({
+        where: step1Params,
         orderBy: { updatedAt: "desc" },
-      })) ||
-      (await prisma.productTypePrompt.findFirst({
-        where: { isActive: true, taskType: "DETAIL_PAGE", userId: null, platform: { key: "GENERAL" } },
+      })
+      if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 1`)
+      
+      if (!promptRecord) {
+        const step2Params = { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", userId: null, platform: { key: platformKey } }
+        console.log(`[PROMPT_LOOKUP] Step 2 - System on platform:`, step2Params)
+        promptRecord = await prisma.productTypePrompt.findFirst({
+          where: step2Params,
+          orderBy: { updatedAt: "desc" },
+        })
+        if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 2`)
+      }
+      
+      if (!promptRecord) {
+        const step3Params = { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", userId: null, platform: { key: "GENERAL" } }
+        console.log(`[PROMPT_LOOKUP] Step 3 - System on GENERAL:`, step3Params)
+        promptRecord = await prisma.productTypePrompt.findFirst({
+          where: step3Params,
+          orderBy: { updatedAt: "desc" },
+        })
+        if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 3`)
+      }
+    } else {
+      console.log(`[PROMPT_LOOKUP] CREATIVE mode - MAIN_IMAGE - trying 3 fallback steps...`)
+      
+      // Creative Mode - MAIN_IMAGE
+      const step1Params = { isActive: true, productType, taskType, mode: "CREATIVE", userId, platform: { key: platformKey } }
+      console.log(`[PROMPT_LOOKUP] Step 1 - User specific:`, step1Params)
+      promptRecord = await prisma.productTypePrompt.findFirst({
+        where: step1Params,
         orderBy: { updatedAt: "desc" },
-      }))
-      : (await prisma.productTypePrompt.findFirst({
-        where: { isActive: true, productType, taskType, userId, platform: { key: platformKey } },
-        orderBy: { updatedAt: "desc" },
-      })) ||
-      (await prisma.productTypePrompt.findFirst({
-        where: { isActive: true, productType, taskType, userId: null, platform: { key: platformKey } },
-        orderBy: { updatedAt: "desc" },
-      })) ||
-      (await prisma.productTypePrompt.findFirst({
-        where: { isActive: true, productType, taskType, userId: null, platform: { key: "GENERAL" } },
-        orderBy: { updatedAt: "desc" },
-      }))
+      })
+      if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 1`)
+      
+      if (!promptRecord) {
+        const step2Params = { isActive: true, productType, taskType, mode: "CREATIVE", userId: null, platform: { key: platformKey } }
+        console.log(`[PROMPT_LOOKUP] Step 2 - System on platform:`, step2Params)
+        promptRecord = await prisma.productTypePrompt.findFirst({
+          where: step2Params,
+          orderBy: { updatedAt: "desc" },
+        })
+        if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 2`)
+      }
+      
+      if (!promptRecord) {
+        const step3Params = { isActive: true, productType, taskType, mode: "CREATIVE", userId: null, platform: { key: "GENERAL" } }
+        console.log(`[PROMPT_LOOKUP] Step 3 - System on GENERAL:`, step3Params)
+        promptRecord = await prisma.productTypePrompt.findFirst({
+          where: step3Params,
+          orderBy: { updatedAt: "desc" },
+        })
+        if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 3`)
+      }
+    }
 
     if (!promptRecord) {
-      throw new Error(`未找到 Prompt 模板：platformKey=${platformKey}, productType=${productType}, taskType=${taskType}`)
+      console.error(`[PROMPT_LOOKUP] ❌ No prompt found after all fallback steps`)
+      throw new Error(`未找到 Prompt 模板：platformKey=${platformKey}, productType=${productType}, taskType=${taskType}, mode=${mode}`)
     }
+
+    console.log(`[PROMPT_LOOKUP] ✅ Final prompt found:`, {
+      id: promptRecord.id,
+      productType: promptRecord.productType,
+      taskType: promptRecord.taskType,
+      mode: promptRecord.mode,
+      description: promptRecord.description,
+    })
 
     // 根据 taskType 和提示词内容选择不同的 webhook
     // MAIN_IMAGE: 提示词以"你是"开头用 AUTO，否则用 GRSAI
@@ -689,17 +844,31 @@ async function handleSingleGeneration(
     }
 
     // Fill in template variables before sending
-    const filledPrompt = fillPromptTemplate(promptRecord.promptTemplate, productName, outputLanguage, "A")
+    const filledPrompt = fillPromptTemplate(
+      promptRecord.promptTemplate,
+      productName,
+      outputLanguage,
+      "A",
+      features,
+      refImages.length
+    )
 
-    const n8nPayload = {
+    const n8nPayload: Record<string, any> = {
       username: (session?.user as any)?.username ?? (session?.user as any)?.name ?? null,
       generation_id: generationId,
       product_name: productName,
-      product_type: ProductTypePromptKey[productType] || productType,
+      product_type: ProductTypePromptKey[productType as ProductTypeKey] || productType,
       prompt_template: filledPrompt,
-      images: imageUrls,
-      image_count: imageUrls.length,
+      images: mode === "CLONE" ? [...refImages, ...imageUrls] : imageUrls,  // 克隆模式：参考图在前，商品图在后
+      image_count: mode === "CLONE" ? refImages.length + imageUrls.length : imageUrls.length,
       output_language: outputLanguage,
+      mode,
+    }
+
+    // Add Clone Mode specific fields
+    if (mode === "CLONE") {
+      n8nPayload.features = features
+      n8nPayload.ref_image_count = refImages.length
     }
 
     console.log(`[N8N_REQUEST] User: ${userId}, Payload: `, JSON.stringify(n8nPayload, null, 2))

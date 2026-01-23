@@ -180,6 +180,9 @@ model Generation {
   productName     String
   productType     String
   taskType        String   @default("MAIN_IMAGE") /// MAIN_IMAGE / DETAIL_PAGE
+  mode            String   @default("CREATIVE")   /// CREATIVE / CLONE
+  features        String?  @db.Text               /// 卖点（克隆模式）
+  refImages       String[]                        /// 参考图片（克隆模式）
   originalImage   String[]
   generatedImage  String?  @db.Text /// 存储完整的、未裁剪的原图 URL
   generatedImages String[] /// 存储九宫格切片图片 URL 数组
@@ -211,6 +214,7 @@ model ProductTypePrompt {
   // 业务维度：具体类别 Key (MENSWEAR, BEDDING)
   productType    String
   taskType       String   @default("MAIN_IMAGE") /// MAIN_IMAGE / DETAIL_PAGE
+  mode           String   @default("CREATIVE")   /// CREATIVE / CLONE
 
   // 内容
   promptTemplate String   @db.Text
@@ -220,7 +224,7 @@ model ProductTypePrompt {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@index([platformId, productType, taskType])
+  @@index([platformId, productType, taskType, mode])
   @@index([userId])
 }
 

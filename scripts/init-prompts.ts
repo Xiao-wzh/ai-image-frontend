@@ -71,6 +71,7 @@ async function main() {
         platformId: shopeeId,
         productType: ProductType.MENSWEAR,
         taskType: "MAIN_IMAGE",
+        mode: "CREATIVE",
         description: "男装",
         promptTemplate: `生成1張2400×2400像素的9宮格商品主圖（每格精確800×800像素，無白邊、無水印、無額外文字），風格必須符合台灣蝦皮男裝類目最常見的高轉換率主圖設計，包括：
 • 乾淨專業的電商排版
@@ -114,6 +115,7 @@ async function main() {
         platformId: shopeeId,
         productType: ProductType.BEDDING,
         taskType: "MAIN_IMAGE",
+        mode: "CREATIVE",
         description: "寝具",
         promptTemplate: `生成1張2400×2400像素的9宮格商品主圖（每格精確800×800像素，無白邊、無水印、無額外文字）
 
@@ -157,6 +159,7 @@ async function main() {
         platformId: shopeeId,
         productType: ProductType.SEXY_SPECIES,
         taskType: "MAIN_IMAGE",
+        mode: "CREATIVE",
         description: "Sexyspecies",
         promptTemplate: `生成1張2400×2400像素的9宮格商品主圖（每格精確800×800像素，無白邊、無水印、無額外文字），風格和視覺特色包括但不限於：
 粗黑描邊超大標題字體風格
@@ -197,6 +200,7 @@ async function main() {
         platformId: generalId,
         productType: ProductType.MENSWEAR,
         taskType: "MAIN_IMAGE",
+        mode: "CREATIVE",
         description: "男装",
         promptTemplate: `（通用兜底）为 \${productName} 生成通用电商九宫格主图，文字清晰、排版干净、卖点真实。`,
       },
@@ -208,6 +212,7 @@ async function main() {
         platformId: shopeeId,
         productType: ProductType.MENSWEAR,
         taskType: "DETAIL_PAGE",
+        mode: "CREATIVE",
         description: "男装详情页",
         promptTemplate: `生成一張800×3200像素的竖版商品詳情長圖，風格必須符合台灣蝦皮男裝類目高轉換率詳情頁設計：
 
@@ -243,6 +248,7 @@ async function main() {
         platformId: shopeeId,
         productType: ProductType.BEDDING,
         taskType: "DETAIL_PAGE",
+        mode: "CREATIVE",
         description: "寝具详情页",
         promptTemplate: `生成一張800×3200像素的竖版商品詳情長圖，風格符合蝦皮寢具類目：
 
@@ -276,6 +282,7 @@ async function main() {
         platformId: shopeeId,
         productType: ProductType.SEXY_SPECIES,
         taskType: "DETAIL_PAGE",
+        mode: "CREATIVE",
         description: "Sexyspecies详情页",
         promptTemplate: `生成一張800×3200像素的竖版商品詳情長圖：
 
@@ -310,8 +317,82 @@ async function main() {
         platformId: generalId,
         productType: ProductType.MENSWEAR,
         taskType: "DETAIL_PAGE",
+        mode: "CREATIVE",
         description: "男装详情页",
         promptTemplate: `（通用兜底）为 \${productName} 生成通用电商竖版详情长图，800×3200像素，文字清晰、排版干净、卖点真实。`,
+      },
+
+      // ===================== CLONE MODE Prompts =====================
+      // Shopee Clone Mode - 主图
+      {
+        userId: null,
+        platformId: shopeeId,
+        productType: "CLONE_GENERAL",
+        taskType: "MAIN_IMAGE",
+        mode: "CLONE",
+        description: "克隆模式通用",
+        promptTemplate: `根据以下 \${refImageCount} 张参考图的构图方式，生成 1 張 2400×2400 像素的 9 宫格商品主图。
+
+**商品名称：\${productName}**
+**商品卖点：\${features}**
+
+**核心要求**：
+• 完全复制参考图的构图风格、布局、排版方式
+• 商品外观必须与上传的商品图 100% 一致
+• 9 宫格切分精确，每格 800×800 像素
+• 所有文字使用繁体中文，清晰可读
+• 赶点真实合理，符合商品特性
+
+**視覺元素**：
+• 保持参考图的色调、标题条风格、icon 设计
+• 复制参考图的文字排版和描边样式
+• 对比图使用红×绿✓形式
+
+**最终仅输出 1 张 2400×2400 九宫格大图**`,
+      },
+      // General fallback - Clone Mode
+      {
+        userId: null,
+        platformId: generalId,
+        productType: "CLONE_GENERAL",
+        taskType: "MAIN_IMAGE",
+        mode: "CLONE",
+        description: "克隆模式通用",
+        promptTemplate: `（通用兜底）根据 \${refImageCount} 张参考图的构图风格，为 \${productName} 生成九宫格主图。卖点：\${features}`,
+      },
+
+      // ===================== CLONE MODE - DETAIL_PAGE Prompts =====================
+      // Shopee Clone Mode - 详情页
+      {
+        userId: null,
+        platformId: shopeeId,
+        productType: "CLONE_GENERAL",
+        taskType: "DETAIL_PAGE",
+        mode: "CLONE",
+        description: "克隆模式详情页",
+        promptTemplate: `根据以下 \${refImageCount} 张参考图的构图排版方式，生成 800×3200 像素的电商详情页长图。
+
+**商品名称：\${productName}**
+**商品卖点：\${features}**
+
+**核心要求**：
+• 完全复制参考图的排版结构、模块划分、整体风格
+• 商品外观必须与上传的商品图 100% 一致
+• 尺寸必须为 800×3200 像素（宽×高）
+• 所有文字使用\${language}，清晰可读
+• 卖点描述真实合理
+
+**最终仅输出 1 张 800×3200 详情页长图**`,
+      },
+      // General fallback - Clone Mode DETAIL_PAGE
+      {
+        userId: null,
+        platformId: generalId,
+        productType: "CLONE_GENERAL",
+        taskType: "DETAIL_PAGE",
+        mode: "CLONE",
+        description: "克隆模式详情页",
+        promptTemplate: `（通用兜底）根据 \${refImageCount} 张参考图的排版风格，为 \${productName} 生成 800×3200 详情页长图。卖点：\${features}`,
       },
     ],
     skipDuplicates: true,

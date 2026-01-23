@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic"
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const taskType = searchParams.get("taskType") || "MAIN_IMAGE"
+  const mode = searchParams.get("mode") || "CREATIVE" // 新增：获取模式参数
 
   const platforms = await prisma.platform.findMany({
     where: { isActive: true },
@@ -16,7 +17,12 @@ export async function GET(req: NextRequest) {
       key: true,
       label: true,
       prompts: {
-        where: { isActive: true, userId: null, taskType },
+        where: { 
+          isActive: true, 
+          userId: null, 
+          taskType,
+          mode, // 新增：根据模式过滤
+        },
         select: {
           productType: true,
           description: true,

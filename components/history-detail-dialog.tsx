@@ -272,6 +272,10 @@ export function HistoryDetailDialog({
           taskType: item.taskType || "MAIN_IMAGE",
           images: item.originalImage,
           platformKey: "SHOPEE",
+          mode: item.mode || "CREATIVE",  // 添加模式
+          features: item.features || "",  // 添加卖点
+          refImages: item.refImages || [],  // 添加参考图
+          outputLanguage: item.outputLanguage || "简体中文",  // 添加输出语言
         }),
       })
       const data = await res.json().catch(() => ({}))

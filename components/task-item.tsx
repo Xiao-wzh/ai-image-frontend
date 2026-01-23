@@ -89,6 +89,9 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                     images: item.originalImage,
                     platformKey: "SHOPEE",
                     outputLanguage: item.outputLanguage || "繁体中文",
+                    mode: item.mode || "CREATIVE",  // 添加模式
+                    features: item.features || "",  // 添加卖点
+                    refImages: item.refImages || [],  // 添加参考图
                 }
 
             const res = await fetch("/api/generate", {

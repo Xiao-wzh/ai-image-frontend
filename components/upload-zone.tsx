@@ -59,6 +59,12 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const [detailBatch, setDetailBatch] = useState<"A" | "B">("A")
   const [isDetailBatchOpen, setIsDetailBatchOpen] = useState(false)
 
+  // Clone Mode state
+  const [generationMode, setGenerationMode] = useState<"CREATIVE" | "CLONE">("CREATIVE")
+  const [features, setFeatures] = useState("") // 卖点
+  const [refFiles, setRefFiles] = useState<File[]>([])
+  const [refPreviewUrls, setRefPreviewUrls] = useState<string[]>([])
+
   // Calculate costs
   const baseCost = taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
   const comboAddOnCost = costs.DETAIL_PAGE_RETRY_COST
@@ -69,7 +75,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     let cancelled = false
     async function load() {
       try {
-        const res = await fetch(`/api/config/platforms?taskType=${taskType}`)
+        const res = await fetch(`/api/config/platforms?taskType=${taskType}&mode=${generationMode}`)
         const data = await res.json().catch(() => null)
         if (!res.ok) throw new Error("加载平台配置失败")
         if (!cancelled) {
@@ -94,7 +100,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     return () => {
       cancelled = true
     }
-  }, [taskType])
+  }, [taskType, generationMode])
 
   const selectedPlatform = useMemo(() => {
     return (platforms || []).find((p) => p.value === platformKey) || null
@@ -117,6 +123,17 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
       setPreviewUrls(urls)
     },
     [previewUrls],
+  )
+
+  // Clone Mode: Reference images handler
+  const handleRefFilesChange = useCallback(
+    (newFiles: File[]) => {
+      refPreviewUrls.forEach((url) => URL.revokeObjectURL(url))
+      const urls = newFiles.map((file) => URL.createObjectURL(file))
+      setRefFiles(newFiles)
+      setRefPreviewUrls(urls)
+    },
+    [refPreviewUrls],
   )
 
   async function signOne(file: File): Promise<SignResponse> {
@@ -223,14 +240,30 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
       loginModal.open()
       return
     }
-    if (!productName.trim() || !productType || files.length === 0) {
-      toast.error("请填写完整信息并上传图片")
+
+    // Common validation for both modes - productType is now required for both
+    if (!productName.trim()) {
+      toast.error("请填写商品名称")
+      return
+    }
+    if (!productType) {
+      toast.error("请选择平台/风格")
+      return
+    }
+    if (files.length === 0) {
+      toast.error("请上传商品图片")
+      return
+    }
+
+    // Clone mode requires reference images
+    if (generationMode === "CLONE" && refFiles.length === 0) {
+      toast.error("克隆模式需要上传参考图")
       return
     }
 
     setIsSubmitting(true)
     try {
-      // toast.message("正在上传图片...")
+      // Upload product images
       const uploadedUrls = await Promise.all(
         files.map(async (file) => {
           const { uploadUrl, publicUrl } = await signOne(file)
@@ -239,14 +272,29 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
         }),
       )
 
+      // Upload reference images for Clone Mode
+      let uploadedRefUrls: string[] = []
+      if (generationMode === "CLONE" && refFiles.length > 0) {
+        uploadedRefUrls = await Promise.all(
+          refFiles.map(async (file) => {
+            const { uploadUrl, publicUrl } = await signOne(file)
+            await uploadToTos(uploadUrl, file)
+            return publicUrl
+          }),
+        )
+      }
+
       await handleGeneration(
         {
           productName: productName.trim(),
-          productType,
+          productType, // Always send productType for both modes
           platformKey,
           taskType,
           images: uploadedUrls,
-          withDetailCombo: isComboMode && taskType === "MAIN_IMAGE",
+          mode: generationMode,
+          features: generationMode === "CLONE" ? features : undefined,
+          refImages: generationMode === "CLONE" ? uploadedRefUrls : undefined,
+          withDetailCombo: isComboMode && taskType === "MAIN_IMAGE" && generationMode === "CREATIVE",
           outputLanguage,
           detailBatch: taskType === "DETAIL_PAGE" ? detailBatch : undefined,
         },
@@ -263,8 +311,11 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     productName,
     productType,
     files,
+    refFiles,
     platformKey,
     taskType,
+    generationMode,
+    features,
     isComboMode,
     totalCost,
     outputLanguage,
@@ -291,6 +342,11 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     setPreviewUrls([])
     setProductName("")
     setProductType("")
+    // Reset Clone Mode state
+    setGenerationMode("CREATIVE")
+    setFeatures("")
+    setRefFiles([])
+    setRefPreviewUrls([])
   }, [])
 
   const typeSelectDisabled = typeOptions.length === 0
@@ -351,6 +407,45 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           </Tabs>
         </motion.div>
 
+        {/* Generation Mode Tabs - Show for BOTH MAIN_IMAGE and DETAIL_PAGE */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <Tabs value={generationMode} onValueChange={(v) => {
+            setGenerationMode(v as "CREATIVE" | "CLONE")
+            // Reset productType when switching modes (different modes have different product types)
+            setProductType("")
+            // Reset images when switching modes
+            if (generatedImages.length > 0) {
+              setGeneratedImages([])
+              setFullImageUrl(null)
+              setCurrentGenerationId(null)
+            }
+          }}>
+            <TabsList className="bg-slate-800/50 border border-white/10 p-1">
+              <TabsTrigger
+                value="CREATIVE"
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white px-5 gap-1.5"
+              >
+                ✨ 创意模式
+              </TabsTrigger>
+              <TabsTrigger
+                value="CLONE"
+                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-600 data-[state=active]:to-orange-600 data-[state=active]:text-white px-5 gap-1.5"
+              >
+                ⚡ 克隆模式
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+          {generationMode === "CLONE" && (
+            <p className="text-xs text-amber-400/80 mt-2">
+              克隆模式将复制参考图的构图风格，适合快速生成相似风格的图片
+            </p>
+          )}
+        </motion.div>
+
         {/* Form */}
         <AnimatePresence mode="wait">
           {!isSubmitting && generatedImages.length === 0 ? (
@@ -363,6 +458,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
             >
               {/* 平台/风格 + 商品名称 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Platform/Style selector - ALWAYS VISIBLE for both modes */}
                 <motion.div
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
@@ -421,6 +517,27 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                     className="w-full h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500 focus:bg-white/10 focus:ring-2 focus:ring-blue-500/20 transition-all backdrop-blur-sm"
                   />
                 </motion.div>
+
+                {/* Clone Mode: Selling Points textarea */}
+                {generationMode === "CLONE" && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.22 }}
+                    className="md:col-span-3"
+                  >
+                    <label className="block text-sm font-medium text-amber-300 mb-2">
+                      商品卖点 <span className="text-amber-400/60 font-normal">(可选，用于生成文案)</span>
+                    </label>
+                    <textarea
+                      value={features}
+                      onChange={(e) => setFeatures(e.target.value)}
+                      placeholder="例如：防水、耐磨、轻便透气、100%纯棉..."
+                      rows={2}
+                      className="w-full rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-white placeholder:text-slate-500 outline-none focus:border-amber-500 focus:bg-amber-500/10 focus:ring-2 focus:ring-amber-500/20 transition-all backdrop-blur-sm resize-none"
+                    />
+                  </motion.div>
+                )}
 
                 {/* Language Selector */}
                 <motion.div
@@ -524,7 +641,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
               {/* Upload Zone */}
               <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
                 <div className="flex items-end justify-between gap-3 flex-wrap">
-                  <label className="block text-sm font-medium text-slate-300">上传商品图片</label>
+                  <label className="block text-sm font-medium text-slate-300">
+                    {generationMode === "CLONE" ? "商品图片" : "上传商品图片"}
+                  </label>
                   <div className="text-xs text-slate-500">
                     提示：图片越清晰、角度越完整，生成结果越贴近实物，货不对板概率越小
                   </div>
@@ -540,8 +659,35 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                 </div>
               </motion.div>
 
-              {/* Combo Offer Card - Only show for MAIN_IMAGE mode */}
-              {taskType === "MAIN_IMAGE" && (
+              {/* Reference Image Upload Zone - Only for Clone Mode */}
+              {generationMode === "CLONE" && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.35 }}
+                >
+                  <div className="flex items-end justify-between gap-3 flex-wrap">
+                    <label className="block text-sm font-medium text-amber-300">
+                      参考图片 <span className="text-amber-400/60 font-normal">(用于复制构图)</span>
+                    </label>
+                    <div className="text-xs text-amber-400/60">
+                      上传您想要复制风格/构图的参考图
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <ImageUploadZone
+                      files={refFiles}
+                      previewUrls={refPreviewUrls}
+                      onFilesChange={handleRefFilesChange}
+                      maxFiles={4}
+                    />
+                  </div>
+                </motion.div>
+              )}
+
+              {/* Combo Offer Card - Only show for MAIN_IMAGE Creative mode */}
+              {taskType === "MAIN_IMAGE" && generationMode === "CREATIVE" && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}

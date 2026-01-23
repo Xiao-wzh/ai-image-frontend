@@ -156,6 +156,13 @@ export function transformGenerationUrls<T>(record: T): T {
         }
     }
 
+    // refImages 是 string[] (参考图，克隆模式)
+    if ("refImages" in result && result.refImages !== undefined) {
+        if (Array.isArray(result.refImages)) {
+            result.refImages = result.refImages.map((item: string) => keyToCdnUrl(item))
+        }
+    }
+
     return result as T
 }
 

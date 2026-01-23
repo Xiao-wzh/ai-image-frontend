@@ -55,6 +55,9 @@ export async function GET(req: NextRequest) {
           productName: true,
           productType: true,
           taskType: true,
+          mode: true,  // 添加 mode 字段
+          features: true,  // 添加 features 字段
+          refImages: true,  // 添加 refImages 字段
           generatedImages: true,
           originalImage: true,
           status: true,
@@ -64,7 +67,6 @@ export async function GET(req: NextRequest) {
           outputLanguage: true,
           editingImageIndexes: true,
           appeal: {
-
             select: {
               id: true,
               status: true,

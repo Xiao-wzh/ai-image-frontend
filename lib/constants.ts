@@ -44,6 +44,14 @@ export const PlatformLabel: Record<PlatformTypeKey, string> = {
   [PlatformType.GENERAL]: "通用",
 }
 
+// 生成模式
+export const GenerationMode = {
+  CREATIVE: "CREATIVE",
+  CLONE: "CLONE",
+} as const
+
+export type GenerationModeKey = keyof typeof GenerationMode
+
 // 每日打卡奖励积分数
 export const DAILY_CHECKIN_REWARD = 200
 
@@ -109,9 +117,9 @@ export const GENERATION_LANGUAGES = [
   { label: "泰文", value: "Thai" },
   { label: "越南文", value: "Vietnamese" },
   // 印尼  巴西  葡萄牙
-  { label: "印尼", value: "Indonesia"},
-  { label: "巴西", value: "Brazil"},
-  { label: "葡萄牙", value: "Portugal"},
+  { label: "印尼", value: "Indonesia" },
+  { label: "巴西", value: "Brazil" },
+  { label: "葡萄牙", value: "Portugal" },
 ] as const
 
 // 传递给N8N的是label（中文名称）
