@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic"
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const taskType = searchParams.get("taskType") || "MAIN_IMAGE"
-  const mode = searchParams.get("mode") || "CREATIVE" // 新增：获取模式参数
+  const mode = searchParams.get("mode") || "CREATIVE"
 
   const platforms = await prisma.platform.findMany({
     where: { isActive: true },
@@ -17,11 +17,11 @@ export async function GET(req: NextRequest) {
       key: true,
       label: true,
       prompts: {
-        where: { 
-          isActive: true, 
-          userId: null, 
+        where: {
+          isActive: true,
+          userId: null,
           taskType,
-          mode, // 新增：根据模式过滤
+          mode,
         },
         select: {
           productType: true,
@@ -31,22 +31,23 @@ export async function GET(req: NextRequest) {
     },
   })
 
-  // distinct productType
-  const tree = platforms.map((p: { id: string; key: string; label: string; prompts: { productType: string; description: string | null }[] }) => {
-    const m = new Map<string, { label: string; value: string }>()
-    for (const t of p.prompts) {
-      const value = t.productType
-      const label = t.description || t.productType
-      if (!m.has(value)) m.set(value, { label, value })
-    }
+  const tree = platforms
+    .map((p: { id: string; key: string; label: string; prompts: { productType: string; description: string | null }[] }) => {
+      const m = new Map<string, { label: string; value: string }>()
+      for (const t of p.prompts) {
+        const value = t.productType
+        const label = t.description || t.productType
+        if (!m.has(value)) m.set(value, { label, value })
+      }
 
-    return {
-      id: p.id,
-      label: p.label,
-      value: p.key,
-      types: Array.from(m.values()),
-    }
-  })
+      return {
+        id: p.id,
+        label: p.label,
+        value: p.key,
+        types: Array.from(m.values()),
+      }
+    })
+    .filter((p) => p.types.length > 0)
 
   return NextResponse.json(tree)
 }

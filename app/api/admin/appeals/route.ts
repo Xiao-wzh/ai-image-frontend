@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
                             generatedImages: true,
                             generatedImage: true,
                             originalImage: true,
+                            refImages: true,
                             hasUsedDiscountedRetry: true,
                             createdAt: true,
                         },

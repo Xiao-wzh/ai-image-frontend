@@ -297,7 +297,7 @@ async function handleComboGeneration(
   const [mainPrompt, detailPrompt] = await Promise.all([
     // Main Image: Match by productType and platform
     prisma.productTypePrompt.findFirst({
-      where: { isActive: true, productType, taskType: "MAIN_IMAGE", userId: null, platform: { key: platformKey } },
+      where: { isActive: true, productType, taskType: "MAIN_IMAGE", userId: null,  },
       orderBy: { updatedAt: "desc" },
     }).then((p: any) => p || prisma.productTypePrompt.findFirst({
       where: { isActive: true, productType, taskType: "MAIN_IMAGE", userId: null, platform: { key: "GENERAL" } },
@@ -305,7 +305,7 @@ async function handleComboGeneration(
     })),
     // Detail Page: Find first DETAIL_PAGE prompt for this platform (ignore productType for combo)
     prisma.productTypePrompt.findFirst({
-      where: { isActive: true, taskType: "DETAIL_PAGE", userId: null, platform: { key: platformKey } },
+      where: { isActive: true, taskType: "DETAIL_PAGE", userId: null,  },
       orderBy: { updatedAt: "desc" },
     }).then((p: any) => p || prisma.productTypePrompt.findFirst({
       where: { isActive: true, taskType: "DETAIL_PAGE", userId: null, platform: { key: "GENERAL" } },
@@ -551,7 +551,7 @@ async function handleSingleGeneration(
       productName = originalGeneration.productName
       productType = originalGeneration.productType as ProductTypeKey
       imageUrls = originalGeneration.originalImage
-      platformKey = "SHOPEE"
+      platformKey = String((originalGeneration as any).platformKey ?? "SHOPEE").trim().toUpperCase()
       outputLanguage = originalGeneration.outputLanguage || "简体中文"
       mode = originalGeneration.mode || "CREATIVE"  // 从原始记录获取模式
       features = originalGeneration.features || ""  // 从原始记录获取卖点
@@ -670,6 +670,7 @@ async function handleSingleGeneration(
         userId,
         productName,
         productType, // Save actual productType (now required for both modes)
+        platformKey,
         taskType,
         mode,
         features: features || null,
@@ -700,7 +701,7 @@ async function handleSingleGeneration(
       
       // Clone Mode: First try to find a prompt matching the specific productType
       // Step 1: Try to find specific productType Clone prompt for user
-      const step1Params = { isActive: true, mode: "CLONE", productType, taskType, userId, platform: { key: platformKey } }
+      const step1Params = { isActive: true, mode: "CLONE", productType, taskType, userId,  }
       console.log(`[PROMPT_LOOKUP] Step 1 - User specific:`, step1Params)
       promptRecord = await prisma.productTypePrompt.findFirst({
         where: step1Params,
@@ -710,7 +711,7 @@ async function handleSingleGeneration(
       
       // Step 2: Try specific productType Clone prompt (system default)
       if (!promptRecord) {
-        const step2Params = { isActive: true, mode: "CLONE", productType, taskType, userId: null, platform: { key: platformKey } }
+        const step2Params = { isActive: true, mode: "CLONE", productType, taskType, userId: null,  }
         console.log(`[PROMPT_LOOKUP] Step 2 - System specific:`, step2Params)
         promptRecord = await prisma.productTypePrompt.findFirst({
           where: step2Params,
@@ -721,7 +722,7 @@ async function handleSingleGeneration(
       
       // Step 3: Fallback to CLONE_GENERAL for user on the platform
       if (!promptRecord) {
-        const step3Params = { isActive: true, mode: "CLONE", productType: "CLONE_GENERAL", taskType, userId, platform: { key: platformKey } }
+        const step3Params = { isActive: true, mode: "CLONE", productType: "CLONE_GENERAL", taskType, userId,  }
         console.log(`[PROMPT_LOOKUP] Step 3 - User CLONE_GENERAL:`, step3Params)
         promptRecord = await prisma.productTypePrompt.findFirst({
           where: step3Params,
@@ -732,7 +733,7 @@ async function handleSingleGeneration(
       
       // Step 4: Fallback to CLONE_GENERAL (system default) on the platform
       if (!promptRecord) {
-        const step4Params = { isActive: true, mode: "CLONE", productType: "CLONE_GENERAL", taskType, userId: null, platform: { key: platformKey } }
+        const step4Params = { isActive: true, mode: "CLONE", productType: "CLONE_GENERAL", taskType, userId: null,  }
         console.log(`[PROMPT_LOOKUP] Step 4 - System CLONE_GENERAL on platform:`, step4Params)
         promptRecord = await prisma.productTypePrompt.findFirst({
           where: step4Params,
@@ -754,7 +755,7 @@ async function handleSingleGeneration(
     } else if (taskType === "DETAIL_PAGE") {
       console.log(`[PROMPT_LOOKUP] CREATIVE mode - DETAIL_PAGE - trying 3 fallback steps...`)
       
-      const step1Params = { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", userId, platform: { key: platformKey } }
+      const step1Params = { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", userId,  }
       console.log(`[PROMPT_LOOKUP] Step 1 - User specific:`, step1Params)
       promptRecord = await prisma.productTypePrompt.findFirst({
         where: step1Params,
@@ -763,7 +764,7 @@ async function handleSingleGeneration(
       if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 1`)
       
       if (!promptRecord) {
-        const step2Params = { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", userId: null, platform: { key: platformKey } }
+        const step2Params = { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", userId: null,  }
         console.log(`[PROMPT_LOOKUP] Step 2 - System on platform:`, step2Params)
         promptRecord = await prisma.productTypePrompt.findFirst({
           where: step2Params,
@@ -785,7 +786,7 @@ async function handleSingleGeneration(
       console.log(`[PROMPT_LOOKUP] CREATIVE mode - MAIN_IMAGE - trying 3 fallback steps...`)
       
       // Creative Mode - MAIN_IMAGE
-      const step1Params = { isActive: true, productType, taskType, mode: "CREATIVE", userId, platform: { key: platformKey } }
+      const step1Params = { isActive: true, productType, taskType, mode: "CREATIVE", userId,  }
       console.log(`[PROMPT_LOOKUP] Step 1 - User specific:`, step1Params)
       promptRecord = await prisma.productTypePrompt.findFirst({
         where: step1Params,
@@ -794,7 +795,7 @@ async function handleSingleGeneration(
       if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 1`)
       
       if (!promptRecord) {
-        const step2Params = { isActive: true, productType, taskType, mode: "CREATIVE", userId: null, platform: { key: platformKey } }
+        const step2Params = { isActive: true, productType, taskType, mode: "CREATIVE", userId: null,  }
         console.log(`[PROMPT_LOOKUP] Step 2 - System on platform:`, step2Params)
         promptRecord = await prisma.productTypePrompt.findFirst({
           where: step2Params,

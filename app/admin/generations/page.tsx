@@ -37,6 +37,7 @@ type Generation = {
     productTypeDescription: string | null
     status: string
     originalImage: string[]
+    refImages: string[]
     generatedImage: string | null
     generatedImages: string[]
     outputLanguage: string | null
@@ -523,31 +524,66 @@ export default function AdminGenerationsPage() {
 
                                     {/* Original Images */}
                                     <div className="col-span-2">
-                                        <div className="flex -space-x-2">
-                                            {item.originalImage?.slice(0, 3).map((img, idx) => (
-                                                <div
-                                                    key={idx}
-                                                    className="relative w-12 h-12 rounded-lg border-2 border-[#0a0a0f] overflow-hidden cursor-pointer hover:z-10 hover:scale-110 transition-transform group"
-                                                    onClick={() => setPreviewImage(img)}
-                                                >
-                                                    <img
-                                                        src={img}
-                                                        alt={`Original ${idx + 1}`}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                        <ZoomIn className="w-4 h-4 text-white" />
+                                        <div className="flex gap-2">
+                                            {/* Original */}
+                                            <div className="flex flex-col">
+                                                <div className="flex -space-x-2">
+                                                    {item.originalImage?.slice(0, 2).map((img, idx) => (
+                                                        <div
+                                                            key={idx}
+                                                            className="relative w-10 h-10 rounded-lg border-2 border-[#0a0a0f] overflow-hidden cursor-pointer hover:z-10 hover:scale-110 transition-transform group"
+                                                            onClick={() => setPreviewImage(img)}
+                                                        >
+                                                            <img
+                                                                src={img}
+                                                                alt={`Original ${idx + 1}`}
+                                                                className="w-full h-full object-cover"
+                                                            />
+                                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                <ZoomIn className="w-3 h-3 text-white" />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {(item.originalImage?.length || 0) > 2 && (
+                                                        <div className="w-10 h-10 rounded-lg bg-white/10 border-2 border-[#0a0a0f] flex items-center justify-center text-xs text-slate-400">
+                                                            +{item.originalImage.length - 2}
+                                                        </div>
+                                                    )}
+                                                    {!item.originalImage?.length && (
+                                                        <div className="w-10 h-10 bg-white/5 rounded-lg flex items-center justify-center">
+                                                            <span className="text-slate-500 text-xs">无</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <span className="text-xs text-slate-500 mt-1">原图</span>
+                                            </div>
+                                            {/* Reference Images */}
+                                            {item.refImages?.length > 0 && (
+                                                <div className="flex flex-col">
+                                                    <div className="flex -space-x-2">
+                                                        {item.refImages.slice(0, 2).map((img, idx) => (
+                                                            <div
+                                                                key={idx}
+                                                                className="relative w-10 h-10 rounded-lg border-2 border-blue-500/30 overflow-hidden cursor-pointer hover:z-10 hover:scale-110 transition-transform group"
+                                                                onClick={() => setPreviewImage(img)}
+                                                            >
+                                                                <img
+                                                                    src={img}
+                                                                    alt={`Ref ${idx + 1}`}
+                                                                    className="w-full h-full object-cover"
+                                                                />
+                                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                                    <ZoomIn className="w-3 h-3 text-white" />
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                        {item.refImages.length > 2 && (
+                                                            <div className="w-10 h-10 rounded-lg bg-blue-500/10 border-2 border-blue-500/30 flex items-center justify-center text-xs text-blue-400">
+                                                                +{item.refImages.length - 2}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                </div>
-                                            ))}
-                                            {(item.originalImage?.length || 0) > 3 && (
-                                                <div className="w-12 h-12 rounded-lg bg-white/10 border-2 border-[#0a0a0f] flex items-center justify-center text-xs text-slate-400">
-                                                    +{item.originalImage.length - 3}
-                                                </div>
-                                            )}
-                                            {!item.originalImage?.length && (
-                                                <div className="w-12 h-12 bg-white/5 rounded-lg flex items-center justify-center">
-                                                    <span className="text-slate-500 text-xs">无</span>
+                                                    <span className="text-xs text-blue-400 mt-1">参考</span>
                                                 </div>
                                             )}
                                         </div>

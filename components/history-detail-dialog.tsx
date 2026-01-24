@@ -177,6 +177,7 @@ export function HistoryDetailDialog({
   const fullImageUrl = item?.generatedImage ?? null
   const productName = item?.productName ?? "generated-images"
   const originalImages = item?.originalImage ?? []
+  const refImages = item?.refImages ?? []
 
   const canPrev = index > 0
   const canNext = index < items.length - 1
@@ -623,7 +624,7 @@ export function HistoryDetailDialog({
 
             {/* 原始参考图 */}
             <div className="mt-6">
-              <div className="text-sm font-semibold text-white mb-3">原始参考图</div>
+              <div className="text-sm font-semibold text-white mb-3">商品图</div>
               {originalImages.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {originalImages.map((url, i) => (
@@ -634,7 +635,23 @@ export function HistoryDetailDialog({
                   ))}
                 </div>
               ) : (
-                <div className="text-xs text-slate-500">无原始参考图</div>
+                <div className="text-xs text-slate-500">无商品图</div>
+              )}
+            </div>
+
+            <div className="mt-6">
+              <div className="text-sm font-semibold text-white mb-3">参考图</div>
+              {refImages.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {refImages.map((url, i) => (
+                    <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-white/10 bg-slate-900/40">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={url} alt={`Original ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-slate-500">无参考图</div>
               )}
             </div>
 

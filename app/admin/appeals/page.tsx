@@ -50,6 +50,7 @@ type Appeal = {
         generatedImages: string[]
         generatedImage: string | null
         originalImage: string[]
+        refImages: string[]
         hasUsedDiscountedRetry: boolean
         createdAt: string
     }
@@ -348,30 +349,55 @@ export default function AdminAppealsPage() {
 
                                                 {/* Original Image (User uploaded) */}
                                                 <td className="p-4">
-                                                    <div className="flex items-center gap-2">
-                                                        {appeal.generation.originalImage?.[0] ? (
-                                                            <div
-                                                                className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 cursor-pointer hover:ring-2 hover:ring-purple-500/50"
-                                                                onClick={() => {
-                                                                    setPreviewImages(appeal.generation.originalImage)
-                                                                    setPreviewTitle(`原图 - ${appeal.generation.productName}`)
-                                                                    setPreviewOpen(true)
-                                                                }}
-                                                            >
-                                                                <img
-                                                                    src={appeal.generation.originalImage[0]}
-                                                                    alt="用户上传"
-                                                                    className="w-full h-full object-cover"
-                                                                />
-                                                            </div>
-                                                        ) : (
-                                                            <div className="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center">
-                                                                <ImageIcon className="w-5 h-5 text-slate-600" />
+                                                    <div className="flex items-center gap-3">
+                                                        {/* Original Images */}
+                                                        <div className="flex flex-col items-center">
+                                                            {appeal.generation.originalImage?.[0] ? (
+                                                                <div
+                                                                    className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 cursor-pointer hover:ring-2 hover:ring-purple-500/50"
+                                                                    onClick={() => {
+                                                                        setPreviewImages(appeal.generation.originalImage)
+                                                                        setPreviewTitle(`原图 - ${appeal.generation.productName}`)
+                                                                        setPreviewOpen(true)
+                                                                    }}
+                                                                >
+                                                                    <img
+                                                                        src={appeal.generation.originalImage[0]}
+                                                                        alt="用户上传"
+                                                                        className="w-full h-full object-cover"
+                                                                    />
+                                                                </div>
+                                                            ) : (
+                                                                <div className="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center">
+                                                                    <ImageIcon className="w-5 h-5 text-slate-600" />
+                                                                </div>
+                                                            )}
+                                                            <span className="text-xs text-slate-500 mt-1">
+                                                                原图{appeal.generation.originalImage?.length || 0}张
+                                                            </span>
+                                                        </div>
+                                                        {/* Reference Images */}
+                                                        {appeal.generation.refImages?.length > 0 && (
+                                                            <div className="flex flex-col items-center">
+                                                                <div
+                                                                    className="w-12 h-12 rounded-lg overflow-hidden bg-blue-900/30 cursor-pointer hover:ring-2 hover:ring-blue-500/50 border border-blue-500/30"
+                                                                    onClick={() => {
+                                                                        setPreviewImages(appeal.generation.refImages)
+                                                                        setPreviewTitle(`参考图 - ${appeal.generation.productName}`)
+                                                                        setPreviewOpen(true)
+                                                                    }}
+                                                                >
+                                                                    <img
+                                                                        src={appeal.generation.refImages[0]}
+                                                                        alt="参考图"
+                                                                        className="w-full h-full object-cover"
+                                                                    />
+                                                                </div>
+                                                                <span className="text-xs text-blue-400 mt-1">
+                                                                    参考{appeal.generation.refImages.length}张
+                                                                </span>
                                                             </div>
                                                         )}
-                                                        <span className="text-xs text-slate-500">
-                                                            {appeal.generation.originalImage?.length || 0}张
-                                                        </span>
                                                     </div>
                                                 </td>
 

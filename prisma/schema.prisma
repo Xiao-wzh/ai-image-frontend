@@ -179,6 +179,7 @@ model Generation {
   userId          String?
   productName     String
   productType     String
+  platformKey     String?  /// 仅记录：提交/重试时的 platformKey（不参与 prompt 查询）
   taskType        String   @default("MAIN_IMAGE") /// MAIN_IMAGE / DETAIL_PAGE
   mode            String   @default("CREATIVE")   /// CREATIVE / CLONE
   features        String?  @db.Text               /// 卖点（克隆模式）
@@ -224,6 +225,7 @@ model ProductTypePrompt {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  @@unique([productType, taskType, mode, userId])
   @@index([platformId, productType, taskType, mode])
   @@index([userId])
 }

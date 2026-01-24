@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
           mode: true,  // 添加 mode 字段
           features: true,  // 添加 features 字段
           refImages: true,  // 添加 refImages 字段
+          platformKey: true,
           generatedImages: true,
           originalImage: true,
           status: true,
