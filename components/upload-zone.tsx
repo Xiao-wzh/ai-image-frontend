@@ -118,9 +118,12 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     return selectedPlatform?.types || []
   }, [selectedPlatform])
 
+  // 当平台变化时，仅在当前已选风格不属于该平台时才清空
   useEffect(() => {
-    setProductType("")
-  }, [platformKey])
+    if (!productType) return
+    const belongsToPlatform = typeOptions.some((t) => t.value === productType)
+    if (!belongsToPlatform) setProductType("")
+  }, [platformKey, typeOptions, productType])
 
   /* ──────────────── file management ──────────────── */
   const handleFilesChange = useCallback(
@@ -690,7 +693,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                       files={refFiles}
                       previewUrls={refPreviewUrls}
                       onFilesChange={handleRefFilesChange}
-                      maxFiles={4}
+                      maxFiles={6}
                     />
                   </div>
                 </motion.div>

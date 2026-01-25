@@ -18,3 +18,5 @@ if (!TOS_BUCKET) {
   console.warn("[tos] TOS_BUCKET 未设置")
 }
 
+
+

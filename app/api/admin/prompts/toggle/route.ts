@@ -44,3 +44,5 @@ export async function PUT(req: NextRequest) {
 export async function POST(req: NextRequest) {
   return handleToggle(req)
 }
+
+

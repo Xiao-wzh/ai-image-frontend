@@ -314,7 +314,7 @@ async function handleComboGeneration(
 
   // Select webhook URL based on prompt content
   // If main image prompt starts with "你是", use AUTO webhook, otherwise use GRSAI webhook
-  const mainWebhookUrl = mainPrompt?.promptTemplate?.startsWith("你是")
+  const mainWebhookUrl = mainPrompt?.promptTemplate?.startsWith("你是") || mainPrompt?.promptTemplate?.startsWith("Role")
     ? process.env.N8N_AUTO_WEBHOOK_URL
     : process.env.N8N_GRSAI_WEBHOOK_URL
   const detailWebhookUrl = process.env.N8N_DETAIL_WEBHOOK_URL
