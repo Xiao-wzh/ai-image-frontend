@@ -65,6 +65,13 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const [refFiles, setRefFiles] = useState<File[]>([])
   const [refPreviewUrls, setRefPreviewUrls] = useState<string[]>([])
 
+  useEffect(() => {
+    if (taskType === "MAIN_IMAGE" && generationMode === "CLONE") {
+      setGenerationMode("CREATIVE")
+      setProductType("")
+    }
+  }, [taskType, generationMode])
+
   // Calculate costs
   const baseCost = taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
   const comboAddOnCost = costs.DETAIL_PAGE_RETRY_COST
@@ -75,7 +82,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     let cancelled = false
     async function load() {
       try {
-        const res = await fetch(`/api/config/platforms?taskType=${taskType}&mode=${generationMode}`)
+        const modeForConfig = taskType === "MAIN_IMAGE" ? "CREATIVE" : generationMode
+        const res = await fetch(`/api/config/platforms?taskType=${taskType}&mode=${modeForConfig}`)
         const data = await res.json().catch(() => null)
         if (!res.ok) throw new Error("加载平台配置失败")
         if (!cancelled) {
@@ -198,7 +206,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
         }
 
         if (!data.generatedImages || data.generatedImages.length === 0) {
-          toast.warning("生成成功但未返回图片数据")
+          toast.success("生成完成")
         } else {
           setGeneratedImages(data.generatedImages)
           setFullImageUrl(data.fullImageUrl || null)
@@ -256,7 +264,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     }
 
     // Clone mode requires reference images
-    if (generationMode === "CLONE" && refFiles.length === 0) {
+    if (taskType === "DETAIL_PAGE" && generationMode === "CLONE" && refFiles.length === 0) {
       toast.error("克隆模式需要上传参考图")
       return
     }
@@ -274,7 +282,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
 
       // Upload reference images for Clone Mode
       let uploadedRefUrls: string[] = []
-      if (generationMode === "CLONE" && refFiles.length > 0) {
+      if (taskType === "DETAIL_PAGE" && generationMode === "CLONE" && refFiles.length > 0) {
         uploadedRefUrls = await Promise.all(
           refFiles.map(async (file) => {
             const { uploadUrl, publicUrl } = await signOne(file)
@@ -287,13 +295,13 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
       await handleGeneration(
         {
           productName: productName.trim(),
-          productType, // Always send productType for both modes
+          productType,
           platformKey,
           taskType,
           images: uploadedUrls,
-          mode: generationMode,
-          features: generationMode === "CLONE" ? features : undefined,
-          refImages: generationMode === "CLONE" ? uploadedRefUrls : undefined,
+          mode: taskType === "MAIN_IMAGE" ? "CREATIVE" : generationMode,
+          features: taskType === "DETAIL_PAGE" && generationMode === "CLONE" ? features : undefined,
+          refImages: taskType === "DETAIL_PAGE" && generationMode === "CLONE" ? uploadedRefUrls : undefined,
           withDetailCombo: isComboMode && taskType === "MAIN_IMAGE" && generationMode === "CREATIVE",
           outputLanguage,
           detailBatch: taskType === "DETAIL_PAGE" ? detailBatch : undefined,
@@ -407,44 +415,46 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           </Tabs>
         </motion.div>
 
-        {/* Generation Mode Tabs - Show for BOTH MAIN_IMAGE and DETAIL_PAGE */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-        >
-          <Tabs value={generationMode} onValueChange={(v) => {
-            setGenerationMode(v as "CREATIVE" | "CLONE")
-            // Reset productType when switching modes (different modes have different product types)
-            setProductType("")
-            // Reset images when switching modes
-            if (generatedImages.length > 0) {
-              setGeneratedImages([])
-              setFullImageUrl(null)
-              setCurrentGenerationId(null)
-            }
-          }}>
-            <TabsList className="bg-slate-800/50 border border-white/10 p-1">
-              <TabsTrigger
-                value="CREATIVE"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white px-5 gap-1.5"
-              >
-                ✨ 创意模式
-              </TabsTrigger>
-              <TabsTrigger
-                value="CLONE"
-                className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-600 data-[state=active]:to-orange-600 data-[state=active]:text-white px-5 gap-1.5"
-              >
-                ⚡ 克隆模式
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-          {generationMode === "CLONE" && (
-            <p className="text-xs text-amber-400/80 mt-2">
-              克隆模式将复制参考图的构图风格，适合快速生成相似风格的图片
-            </p>
-          )}
-        </motion.div>
+        {/* Generation Mode Tabs - only show for DETAIL_PAGE */}
+        {taskType === "DETAIL_PAGE" && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+          >
+            <Tabs value={generationMode} onValueChange={(v) => {
+              setGenerationMode(v as "CREATIVE" | "CLONE")
+              // Reset productType when switching modes (different modes have different product types)
+              setProductType("")
+              // Reset images when switching modes
+              if (generatedImages.length > 0) {
+                setGeneratedImages([])
+                setFullImageUrl(null)
+                setCurrentGenerationId(null)
+              }
+            }}>
+              <TabsList className="bg-slate-800/50 border border-white/10 p-1">
+                <TabsTrigger
+                  value="CREATIVE"
+                  className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white px-5 gap-1.5"
+                >
+                  ✨ 创意模式
+                </TabsTrigger>
+                <TabsTrigger
+                  value="CLONE"
+                  className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-600 data-[state=active]:to-orange-600 data-[state=active]:text-white px-5 gap-1.5"
+                >
+                  ⚡ 克隆模式
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+            {generationMode === "CLONE" && (
+              <p className="text-xs text-amber-400/80 mt-2">
+                克隆模式将复制参考图的构图风格，适合快速生成相似风格的图片
+              </p>
+            )}
+          </motion.div>
+        )}
 
         {/* Form */}
         <AnimatePresence mode="wait">
@@ -519,7 +529,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                 </motion.div>
 
                 {/* Clone Mode: Selling Points textarea */}
-                {generationMode === "CLONE" && (
+                {taskType === "DETAIL_PAGE" && generationMode === "CLONE" && (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -660,7 +670,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
               </motion.div>
 
               {/* Reference Image Upload Zone - Only for Clone Mode */}
-              {generationMode === "CLONE" && (
+              {taskType === "DETAIL_PAGE" && generationMode === "CLONE" && (
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -668,7 +678,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                 >
                   <div className="flex items-end justify-between gap-3 flex-wrap">
                     <label className="block text-sm font-medium text-amber-300">
-                      参考图片 <span className="text-amber-400/60 font-normal">(用于复制构图)</span>
+                      参考图片 <span className="text-amber-400/60 font-normal">(用于复制构图，总共生成6张，有几张参考图就会复制几张，其余张数会根据参考图风格自动生成)</span>
                     </label>
                     <div className="text-xs text-amber-400/60">
                       上传您想要复制风格/构图的参考图
@@ -762,7 +772,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
             <GenerationLoading key="loading" />
           ) : generatedImages.length > 0 ? (
             <GenerationResult
-              key={currentGenerationId} // Use key to reset retry state on new generation
+              key={currentGenerationId}
               generationId={currentGenerationId!}
               generatedImages={generatedImages}
               fullImageUrl={fullImageUrl}

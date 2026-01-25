@@ -58,6 +58,8 @@ async function callN8N(
     })
 
     if (!res.ok) {
+      console.log(webhookUrl);
+    
       return { success: false, error: `n8n 调用失败: ${res.status} ${res.statusText}` }
     }
 
@@ -295,22 +297,16 @@ async function handleComboGeneration(
 
   // Fetch prompt templates for both
   const [mainPrompt, detailPrompt] = await Promise.all([
-    // Main Image: Match by productType and platform
+    // 主图：仅使用创意模式提示词（不允许落到克隆模式）
     prisma.productTypePrompt.findFirst({
-      where: { isActive: true, productType, taskType: "MAIN_IMAGE", userId: null,  },
+      where: { isActive: true, productType, taskType: "MAIN_IMAGE", mode: "CREATIVE", userId: null },
       orderBy: { updatedAt: "desc" },
-    }).then((p: any) => p || prisma.productTypePrompt.findFirst({
-      where: { isActive: true, productType, taskType: "MAIN_IMAGE", userId: null, platform: { key: "GENERAL" } },
-      orderBy: { updatedAt: "desc" },
-    })),
-    // Detail Page: Find first DETAIL_PAGE prompt for this platform (ignore productType for combo)
+    }),
+    // 详情页（套餐勾选）：仅使用创意模式提示词（不允许落到克隆模式）
     prisma.productTypePrompt.findFirst({
-      where: { isActive: true, taskType: "DETAIL_PAGE", userId: null,  },
+      where: { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", userId: null },
       orderBy: { updatedAt: "desc" },
-    }).then((p: any) => p || prisma.productTypePrompt.findFirst({
-      where: { isActive: true, taskType: "DETAIL_PAGE", userId: null, platform: { key: "GENERAL" } },
-      orderBy: { updatedAt: "desc" },
-    })),
+    }),
   ])
 
   // If prompt is missing, fail the corresponding task and refund
@@ -836,7 +832,7 @@ async function handleSingleGeneration(
       webhookUrl = process.env.N8N_DETAIL_WEBHOOK_URL
     } else {
       // MAIN_IMAGE - check prompt content
-      webhookUrl = promptRecord.promptTemplate.startsWith("你是")
+      webhookUrl = promptRecord.promptTemplate.startsWith("你是") || promptRecord.promptTemplate.startsWith("Role")
         ? process.env.N8N_AUTO_WEBHOOK_URL
         : process.env.N8N_GRSAI_WEBHOOK_URL
     }
