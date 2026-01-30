@@ -77,6 +77,11 @@ export const WATERMARK_ADD_COST = 0
 // 去除水印功能消耗积分
 export const WATERMARK_REMOVE_COST = 100
 
+// ==================== 限时活动配置 ====================
+
+// 智能去水印「限时免费」结束时间（北京时间）
+export const WATERMARK_REMOVE_FREE_END_AT = "2026-02-10T00:00:00+08:00" as const
+
 // ==================== 积分消耗配置 ====================
 
 // --- 主图生成 ---

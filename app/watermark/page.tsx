@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useEffect, useRef } from "react"
+import { useState, useCallback, useEffect, useRef, useMemo } from "react"
 import { useDropzone } from "react-dropzone"
 import useSWR from "swr"
 import { formatDistanceToNow } from "date-fns"
@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Sidebar } from "@/components/sidebar"
 import { useCosts } from "@/hooks/use-costs"
+import { WATERMARK_REMOVE_FREE_END_AT } from "@/lib/constants"
 
 // Types
 interface WatermarkTask {
@@ -104,6 +105,41 @@ export default function WatermarkPage() {
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [uploadProgress, setUploadProgress] = useState<string>("")
     const [, setCurrentTime] = useState(Date.now())
+    
+    // 限时免费倒计时
+    const [timeLeft, setTimeLeft] = useState<{ days: number; hours: number; minutes: number; seconds: number } | null>(null)
+    const [isFreePeriod, setIsFreePeriod] = useState(true)
+    
+    // 设置活动结束时间：2月10日 00:00:00（北京时间）
+    const FREE_PERIOD_END = useMemo(() => new Date(WATERMARK_REMOVE_FREE_END_AT).getTime(), [])
+    
+    // 更新倒计时
+    useEffect(() => {
+        const updateCountdown = () => {
+            const now = new Date().getTime()
+            const distance = FREE_PERIOD_END - now
+            if (distance <= 0) {
+                setIsFreePeriod(false)
+                return
+            }
+            
+            // 计算剩余时间（X天 HH:MM:SS）
+            const days = Math.floor(distance / (1000 * 60 * 60 * 24))
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60))
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000)
+            setTimeLeft({ days, hours, minutes, seconds })
+        }
+        
+        // 立即更新一次
+        updateCountdown()
+        
+        // 设置定时器，每秒更新一次
+        const timer = setInterval(updateCountdown, 1000)
+        
+        // 组件卸载时清除定时器
+        return () => clearInterval(timer)
+    }, [FREE_PERIOD_END])
 
     // Track previous task statuses to detect changes
     const prevTaskStatusesRef = useRef<Map<string, string>>(new Map())
@@ -369,9 +405,25 @@ export default function WatermarkPage() {
                                         使用 AI 智能去除图片上的水印、文字、logo
                                     </p>
                                 </div>
-                                <Badge variant="outline" className="w-fit bg-amber-500/10 text-amber-400 border-amber-500/30 px-3 py-1.5">
-                                    <span className="text-lg font-bold">{costs.WATERMARK_REMOVE_COST}</span>
-                                    <span className="ml-1">积分/张</span>
+                                <Badge
+                                    variant="outline"
+                                    className="w-fit bg-amber-500/10 text-amber-400 border-amber-500/30 px-3 py-1.5"
+                                >
+                                    {isFreePeriod && timeLeft ? (
+                                        <div className="flex flex-col items-end leading-tight">
+                                            <div className="text-[10px] text-emerald-300/90">限时免费</div>
+                                            <div className="text-[12px] font-semibold text-emerald-300">
+                                                {timeLeft.days}天 {String(timeLeft.hours).padStart(2, "0")}:
+                                                {String(timeLeft.minutes).padStart(2, "0")}:
+                                                {String(timeLeft.seconds).padStart(2, "0")}
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <span className="text-lg font-bold">{costs.WATERMARK_REMOVE_COST}</span>
+                                            <span className="ml-1">积分/张</span>
+                                        </>
+                                    )}
                                 </Badge>
                             </div>
 

@@ -11,19 +11,20 @@ import { Button } from "./ui/button"
 import { PricingModal } from "./pricing-modal"
 import { DailyCheckin } from "./daily-checkin"
 import { useLoginModal } from "@/hooks/use-login-modal"
+import { WATERMARK_REMOVE_FREE_END_AT } from "@/lib/constants"
 
 type NavItem = {
   icon: any
   label: string
   href: string
-  badge?: "pending" // Special badge type
+  badge?: "pending" | "limited_free" // Special badge type
 }
 
 const navItems: NavItem[] = [
   { icon: Sparkles, label: "AI 生图", href: "/" },
   { icon: FileText, label: "智能商品描述", href: "/copywriting" },
   { icon: Droplets, label: "水印模板", href: "/settings/watermark" },
-  { icon: Eraser, label: "智能去水印", href: "/watermark" },
+  { icon: Eraser, label: "智能去水印", href: "/watermark", badge: "limited_free" },
   { icon: Images, label: "我的作品", href: "/history" },
   { icon: ListTodo, label: "任务队列", href: "/tasks", badge: "pending" },
   { icon: Wallet, label: "积分流水", href: "/credits" },
@@ -52,6 +53,24 @@ export function Sidebar() {
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false)
   const loginModal = useLoginModal()
   const [pendingCount, setPendingCount] = useState(0)
+  const [isFreePeriod, setIsFreePeriod] = useState(true)
+
+  // 检查是否在活动期内
+  useEffect(() => {
+    const checkFreePeriod = () => {
+      const now = new Date().getTime()
+      const endTime = new Date(WATERMARK_REMOVE_FREE_END_AT).getTime()
+      setIsFreePeriod(now <= endTime)
+    }
+
+    // 立即检查一次
+    checkFreePeriod()
+
+    // 设置检查间隔（每5分钟检查一次，避免频繁触发重渲染）
+    const interval = setInterval(checkFreePeriod, 5 * 60 * 1000)
+    
+    return () => clearInterval(interval)
+  }, [])
 
   // Fetch pending task count
   useEffect(() => {
@@ -121,7 +140,8 @@ export function Sidebar() {
               pathname === item.href ||
               (item.href === "/" ? pathname === "/" : pathname?.startsWith(item.href))
 
-            const showBadge = item.badge === "pending" && pendingCount > 0
+            const showPendingBadge = item.badge === "pending" && pendingCount > 0
+            const showLimitedFreeBadge = item.badge === "limited_free" && isFreePeriod
 
             return (
               <button
@@ -135,10 +155,15 @@ export function Sidebar() {
                 )}
               >
                 <item.icon className="w-4 h-4" />
-                <span>{item.label}</span>
-                {showBadge && (
-                  <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 animate-pulse">
+                <span className="truncate">{item.label}</span>
+                {showPendingBadge && (
+                  <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 animate-pulse shrink-0">
                     {pendingCount > 9 ? "9+" : pendingCount}
+                  </span>
+                )}
+                {showLimitedFreeBadge && (
+                  <span className="ml-auto inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 shrink-0">
+                    限时免费
                   </span>
                 )}
               </button>
