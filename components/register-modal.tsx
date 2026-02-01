@@ -14,6 +14,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import { ResetPasswordDialog } from "@/components/reset-password-dialog"
 
 interface RegisterModalProps {
   isOpen: boolean
@@ -41,6 +42,15 @@ export function RegisterModal({ isOpen, onClose, initialInviteCode = "", inviteT
   const [loginPassword, setLoginPassword] = useState("")
   const [isLoggingIn, setIsLoggingIn] = useState(false)
 
+  // Reset Password Form State
+  const [resetEmail, setResetEmail] = useState("")
+  const [resetCode, setResetCode] = useState("")
+  const [resetNewPassword, setResetNewPassword] = useState("")
+  const [isSendingResetCode, setIsSendingResetCode] = useState(false)
+  const [resetCountdown, setResetCountdown] = useState(0)
+  const [isResettingPassword, setIsResettingPassword] = useState(false)
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false)
+
   // Countdown Timer
   useEffect(() => {
     if (countdown > 0) {
@@ -48,6 +58,14 @@ export function RegisterModal({ isOpen, onClose, initialInviteCode = "", inviteT
       return () => clearTimeout(timer)
     }
   }, [countdown])
+
+  // Reset password countdown
+  useEffect(() => {
+    if (resetCountdown > 0) {
+      const timer = setTimeout(() => setResetCountdown(resetCountdown - 1), 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [resetCountdown])
 
   // 获取或生成设备ID（用于限流）
   const getDeviceId = (): string => {
@@ -217,7 +235,8 @@ export function RegisterModal({ isOpen, onClose, initialInviteCode = "", inviteT
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <>
+      <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-md border-white/10 bg-slate-900/95 backdrop-blur-xl p-0 overflow-hidden">
         <DialogHeader className="p-6 pb-4">
           <DialogTitle className="text-2xl font-bold gradient-text">
@@ -273,8 +292,25 @@ export function RegisterModal({ isOpen, onClose, initialInviteCode = "", inviteT
                   {isLoggingIn ? "登录中..." : "登录"}
                   <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                 </Button>
+                <div className="flex items-center justify-between pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetEmail(loginIdentifier.trim())
+                      setResetCode("")
+                    
+                      setResetNewPassword("")
+                      setResetCountdown(0)
+                      setIsResetDialogOpen(true)
+                    }}
+                    className="text-xs text-slate-400 hover:text-white underline underline-offset-4 transition-colors"
+                  >
+                    忘记密码？
+                  </button>
+                </div>
               </motion.form>
             </TabsContent>
+
 
             {/* Register Tab */}
             <TabsContent value="register">
@@ -366,6 +402,30 @@ export function RegisterModal({ isOpen, onClose, initialInviteCode = "", inviteT
         </div>
       </DialogContent>
     </Dialog>
+
+      <ResetPasswordDialog
+        isOpen={isResetDialogOpen}
+        onClose={() => setIsResetDialogOpen(false)}
+        email={resetEmail}
+        setEmail={setResetEmail}
+        code={resetCode}
+        setCode={setResetCode}
+        newPassword={resetNewPassword}
+        setNewPassword={setResetNewPassword}
+        isSendingCode={isSendingResetCode}
+        setIsSendingCode={setIsSendingResetCode}
+        countdown={resetCountdown}
+        setCountdown={setResetCountdown}
+        isResetting={isResettingPassword}
+        setIsResetting={setIsResettingPassword}
+        onResetSuccess={(email) => {
+          setLoginIdentifier(email)
+          setLoginPassword("")
+          setResetCode("")
+          setResetNewPassword("")
+        }}
+      />
+    </>
   )
 }
 
