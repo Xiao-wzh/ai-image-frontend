@@ -54,6 +54,7 @@ model User {
   withdrawals               Withdrawal[]
   watermarkTasks            WatermarkTask[]
   copywritings              Copywriting[]
+  orders                    Order[]             /// 用户的支付订单
 }
 
 
@@ -365,5 +366,38 @@ model Copywriting {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([createdAt])
+}
+
+/// 支付订单表（微信/支付宝等）
+model Order {
+  id                  String    @id @default(cuid())
+  outTradeNo          String    @unique             /// 商户订单号（带渠道前缀，如 WX_xxx）
+  channel             String    @default("wechat")  /// 支付渠道: wechat / alipay
+  merchantKey         String                        /// 商户标识: mch_indi / mch_company
+  mchid               String                        /// 微信商户号
+
+  userId              String?                       /// 关联用户（可选，允许未登录下单）
+  user                User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  amount              Int                           /// 订单金额（分）
+  currency            String    @default("CNY")     /// 货币类型
+  title               String                        /// 订单标题/商品描述
+
+  status              String    @default("CREATED") /// 状态: CREATED / PAYING / PAID / CLOSED / REFUND
+  payPlatformTradeNo  String?                       /// 平台交易号（微信 transaction_id）
+  paidAt              DateTime?                     /// 支付完成时间
+
+  rawNotify           Json?                         /// 原始回调数据（用于排查）
+  notifyProcessedAt   DateTime?                     /// 回调处理时间（幂等控制）
+
+  expiredAt           DateTime?                     /// 订单过期时间（TODO: 支持自动关单）
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([merchantKey])
   @@index([createdAt])
 }
