@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser, BarChart3, FileText, Users } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser, BarChart3, FileText, Users, Receipt } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -28,6 +28,7 @@ const navItems: NavItem[] = [
   { icon: Images, label: "我的作品", href: "/history" },
   { icon: ListTodo, label: "任务队列", href: "/tasks", badge: "pending" },
   { icon: Wallet, label: "积分流水", href: "/credits" },
+  { icon: Receipt, label: "充值记录", href: "/orders" },
   { icon: ShieldCheck, label: "售后记录", href: "/appeals" },
   { icon: Gift, label: "邀请赚积分", href: "/referral" },
 
@@ -37,6 +38,7 @@ const navItems: NavItem[] = [
 // 管理员专属导航
 const adminItems: NavItem[] = [
   { icon: BarChart3, label: "收入仪表盘", href: "/admin/dashboard" },
+  { icon: Receipt, label: "订单管理", href: "/admin/orders" },
   { icon: Users, label: "用户管理", href: "/admin/users" },
   { icon: LayoutGrid, label: "生成记录管理", href: "/admin/generations" },
   { icon: ShieldCheck, label: "售后审核", href: "/admin/appeals" },
@@ -68,7 +70,7 @@ export function Sidebar() {
 
     // 设置检查间隔（每5分钟检查一次，避免频繁触发重渲染）
     const interval = setInterval(checkFreePeriod, 5 * 60 * 1000)
-    
+
     return () => clearInterval(interval)
   }, [])
 

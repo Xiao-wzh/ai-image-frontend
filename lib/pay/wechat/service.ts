@@ -150,7 +150,7 @@ export async function createNativeOrder(
 
         const codeUrl = result.data.code_url;
 
-        console.log(`[WechatPay] 下单成功: ${outTradeNo}, codeUrl: ${codeUrl}`);
+        console.log(`[WechatPay] 支付二维码: ${outTradeNo}, codeUrl: ${codeUrl}`);
 
         return {
             outTradeNo,

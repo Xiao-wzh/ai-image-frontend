@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
 
         const codeUrl = result.data.code_url;
 
-        console.log(`[WechatPay] 下单成功: ${order.outTradeNo}, codeUrl: ${codeUrl}`);
+        console.log(`[WechatPay] 支付二维码: ${order.outTradeNo}, codeUrl: ${codeUrl}`);
 
         return NextResponse.json({
             success: true,
