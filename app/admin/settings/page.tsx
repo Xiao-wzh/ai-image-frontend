@@ -215,7 +215,7 @@ export default function AdminSettingsPage() {
                             ) : (
                                 <div className="space-y-6">
                                     <p className="text-sm text-slate-400">
-                                        上传客服微信和售后群的二维码图片，用户可在页面右下角悬浮图标中查看
+                                        上传客服微信和交流群的二维码图片，用户可在页面右下角悬浮图标中查看
                                     </p>
 
                                     <div className="grid gap-6 md:grid-cols-2">
@@ -291,7 +291,7 @@ export default function AdminSettingsPage() {
                                         {/* After Sale Group QR */}
                                         <div className="space-y-3">
                                             <label className="text-sm font-medium text-slate-300">
-                                                售后群二维码
+                                                交流群二维码
                                             </label>
                                             <div className="border border-dashed border-white/20 rounded-xl p-4 bg-slate-800/30">
                                                 {afterSaleGroupQr ? (
@@ -299,7 +299,7 @@ export default function AdminSettingsPage() {
                                                         <div className="w-32 h-32 rounded-lg overflow-hidden bg-white p-1">
                                                             <img
                                                                 src={afterSaleGroupQr}
-                                                                alt="售后群二维码"
+                                                                alt="交流群二维码"
                                                                 className="w-full h-full object-contain"
                                                             />
                                                         </div>

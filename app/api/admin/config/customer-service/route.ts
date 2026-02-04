@@ -8,7 +8,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import prisma from '@/lib/prisma';
-import { revalidateTag } from 'next/cache';
 
 export const runtime = 'nodejs';
 
@@ -93,7 +92,7 @@ export async function PUT(req: NextRequest) {
                 create: {
                     key: 'AFTER_SALE_GROUP_QR',
                     value: afterSaleGroupQr || '',
-                    description: '售后群二维码图片URL',
+                    description: '交流群二维码图片URL',
                 },
                 update: {
                     value: afterSaleGroupQr || '',
@@ -101,8 +100,9 @@ export async function PUT(req: NextRequest) {
             });
         }
 
-        // 刷新缓存
+        // 刷新缓存 - 使用动态 require 避免类型问题
         try {
+            const { revalidateTag } = require('next/cache');
             revalidateTag('customer-service-qr');
         } catch {
             // Ignore if not in server context

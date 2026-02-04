@@ -70,12 +70,12 @@ export function FloatingCustomerService({
                                         <div className="w-28 h-28 rounded-xl overflow-hidden bg-white p-1.5 shadow-lg">
                                             <img
                                                 src={afterSaleGroupQr}
-                                                alt="售后群"
+                                                alt="交流群"
                                                 className="w-full h-full object-contain"
                                             />
                                         </div>
                                         <span className="text-xs text-slate-400 mt-2">
-                                            售后群
+                                            交流群
                                         </span>
                                     </div>
                                 )}
@@ -83,7 +83,7 @@ export function FloatingCustomerService({
 
                             {/* Tip */}
                             <p className="text-xs text-slate-500 mt-3 text-center">
-                                扫码添加客服或加入售后群
+                                扫码添加客服或加入交流群
                             </p>
                         </div>
 
