@@ -103,12 +103,12 @@ export default function AdminSettingsPage() {
         return original !== editedValues[key]
     }
 
-    // 上传图片到 TOS (使用管理员专用上传接口，支持 CDN)
+    // 上传图片到 TOS (复用现有 /api/tos/sign 接口 + keyToCdnUrl 转换)
     const handleUploadImage = async (file: File, type: 'cs' | 'as') => {
         setUploadingCs(type)
         try {
-            // 获取预签名 URL（使用管理员上传接口，返回 CDN 加速 URL）
-            const presignRes = await fetch("/api/admin/upload", {
+            // 获取预签名 URL（使用现有的 TOS 签名接口）
+            const presignRes = await fetch("/api/tos/sign", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -127,11 +127,15 @@ export default function AdminSettingsPage() {
             })
             if (!uploadRes.ok) throw new Error("上传文件失败")
 
+            // 使用 keyToCdnUrl 转换为 CDN URL
+            const { keyToCdnUrl } = await import("@/lib/cdnUrl")
+            const cdnUrl = keyToCdnUrl(presignData.objectKey) as string
+
             // 更新状态
             if (type === 'cs') {
-                setCustomerServiceQr(presignData.publicUrl)
+                setCustomerServiceQr(cdnUrl)
             } else {
-                setAfterSaleGroupQr(presignData.publicUrl)
+                setAfterSaleGroupQr(cdnUrl)
             }
             toast.success("图片上传成功")
         } catch (e: any) {
