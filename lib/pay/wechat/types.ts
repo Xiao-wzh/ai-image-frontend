@@ -8,7 +8,8 @@
 // 订单状态枚举
 // ============================================
 export const OrderStatus = {
-    CREATED: 'CREATED',   // 订单已创建
+    PENDING: 'PENDING',   // 待支付（业务下单完成，等待发起支付）
+    CREATED: 'CREATED',   // 订单已创建（兼容旧逻辑）
     PAYING: 'PAYING',     // 用户扫码中
     PAID: 'PAID',         // 支付成功
     CLOSED: 'CLOSED',     // 订单已关闭（超时/手动）
@@ -69,14 +70,12 @@ export interface MerchantConfigRaw {
 // 创建订单
 // ============================================
 export interface CreateOrderRequest {
-    /** 订单金额（分） */
-    amount: number;
-    /** 订单标题 */
-    title: string;
+    /** 套餐ID（必须从数据库查询价格，不信任前端） */
+    planId: string;
     /** 商户标识（可选，默认使用 WECHAT_DEFAULT_MERCHANT_KEY） */
     merchantKey?: string;
-    /** 用户ID（可选） */
-    userId?: string;
+    /** 用户ID（必须登录） */
+    userId: string;
 }
 
 export interface CreateOrderResponse {

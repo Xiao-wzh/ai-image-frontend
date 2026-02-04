@@ -55,6 +55,51 @@ model User {
   watermarkTasks            WatermarkTask[]
   copywritings              Copywriting[]
   orders                    Order[]             /// 用户的支付订单
+
+  // VIP会员
+  isVIP           Boolean   @default(false)    /// 是否VIP会员
+  vipLevel        Int       @default(0)        // 0=无, 1=月卡Pro, 2=年卡Ultra (预留)
+  vipValidUntil   DateTime?                    /// VIP有效期
+}
+
+
+// ============================================
+// 商品套餐（统一管理积分包和VIP会员）
+// ============================================
+
+enum PlanType {
+  CREDIT        // 积分充值包
+  SUBSCRIPTION  // VIP订阅会员
+}
+
+model Plan {
+  id            String    @id @default(cuid())
+  name          String                          /// 商品名称
+  description   String?                         /// 描述文案
+  type          PlanType  @default(CREDIT)      /// 类型区分
+
+  // 价格配置（单位：分）
+  price         Int                             /// 售价
+  originalPrice Int?                            /// 原价（划线价）
+
+  // 权益配置
+  credits       Int       @default(0)           /// 基础积分
+  giftCredits   Int       @default(0)           /// 赠送积分
+  duration      Int?                            /// 会员时长（天），仅 SUBSCRIPTION 有效
+  features      Json?                           /// 其他权益配置
+
+  isActive      Boolean   @default(true)        /// 是否上架
+  isRecommend   Boolean   @default(false)       /// 是否推荐
+  sortOrder     Int       @default(0)           /// 排序权重
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  orders        Order[]
+
+  @@index([type])
+  @@index([isActive])
+  @@index([sortOrder])
 }
 
 
@@ -400,4 +445,10 @@ model Order {
   @@index([status])
   @@index([merchantKey])
   @@index([createdAt])
+
+  planId      String?                       /// 关联商品ID
+  plan        Plan?     @relation(fields: [planId], references: [id])
+  snapshot    Json?                         /// 下单时的商品快照
+
+  @@index([planId])
 }

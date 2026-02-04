@@ -44,85 +44,103 @@ import {
 
 /**
  * 创建微信 Native 扫码支付订单
+ * 
+ * 安全设计：
+ * 1. 仅接收 planId，从数据库查询价格
+ * 2. 严禁信任前端传来的价格
+ * 3. 保存商品快照用于对账
  */
 export async function createNativeOrder(
     request: CreateOrderRequest
 ): Promise<CreateOrderResponse> {
-    const { amount, title, merchantKey, userId } = request;
+    const { planId, merchantKey, userId } = request;
 
-    // 参数校验
-    if (!amount || amount <= 0) {
-        throw new BadRequestError('订单金额必须大于 0');
+    // 1. 校验 planId
+    if (!planId || typeof planId !== 'string') {
+        throw new BadRequestError('套餐ID不能为空');
     }
-    if (!title || title.trim().length === 0) {
-        throw new BadRequestError('订单标题不能为空');
+
+    // 2. 从数据库查询套餐（必须上架）
+    const plan = await prisma.plan.findUnique({
+        where: { id: planId },
+    });
+
+    if (!plan) {
+        throw new NotFoundError('套餐不存在');
     }
-    // TODO: 金额应由服务端根据商品系统计算，此处暂用请求参数
+
+    if (!plan.isActive) {
+        throw new BadRequestError('该套餐已下架');
+    }
+
+    // 3. 使用数据库中的价格（核心安全点！）
+    const amount = plan.price;
+    const title = plan.name;
+
     // 基础校验：金额不能超过 10 万元（1000 万分）
     if (amount > 10000000) {
         throw new BadRequestError('订单金额超出限制');
     }
 
-    // 获取商户配置
+    // 4. 获取商户配置
     const mchKey = merchantKey ?? getDefaultMerchantKey();
     const config = getMerchantConfig(mchKey);
     const client = getWechatPayClient(mchKey);
 
-    // 生成订单号（带渠道前缀）
+    // 5. 生成订单号（带渠道前缀）
     const outTradeNo = generateOutTradeNo();
     const notifyUrl = getNotifyUrl();
 
     // 订单过期时间：2小时后
     const expiredAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
 
-    console.log("创建订单参数", {
-        outTradeNo,
-        channel: PayChannel.WECHAT,
-        merchantKey: mchKey,
-        mchid: config.mchid,
-        userId: userId ?? null,
-        amount,
-        currency: 'CNY',
-        title: title.trim(),
-        status: OrderStatus.PAYING,
-        expiredAt,
-    });
+    // 6. 创建商品快照（用于对账和历史记录）
+    const snapshot = {
+        planId: plan.id,
+        name: plan.name,
+        description: plan.description,
+        type: plan.type,
+        price: plan.price,
+        credits: plan.credits,
+        giftCredits: plan.giftCredits,
+        duration: plan.duration,
+        features: plan.features,
+    };
 
-    // 创建数据库订单记录
+    console.log(`[WechatPay] 创建订单: ${outTradeNo}, 套餐: ${plan.name}, 金额: ${amount}分, 商户: ${mchKey}`);
+
+    // 7. 创建数据库订单记录
     const order = await prisma.order.create({
         data: {
             outTradeNo,
             channel: PayChannel.WECHAT,
             merchantKey: mchKey,
             mchid: config.mchid,
-            userId: userId ?? null,
+            userId,
             amount,
             currency: 'CNY',
-            title: title.trim(),
-            status: OrderStatus.PAYING, // 创建后直接进入待支付状态
+            title,
+            status: OrderStatus.PAYING,
             expiredAt,
+            planId: plan.id,
+            snapshot,
         },
     });
 
-    console.log(`[WechatPay] 创建订单: ${outTradeNo}, 金额: ${amount}分, 商户: ${mchKey}`);
-
     try {
-        // 调用微信 Native 下单 API
-
+        // 8. 调用微信 Native 下单 API
         const result = await client.transactions_native({
-            description: title.trim().substring(0, 127),
+            description: title.substring(0, 127),
             out_trade_no: outTradeNo,
             notify_url: notifyUrl,
             amount: {
                 total: amount,
                 currency: 'CNY',
             },
-            // time_expire 可选，微信默认 2 小时
         });
 
         if (result.status !== 200 || !result.data?.code_url) {
             console.error('[WechatPay] 下单失败:', result);
-            // 更新订单状态为失败
             await prisma.order.update({
                 where: { id: order.id },
                 data: { status: OrderStatus.CLOSED },
@@ -142,7 +160,6 @@ export async function createNativeOrder(
         };
     } catch (error) {
         console.error('[WechatPay] 下单异常:', error);
-        // 更新订单状态
         await prisma.order.update({
             where: { id: order.id },
             data: { status: OrderStatus.CLOSED },
@@ -298,15 +315,9 @@ async function verifySignatureWithSerial(
 }
 
 /**
- * 处理支付成功（事务）
+ * 处理支付成功
  * 
- * 在同一个事务中完成：
- * - 校验订单存在
- * - 校验金额一致
- * - 幂等检查（notifyProcessedAt）
- * - 更新订单状态
- * - 给用户加积分
- * - 记录佣金
+ * 回调特有的安全校验后，调用原子结算服务
  */
 async function processPaymentSuccess(
     plainResource: NotifyPlainResource,
@@ -316,115 +327,69 @@ async function processPaymentSuccess(
     const transactionId = plainResource.transaction_id;
     const paidAmount = plainResource.amount.total;
 
-    return await prisma.$transaction(async (tx) => {
-        // 1. 查询并锁定订单
-        const orders = await tx.$queryRaw<
-            Array<{
-                id: string;
-                userId: string | null;
-                merchantKey: string;
-                mchid: string;
-                amount: number;
-                status: string;
-                notifyProcessedAt: Date | null;
-            }>
-        >`SELECT "id", "userId", "merchantKey", "mchid", "amount", "status", "notifyProcessedAt" 
-      FROM "Order" 
-      WHERE "outTradeNo" = ${outTradeNo} 
-      FOR UPDATE`;
+    // 1. 查询订单（回调特有的安全校验）
+    const order = await prisma.order.findUnique({
+        where: { outTradeNo },
+        select: {
+            id: true,
+            userId: true,
+            merchantKey: true,
+            mchid: true,
+            amount: true,
+            status: true,
+            notifyProcessedAt: true,
+        },
+    });
 
-        if (orders.length === 0) {
-            console.error(`[WechatPay] 订单不存在: ${outTradeNo}`);
-            throw new NotFoundError(`订单不存在: ${outTradeNo}`);
-        }
+    if (!order) {
+        console.error(`[WechatPay] 订单不存在: ${outTradeNo}`);
+        throw new NotFoundError(`订单不存在: ${outTradeNo}`);
+    }
 
-        const order = orders[0];
+    // 2. 幂等检查：已处理过则跳过（但返回成功，告诉微信不要重试）
+    if (order.notifyProcessedAt !== null || order.status === OrderStatus.PAID) {
+        console.log(`[WechatPay] 订单已处理，跳过: ${outTradeNo}`);
+        return {
+            success: true,
+            code: 'SUCCESS' as const,
+            message: 'OK (已处理)',
+            orderId: order.id,
+        };
+    }
 
-        // 2. 幂等检查：已处理过则跳过
-        if (order.notifyProcessedAt !== null || order.status === OrderStatus.PAID) {
-            console.log(`[WechatPay] 订单已处理，跳过: ${outTradeNo}`);
-            throw new ConflictError('订单已处理');
-        }
+    // 3. 校验商户匹配
+    if (order.mchid !== plainResource.mchid) {
+        console.error(`[WechatPay] 商户号不匹配: 订单=${order.mchid}, 回调=${plainResource.mchid}`);
+        throw new BadRequestError('商户号不匹配');
+    }
 
-        // 3. 校验商户匹配
-        if (order.mchid !== plainResource.mchid) {
-            console.error(`[WechatPay] 商户号不匹配: 订单=${order.mchid}, 回调=${plainResource.mchid}`);
-            throw new BadRequestError('商户号不匹配');
-        }
+    // 4. 校验金额一致（核心安全检查！）
+    if (order.amount !== paidAmount) {
+        console.error(`[WechatPay] 金额不匹配: 订单=${order.amount}, 回调=${paidAmount}`);
+        throw new BadRequestError(`金额不匹配: 订单金额=${order.amount}, 支付金额=${paidAmount}`);
+    }
 
-        // 4. 校验金额一致（核心安全检查！）
-        if (order.amount !== paidAmount) {
-            console.error(`[WechatPay] 金额不匹配: 订单=${order.amount}, 回调=${paidAmount}`);
-            // TODO: 发送报警通知
-            throw new BadRequestError(`金额不匹配: 订单金额=${order.amount}, 支付金额=${paidAmount}`);
-        }
+    // 5. 调用原子结算服务（CAS + 事务内分润）
+    const { settleOrder } = await import('@/lib/order-service');
 
-        const now = new Date();
+    const result = await settleOrder(order.id, {
+        transactionId,
+        rawNotify,
+        source: 'NOTIFY',
+    });
 
-        // 5. 更新订单状态
-        await tx.order.update({
-            where: { id: order.id },
-            data: {
-                status: OrderStatus.PAID,
-                payPlatformTradeNo: transactionId,
-                paidAt: now,
-                rawNotify: JSON.parse(rawNotify),
-                notifyProcessedAt: now,
-            },
-        });
-
-        // 6. 给用户加积分（如果有 userId）
-        if (order.userId) {
-            // 积分 = 金额（分），1分钱 = 1积分
-            const credits = order.amount;
-
-            await tx.user.update({
-                where: { id: order.userId },
-                data: {
-                    credits: { increment: credits },
-                },
-            });
-
-            // 写入积分流水
-            await tx.creditRecord.create({
-                data: {
-                    userId: order.userId,
-                    amount: credits,
-                    type: 'RECHARGE',
-                    description: `微信支付充值：积分+${credits}`,
-                },
-            });
-
-            console.log(`[WechatPay] 用户 ${order.userId} 充值 ${credits} 积分`);
-        }
-
+    // ALREADY_PROCESSED 也算成功（被其他请求抢先处理了）
+    if (result.status === 'SUCCESS' || result.status === 'ALREADY_PROCESSED') {
         console.log(`[WechatPay] 订单支付成功: ${outTradeNo}, transactionId: ${transactionId}`);
-
         return {
             success: true,
             code: 'SUCCESS' as const,
             message: 'OK',
             orderId: order.id,
         };
-    }).then(async (result) => {
-        // 7. 事务外处理佣金分润（不影响主流程）
-        if (result.orderId) {
-            const order = await prisma.order.findUnique({
-                where: { id: result.orderId },
-                select: { userId: true, amount: true, outTradeNo: true },
-            });
+    }
 
-            if (order?.userId) {
-                try {
-                    await distributeCommission(order.userId, order.amount, 'WECHAT', order.outTradeNo);
-                } catch (e) {
-                    console.error('[WechatPay] 佣金分润失败（不影响订单）:', e);
-                }
-            }
-        }
-
-        return result;
-    });
+    throw new Error(result.error || '订单处理失败');
 }
 
 // ============================================

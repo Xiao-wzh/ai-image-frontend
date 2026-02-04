@@ -3,29 +3,40 @@
  * 
  * POST /api/pay/wechat/native/create
  * 
- * 请求：{ amount: number, title: string, merchantKey?: string }
+ * 请求：{ planId: string, merchantKey?: string }
  * 响应：{ outTradeNo: string, codeUrl: string, merchantKey: string, mchid: string }
+ * 
+ * 安全设计：
+ * - 必须登录
+ * - 仅接收 planId，价格从数据库读取
+ * - 严禁信任前端传来的价格
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { createNativeOrder } from '@/lib/pay/wechat/service';
-import { PaymentError, BadRequestError } from '@/lib/pay/wechat/types';
+import { PaymentError } from '@/lib/pay/wechat/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 interface CreateOrderRequestBody {
-    amount: number;
-    title: string;
+    planId: string;
     merchantKey?: string;
 }
 
 export async function POST(req: NextRequest) {
     try {
-        // 获取当前用户（可选，允许未登录下单）
+        // 必须登录
         const session = await auth();
         const userId = session?.user?.id;
+
+        if (!userId) {
+            return NextResponse.json(
+                { error: '请先登录' },
+                { status: 401 }
+            );
+        }
 
         // 解析请求体
         const body = await req.json().catch(() => null) as CreateOrderRequestBody | null;
@@ -37,27 +48,19 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const { amount, title, merchantKey } = body;
+        const { planId, merchantKey } = body;
 
-        // 基础校验
-        if (typeof amount !== 'number' || amount <= 0) {
+        // 校验 planId
+        if (!planId || typeof planId !== 'string') {
             return NextResponse.json(
-                { error: '订单金额必须是正整数（单位：分）' },
+                { error: '套餐ID不能为空' },
                 { status: 400 }
             );
         }
 
-        if (!title || typeof title !== 'string' || title.trim().length === 0) {
-            return NextResponse.json(
-                { error: '订单标题不能为空' },
-                { status: 400 }
-            );
-        }
-
-        // 创建订单
+        // 创建订单（价格从数据库读取，不信任前端）
         const result = await createNativeOrder({
-            amount: Math.floor(amount), // 确保是整数
-            title: title.trim(),
+            planId,
             merchantKey,
             userId,
         });

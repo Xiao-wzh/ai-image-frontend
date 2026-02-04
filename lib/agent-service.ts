@@ -1,11 +1,19 @@
 import prisma from "@/lib/prisma"
+import type { Prisma } from "@prisma/client"
 
 // 从 agent-constants 导入并重新导出（保持其他 API routes 的兼容性）
 export { AGENT_LEVEL, COMMISSION_RATES, L1_INITIAL_QUOTA } from "@/lib/agent-constants"
 import { AGENT_LEVEL, COMMISSION_RATES } from "@/lib/agent-constants"
 
+// Prisma 事务客户端类型
+type TransactionClient = Omit<
+    typeof prisma,
+    "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+>
+
 type CommissionResult = {
     success: boolean
+    skipped?: boolean  // 幂等跳过标记
     distributed: {
         level: number
         earnerId: string
@@ -108,20 +116,32 @@ export async function distributeCommission(
     const distributed: CommissionResult["distributed"] = []
 
     try {
+        console.log(`[Commission] 开始处理分润 - 用户: ${userId}, 金额: ${amount}分, 订单: ${orderId}`)
+
         // 获取充值用户的直接上级
         const user = await prisma.user.findUnique({
             where: { id: userId },
             select: { id: true, invitedById: true },
         })
 
-        if (!user || !user.invitedById) {
+        if (!user) {
+            console.log(`[Commission] 用户不存在: ${userId}`)
+            return { success: true, distributed }
+        }
+
+        if (!user.invitedById) {
+            console.log(`[Commission] 用户 ${userId} 无邀请人，跳过分润`)
             return { success: true, distributed } // 无邀请人，正常返回
         }
 
+        console.log(`[Commission] 用户 ${userId} 的邀请人: ${user.invitedById}`)
+
         // 获取五级上级链（足够找到各级别代理）
         const ancestors = await getAncestorChain(user.invitedById, 5)
+        console.log(`[Commission] 上级链: ${JSON.stringify(ancestors.map(a => ({ id: a.id, level: a.agentLevel })))}`)
 
         if (ancestors.length === 0) {
+            console.log(`[Commission] 上级链为空，跳过分润`)
             return { success: true, distributed }
         }
 
@@ -231,6 +251,191 @@ export async function distributeCommission(
         console.error("❌ 分润失败:", error)
         return { success: false, distributed, error: error?.message || "分润处理失败" }
     }
+}
+
+/**
+ * ================================================================================
+ * 三级分润算法 - 事务版本（用于原子结算）
+ * ================================================================================
+ * 
+ * 与 distributeCommission 相同的分润逻辑，但：
+ * 1. 接收外部传入的事务客户端（tx），确保与订单结算在同一事务
+ * 2. 内置幂等检查，防止重复分润
+ * 
+ * @param tx - Prisma 事务客户端（必须）
+ * @param userId - 充值用户 ID
+ * @param amount - 实付金额（分）
+ * @param orderType - 订单类型
+ * @param orderId - 订单 ID（必须，用于幂等检查）
+ */
+export async function distributeCommissionTx(
+    tx: TransactionClient,
+    userId: string,
+    amount: number,
+    orderType: string,
+    orderId: string
+): Promise<CommissionResult> {
+    const distributed: CommissionResult["distributed"] = []
+
+    try {
+        console.log(`[CommissionTx] 开始处理分润 - 用户: ${userId}, 金额: ${amount}分, 订单: ${orderId}`)
+
+        // ============= 幂等检查：是否已有该订单的佣金记录 =============
+        const existingRecord = await tx.commissionRecord.findFirst({
+            where: { orderId },
+        })
+
+        if (existingRecord) {
+            console.log(`[CommissionTx] 订单 ${orderId} 已有佣金记录，跳过分润（幂等）`)
+            return { success: true, skipped: true, distributed }
+        }
+
+        // 获取充值用户的邀请人
+        const user = await tx.user.findUnique({
+            where: { id: userId },
+            select: { id: true, invitedById: true },
+        })
+
+        if (!user) {
+            console.log(`[CommissionTx] 用户不存在: ${userId}`)
+            return { success: true, distributed }
+        }
+
+        if (!user.invitedById) {
+            console.log(`[CommissionTx] 用户 ${userId} 无邀请人，跳过分润`)
+            return { success: true, distributed }
+        }
+
+        // 获取上级链（使用事务客户端）
+        const ancestors = await getAncestorChainTx(tx, user.invitedById, 5)
+        console.log(`[CommissionTx] 上级链: ${JSON.stringify(ancestors.map(a => ({ id: a.id, level: a.agentLevel })))}`)
+
+        if (ancestors.length === 0) {
+            return { success: true, distributed }
+        }
+
+        // 计算各级佣金
+        const directCommission = Math.floor(amount * COMMISSION_RATES.DIRECT / 100)
+        const managementCommission = Math.floor(amount * COMMISSION_RATES.MANAGEMENT / 100)
+        const topCommission = Math.floor(amount * COMMISSION_RATES.TOP / 100)
+
+        const parent = ancestors[0]
+        if (!parent) return { success: true, distributed }
+
+        // Level 1: 直推奖励 (10%)
+        if (parent.agentLevel > 0 && directCommission > 0) {
+            await tx.user.update({
+                where: { id: parent.id },
+                data: { agentBalance: { increment: directCommission } },
+            })
+            await tx.commissionRecord.create({
+                data: {
+                    earnerId: parent.id,
+                    sourceUserId: userId,
+                    amount: directCommission,
+                    rate: COMMISSION_RATES.DIRECT,
+                    level: 1,
+                    orderId,
+                    orderType,
+                },
+            })
+            distributed.push({ level: 1, earnerId: parent.id, amount: directCommission, rate: COMMISSION_RATES.DIRECT })
+            console.log(`💰 直推奖励: ${parent.id} (L${parent.agentLevel}) 获得 ${directCommission} (10%)`)
+        }
+
+        // Level 2: 管理奖励 (5%)
+        let managementEarner: typeof parent | null = null
+        if (parent.agentLevel === AGENT_LEVEL.L1 || parent.agentLevel === AGENT_LEVEL.L2) {
+            managementEarner = parent
+        } else {
+            for (let i = 1; i < ancestors.length; i++) {
+                if (ancestors[i].agentLevel === AGENT_LEVEL.L1 || ancestors[i].agentLevel === AGENT_LEVEL.L2) {
+                    managementEarner = ancestors[i]
+                    break
+                }
+            }
+        }
+
+        if (managementEarner && managementCommission > 0) {
+            await tx.user.update({
+                where: { id: managementEarner.id },
+                data: { agentBalance: { increment: managementCommission } },
+            })
+            await tx.commissionRecord.create({
+                data: {
+                    earnerId: managementEarner.id,
+                    sourceUserId: userId,
+                    amount: managementCommission,
+                    rate: COMMISSION_RATES.MANAGEMENT,
+                    level: 2,
+                    orderId,
+                    orderType,
+                },
+            })
+            distributed.push({ level: 2, earnerId: managementEarner.id, amount: managementCommission, rate: COMMISSION_RATES.MANAGEMENT })
+            console.log(`💰 管理奖励: ${managementEarner.id} (L${managementEarner.agentLevel}) 获得 ${managementCommission} (5%)`)
+        }
+
+        // Level 3: 顶级奖励 (5%)
+        let topEarner: typeof parent | null = null
+        for (const ancestor of ancestors) {
+            if (ancestor.agentLevel === AGENT_LEVEL.L1) {
+                topEarner = ancestor
+                break
+            }
+        }
+
+        if (topEarner && topCommission > 0) {
+            await tx.user.update({
+                where: { id: topEarner.id },
+                data: { agentBalance: { increment: topCommission } },
+            })
+            await tx.commissionRecord.create({
+                data: {
+                    earnerId: topEarner.id,
+                    sourceUserId: userId,
+                    amount: topCommission,
+                    rate: COMMISSION_RATES.TOP,
+                    level: 3,
+                    orderId,
+                    orderType,
+                },
+            })
+            distributed.push({ level: 3, earnerId: topEarner.id, amount: topCommission, rate: COMMISSION_RATES.TOP })
+            console.log(`💰 顶级奖励: ${topEarner.id} (L${topEarner.agentLevel}) 获得 ${topCommission} (5%)`)
+        }
+
+        return { success: true, distributed }
+    } catch (error: any) {
+        console.error("❌ 分润失败(Tx):", error)
+        return { success: false, distributed, error: error?.message || "分润处理失败" }
+    }
+}
+
+/**
+ * 获取上级链 - 事务版本
+ */
+async function getAncestorChainTx(
+    tx: TransactionClient,
+    userId: string,
+    depth: number
+): Promise<{ id: string; agentLevel: number }[]> {
+    const ancestors: { id: string; agentLevel: number }[] = []
+    let currentId: string | null = userId
+
+    for (let i = 0; i < depth && currentId; i++) {
+        const user: { id: string; agentLevel: number; invitedById: string | null } | null = await tx.user.findUnique({
+            where: { id: currentId },
+            select: { id: true, agentLevel: true, invitedById: true },
+        })
+
+        if (!user) break
+
+        ancestors.push({ id: user.id, agentLevel: user.agentLevel })
+        currentId = user.invitedById
+    }
+
+    return ancestors
 }
 
 /**
