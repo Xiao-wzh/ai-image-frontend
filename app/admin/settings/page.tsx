@@ -1,12 +1,12 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion } from "framer-motion"
 import { Sidebar } from "@/components/sidebar"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Settings, Save, Loader2, RefreshCw, Check } from "lucide-react"
+import { Settings, Save, Loader2, RefreshCw, Check, Upload, Trash2, Headphones, Image as ImageIcon } from "lucide-react"
 import { toast } from "sonner"
 
 type ConfigItem = {
@@ -21,6 +21,15 @@ export default function AdminSettingsPage() {
     const [saving, setSaving] = useState<string | null>(null)
     const [configs, setConfigs] = useState<ConfigItem[]>([])
     const [editedValues, setEditedValues] = useState<Record<string, string>>({})
+
+    // 客服配置状态
+    const [customerServiceQr, setCustomerServiceQr] = useState("")
+    const [afterSaleGroupQr, setAfterSaleGroupQr] = useState("")
+    const [loadingCs, setLoadingCs] = useState(true)
+    const [savingCs, setSavingCs] = useState(false)
+    const [uploadingCs, setUploadingCs] = useState<string | null>(null)
+    const csFileRef = useRef<HTMLInputElement>(null)
+    const asFileRef = useRef<HTMLInputElement>(null)
 
     const fetchConfigs = async () => {
         setLoading(true)
@@ -42,8 +51,25 @@ export default function AdminSettingsPage() {
         }
     }
 
+    const fetchCustomerServiceConfig = async () => {
+        setLoadingCs(true)
+        try {
+            const res = await fetch("/api/admin/config/customer-service")
+            const data = await res.json()
+            if (data.success) {
+                setCustomerServiceQr(data.customerServiceQr || "")
+                setAfterSaleGroupQr(data.afterSaleGroupQr || "")
+            }
+        } catch (e: any) {
+            console.error("获取客服配置失败", e)
+        } finally {
+            setLoadingCs(false)
+        }
+    }
+
     useEffect(() => {
         fetchConfigs()
+        fetchCustomerServiceConfig()
     }, [])
 
     const handleSave = async (key: string) => {
@@ -77,6 +103,73 @@ export default function AdminSettingsPage() {
         return original !== editedValues[key]
     }
 
+    // 上传图片到 TOS (使用管理员专用上传接口，支持 CDN)
+    const handleUploadImage = async (file: File, type: 'cs' | 'as') => {
+        setUploadingCs(type)
+        try {
+            // 获取预签名 URL（使用管理员上传接口，返回 CDN 加速 URL）
+            const presignRes = await fetch("/api/admin/upload", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    filename: file.name,
+                    contentType: file.type,
+                }),
+            })
+            const presignData = await presignRes.json()
+            if (!presignRes.ok) throw new Error(presignData.error || "获取上传地址失败")
+
+            // 上传文件到 TOS
+            const uploadRes = await fetch(presignData.uploadUrl, {
+                method: "PUT",
+                headers: { "Content-Type": file.type },
+                body: file,
+            })
+            if (!uploadRes.ok) throw new Error("上传文件失败")
+
+            // 更新状态
+            if (type === 'cs') {
+                setCustomerServiceQr(presignData.publicUrl)
+            } else {
+                setAfterSaleGroupQr(presignData.publicUrl)
+            }
+            toast.success("图片上传成功")
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setUploadingCs(null)
+        }
+    }
+
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'cs' | 'as') => {
+        const file = e.target.files?.[0]
+        if (file) {
+            handleUploadImage(file, type)
+        }
+        e.target.value = ""
+    }
+
+    const saveCustomerServiceConfig = async () => {
+        setSavingCs(true)
+        try {
+            const res = await fetch("/api/admin/config/customer-service", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    customerServiceQr,
+                    afterSaleGroupQr,
+                }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || "保存失败")
+            toast.success("客服配置已保存，刷新页面后生效")
+        } catch (e: any) {
+            toast.error(e.message)
+        } finally {
+            setSavingCs(false)
+        }
+    }
+
     return (
         <div className="flex h-screen bg-slate-950">
             <Sidebar />
@@ -89,18 +182,196 @@ export default function AdminSettingsPage() {
                                 <Settings className="w-8 h-8 text-purple-400" />
                                 系统配置
                             </h1>
-                            <p className="text-slate-400 mt-1">管理积分消耗等系统配置项</p>
+                            <p className="text-slate-400 mt-1">管理积分消耗、客服配置等系统配置项</p>
                         </div>
                         <Button
-                            onClick={fetchConfigs}
-                            disabled={loading}
+                            onClick={() => { fetchConfigs(); fetchCustomerServiceConfig(); }}
+                            disabled={loading || loadingCs}
                             variant="outline"
                             className="border-white/10 hover:bg-white/5"
                         >
-                            <RefreshCw className={`w-4 h-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+                            <RefreshCw className={`w-4 h-4 mr-2 ${(loading || loadingCs) ? "animate-spin" : ""}`} />
                             刷新
                         </Button>
                     </div>
+
+                    {/* Customer Service Config */}
+                    <Card className="bg-slate-900/50 border-white/10">
+                        <CardHeader>
+                            <CardTitle className="text-white flex items-center gap-2">
+                                <Headphones className="w-5 h-5 text-purple-400" />
+                                客服配置
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {loadingCs ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    <p className="text-sm text-slate-400">
+                                        上传客服微信和售后群的二维码图片，用户可在页面右下角悬浮图标中查看
+                                    </p>
+
+                                    <div className="grid gap-6 md:grid-cols-2">
+                                        {/* Customer Service QR */}
+                                        <div className="space-y-3">
+                                            <label className="text-sm font-medium text-slate-300">
+                                                客服微信二维码
+                                            </label>
+                                            <div className="border border-dashed border-white/20 rounded-xl p-4 bg-slate-800/30">
+                                                {customerServiceQr ? (
+                                                    <div className="flex flex-col items-center gap-3">
+                                                        <div className="w-32 h-32 rounded-lg overflow-hidden bg-white p-1">
+                                                            <img
+                                                                src={customerServiceQr}
+                                                                alt="客服二维码"
+                                                                className="w-full h-full object-contain"
+                                                            />
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => csFileRef.current?.click()}
+                                                                disabled={uploadingCs === 'cs'}
+                                                                className="border-white/10"
+                                                            >
+                                                                {uploadingCs === 'cs' ? (
+                                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                                ) : (
+                                                                    <>
+                                                                        <Upload className="w-3 h-3 mr-1" />
+                                                                        更换
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => setCustomerServiceQr("")}
+                                                                className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                                                            >
+                                                                <Trash2 className="w-3 h-3 mr-1" />
+                                                                删除
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => csFileRef.current?.click()}
+                                                        disabled={uploadingCs === 'cs'}
+                                                        className="w-full py-8 flex flex-col items-center gap-2 text-slate-400 hover:text-white transition-colors"
+                                                    >
+                                                        {uploadingCs === 'cs' ? (
+                                                            <Loader2 className="w-8 h-8 animate-spin" />
+                                                        ) : (
+                                                            <>
+                                                                <ImageIcon className="w-8 h-8" />
+                                                                <span className="text-sm">点击上传图片</span>
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <input
+                                                ref={csFileRef}
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={(e) => handleFileChange(e, 'cs')}
+                                            />
+                                        </div>
+
+                                        {/* After Sale Group QR */}
+                                        <div className="space-y-3">
+                                            <label className="text-sm font-medium text-slate-300">
+                                                售后群二维码
+                                            </label>
+                                            <div className="border border-dashed border-white/20 rounded-xl p-4 bg-slate-800/30">
+                                                {afterSaleGroupQr ? (
+                                                    <div className="flex flex-col items-center gap-3">
+                                                        <div className="w-32 h-32 rounded-lg overflow-hidden bg-white p-1">
+                                                            <img
+                                                                src={afterSaleGroupQr}
+                                                                alt="售后群二维码"
+                                                                className="w-full h-full object-contain"
+                                                            />
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => asFileRef.current?.click()}
+                                                                disabled={uploadingCs === 'as'}
+                                                                className="border-white/10"
+                                                            >
+                                                                {uploadingCs === 'as' ? (
+                                                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                                                ) : (
+                                                                    <>
+                                                                        <Upload className="w-3 h-3 mr-1" />
+                                                                        更换
+                                                                    </>
+                                                                )}
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => setAfterSaleGroupQr("")}
+                                                                className="border-red-500/30 text-red-400 hover:bg-red-500/10"
+                                                            >
+                                                                <Trash2 className="w-3 h-3 mr-1" />
+                                                                删除
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => asFileRef.current?.click()}
+                                                        disabled={uploadingCs === 'as'}
+                                                        className="w-full py-8 flex flex-col items-center gap-2 text-slate-400 hover:text-white transition-colors"
+                                                    >
+                                                        {uploadingCs === 'as' ? (
+                                                            <Loader2 className="w-8 h-8 animate-spin" />
+                                                        ) : (
+                                                            <>
+                                                                <ImageIcon className="w-8 h-8" />
+                                                                <span className="text-sm">点击上传图片</span>
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <input
+                                                ref={asFileRef}
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={(e) => handleFileChange(e, 'as')}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex justify-end">
+                                        <Button
+                                            onClick={saveCustomerServiceConfig}
+                                            disabled={savingCs}
+                                            className="bg-purple-600 hover:bg-purple-700"
+                                        >
+                                            {savingCs ? (
+                                                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                                            ) : (
+                                                <Save className="w-4 h-4 mr-2" />
+                                            )}
+                                            保存客服配置
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
 
                     {/* Config Table */}
                     <Card className="bg-slate-900/50 border-white/10">
@@ -188,8 +459,8 @@ export default function AdminSettingsPage() {
                             <h3 className="text-blue-300 font-semibold mb-2">💡 使用说明</h3>
                             <ul className="text-sm text-slate-400 space-y-1">
                                 <li>• 修改配置值后点击"保存"按钮，配置会立即生效</li>
-                                <li>• 前端页面会自动使用最新配置值（可能有 1 分钟缓存）</li>
-                                <li>• 如果数据库中没有配置项，系统会使用默认值</li>
+                                <li>• 客服配置保存后，刷新页面即可在右下角看到悬浮图标</li>
+                                <li>• 如果两个二维码都为空，则不会显示客服图标</li>
                             </ul>
                         </CardContent>
                     </Card>
@@ -198,3 +469,4 @@ export default function AdminSettingsPage() {
         </div>
     )
 }
+

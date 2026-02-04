@@ -8,6 +8,8 @@ import { LoginModalProviderClient } from "@/components/login-modal-provider"
 import { LoginModalRoot } from "@/components/login-modal-root"
 import { AnnouncementModalProvider } from "@/hooks/use-announcement-modal"
 import { AnnouncementModalRoot } from "@/components/announcement-modal-root"
+import { FloatingCustomerService } from "@/components/floating-customer-service"
+import prisma from "@/lib/prisma"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -33,11 +35,32 @@ export const metadata: Metadata = {
   },
 }
 
-export default function RootLayout({
+// 获取客服二维码配置
+async function getCustomerServiceConfig() {
+  try {
+    const configs = await prisma.systemConfig.findMany({
+      where: { key: { in: ['CUSTOMER_SERVICE_QR', 'AFTER_SALE_GROUP_QR'] } },
+    })
+    const result: Record<string, string> = {}
+    for (const config of configs) {
+      result[config.key] = config.value
+    }
+    return {
+      customerServiceQr: result['CUSTOMER_SERVICE_QR'] || '',
+      afterSaleGroupQr: result['AFTER_SALE_GROUP_QR'] || '',
+    }
+  } catch {
+    return { customerServiceQr: '', afterSaleGroupQr: '' }
+  }
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  const qrConfig = await getCustomerServiceConfig()
+
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <body className="font-sans antialiased">
@@ -48,6 +71,10 @@ export default function RootLayout({
                 {children}
                 <LoginModalRoot />
                 <AnnouncementModalRoot />
+                <FloatingCustomerService
+                  customerServiceQr={qrConfig.customerServiceQr}
+                  afterSaleGroupQr={qrConfig.afterSaleGroupQr}
+                />
                 <Toaster richColors closeButton position="top-center" />
                 <Analytics />
               </ThemeProvider>
@@ -58,5 +85,6 @@ export default function RootLayout({
     </html>
   )
 }
+
 
 
