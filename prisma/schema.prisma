@@ -222,6 +222,7 @@ model Platform {
 // 我们的业务模型
 model Generation {
   id              String   @id @default(uuid()) @db.Uuid
+  requestId       String?  @unique /// 幂等键：前端生成的唯一请求ID，用于防重复提交
   userId          String?
   productName     String
   productType     String

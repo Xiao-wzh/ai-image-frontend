@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useMemo, useState, useCallback } from "react"
+import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Sparkles, ChevronDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -64,6 +64,10 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const [features, setFeatures] = useState("") // 卖点
   const [refFiles, setRefFiles] = useState<File[]>([])
   const [refPreviewUrls, setRefPreviewUrls] = useState<string[]>([])
+
+  // Debounce ref to prevent rapid clicking
+  const lastSubmitTimeRef = useRef<number>(0)
+  const SUBMIT_DEBOUNCE_MS = 2000 // 2 seconds debounce
 
   useEffect(() => {
     if (taskType === "MAIN_IMAGE" && generationMode === "CLONE") {
@@ -247,6 +251,14 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   )
 
   const onSubmit = useCallback(async () => {
+    // Debounce check - prevent rapid clicking
+    const now = Date.now()
+    if (now - lastSubmitTimeRef.current < SUBMIT_DEBOUNCE_MS) {
+      toast.warning("请稍等片刻再点击")
+      return
+    }
+    lastSubmitTimeRef.current = now
+
     if (!isAuthenticated) {
       loginModal.open()
       return
@@ -274,6 +286,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
 
     setIsSubmitting(true)
     try {
+      // Generate unique requestId for idempotency
+      const requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
       // Upload product images
       const uploadedUrls = await Promise.all(
         files.map(async (file) => {
@@ -297,6 +312,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
 
       await handleGeneration(
         {
+          requestId, // Pass requestId for idempotency
           productName: productName.trim(),
           productType,
           platformKey,
