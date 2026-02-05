@@ -12,6 +12,9 @@ import { FloatingCustomerService } from "@/components/floating-customer-service"
 import prisma from "@/lib/prisma"
 import "./globals.css"
 
+// 强制动态渲染，确保每次请求都从数据库获取最新配置
+export const dynamic = "force-dynamic"
+
 export const metadata: Metadata = {
   title: "AI 图像生成器 - 仪表盘",
   description: "使用我们现代化的图像生成器创建令人惊叹的 AI 生成艺术作品",
