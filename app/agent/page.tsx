@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
@@ -19,6 +19,11 @@ import {
     ChevronRight,
     Link,
     UserPlus,
+    Settings,
+    Upload,
+    Save,
+    Trash2,
+    Image as ImageIcon,
 } from "lucide-react"
 
 import { Sidebar } from "@/components/sidebar"
@@ -121,6 +126,15 @@ export default function AgentCenterPage() {
     const [promoteTarget, setPromoteTarget] = useState<TeamMember | null>(null)
     const [promoting, setPromoting] = useState(false)
 
+    // 代理客制化配置
+    const [profileSiteName, setProfileSiteName] = useState("")
+    const [profileWelcomeMsg, setProfileWelcomeMsg] = useState("")
+    const [profileContactQr, setProfileContactQr] = useState("")
+    const [savingProfile, setSavingProfile] = useState(false)
+    const [profileLoaded, setProfileLoaded] = useState(false)
+    const [uploadingQr, setUploadingQr] = useState(false)
+    const qrFileRef = useRef<HTMLInputElement>(null)
+
     // 获取代理统计
     const fetchStats = useCallback(async () => {
         try {
@@ -151,6 +165,89 @@ export default function AgentCenterPage() {
         }
     }, [])
 
+    // 获取代理配置
+    const fetchProfile = useCallback(async () => {
+        try {
+            const res = await fetch("/api/agent/profile")
+            if (res.ok) {
+                const data = await res.json()
+                setProfileSiteName(data.profile?.siteName || "")
+                setProfileWelcomeMsg(data.profile?.welcomeMsg || "")
+                setProfileContactQr(data.profile?.contactQr || "")
+                setProfileLoaded(true)
+            }
+        } catch (e) {
+            console.error("获取代理配置失败:", e)
+        }
+    }, [])
+
+    // 保存代理配置
+    const saveProfile = async () => {
+        setSavingProfile(true)
+        try {
+            const res = await fetch("/api/agent/profile", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    siteName: profileSiteName.trim() || undefined,
+                    welcomeMsg: profileWelcomeMsg.trim() || undefined,
+                    contactQr: profileContactQr.trim() || undefined,
+                }),
+            })
+            const data = await res.json()
+            if (!res.ok) throw new Error(data.error || "保存失败")
+            toast.success("品牌设置已保存")
+        } catch (e: any) {
+            toast.error(e.message || "保存失败")
+        } finally {
+            setSavingProfile(false)
+        }
+    }
+
+    // 上传交流群二维码图片
+    const handleUploadQr = async (file: File) => {
+        setUploadingQr(true)
+        try {
+            // 获取预签名 URL
+            const presignRes = await fetch("/api/tos/sign", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    filename: file.name,
+                    contentType: file.type,
+                }),
+            })
+            const presignData = await presignRes.json()
+            if (!presignRes.ok) throw new Error(presignData.error || "获取上传地址失败")
+
+            // 上传文件到 TOS
+            const uploadRes = await fetch(presignData.uploadUrl, {
+                method: "PUT",
+                headers: { "Content-Type": file.type },
+                body: file,
+            })
+            if (!uploadRes.ok) throw new Error("上传文件失败")
+
+            // 转换为 CDN URL
+            const { keyToCdnUrl } = await import("@/lib/cdnUrl")
+            const cdnUrl = keyToCdnUrl(presignData.objectKey) as string
+            setProfileContactQr(cdnUrl)
+            toast.success("二维码上传成功")
+        } catch (e: any) {
+            toast.error(e.message || "上传失败")
+        } finally {
+            setUploadingQr(false)
+        }
+    }
+
+    const handleQrFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (file) {
+            handleUploadQr(file)
+            e.target.value = ""
+        }
+    }
+
     useEffect(() => {
         if (status === "unauthenticated") {
             router.push("/")
@@ -159,8 +256,9 @@ export default function AgentCenterPage() {
         if (session?.user) {
             fetchStats()
             fetchTeam()
+            fetchProfile()
         }
-    }, [session, status, router, fetchStats, fetchTeam])
+    }, [session, status, router, fetchStats, fetchTeam, fetchProfile])
 
     // 复制邀请码
     const copyReferralCode = () => {
@@ -469,6 +567,118 @@ export default function AgentCenterPage() {
                                             </Button>
                                         </div>
                                     )}
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* 品牌设置 - 仅代理可见 */}
+                        {profileLoaded && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.55 }}
+                                className="relative z-10 glass rounded-2xl border border-white/10 overflow-hidden mb-8"
+                            >
+                                <div className="p-5 border-b border-white/10">
+                                    <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                                        <Settings className="w-5 h-5 text-purple-400" />
+                                        品牌设置
+                                    </h2>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        自定义您的品牌展示，您的下级用户将看到这些信息
+                                    </p>
+                                </div>
+
+                                <div className="p-5 space-y-4">
+                                    <div>
+                                        <Label className="text-slate-300">店铺名称</Label>
+                                        <Input
+                                            placeholder="如：老郑AI创作室"
+                                            value={profileSiteName}
+                                            onChange={(e) => setProfileSiteName(e.target.value)}
+                                            className="mt-1 bg-white/5 border-white/10 text-white"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <Label className="text-slate-300">欢迎语/副标题</Label>
+                                        <Input
+                                            placeholder="如：专为电商人打造的AI创作平台"
+                                            value={profileWelcomeMsg}
+                                            onChange={(e) => setProfileWelcomeMsg(e.target.value)}
+                                            className="mt-1 bg-white/5 border-white/10 text-white"
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <Label className="text-slate-300">交流群二维码</Label>
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            ref={qrFileRef}
+                                            onChange={handleQrFileChange}
+                                            className="hidden"
+                                        />
+                                        {profileContactQr ? (
+                                            <div className="mt-2 relative w-32">
+                                                <img
+                                                    src={profileContactQr}
+                                                    alt="交流群二维码"
+                                                    className="w-32 h-32 object-cover rounded-lg border border-white/10"
+                                                />
+                                                <div className="absolute top-1 right-1 flex gap-1">
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        onClick={() => qrFileRef.current?.click()}
+                                                        disabled={uploadingQr}
+                                                        className="w-6 h-6 bg-black/50 hover:bg-black/70 text-white"
+                                                    >
+                                                        {uploadingQr ? (
+                                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                                        ) : (
+                                                            <Upload className="w-3 h-3" />
+                                                        )}
+                                                    </Button>
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        onClick={() => setProfileContactQr("")}
+                                                        className="w-6 h-6 bg-black/50 hover:bg-red-500/70 text-white"
+                                                    >
+                                                        <Trash2 className="w-3 h-3" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div
+                                                onClick={() => !uploadingQr && qrFileRef.current?.click()}
+                                                className="mt-2 w-32 h-32 border-2 border-dashed border-white/20 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-purple-500/50 transition-colors"
+                                            >
+                                                {uploadingQr ? (
+                                                    <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+                                                ) : (
+                                                    <>
+                                                        <ImageIcon className="w-8 h-8 text-slate-500 mb-1" />
+                                                        <span className="text-xs text-slate-500">点击上传</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                        <p className="text-xs text-slate-500 mt-2">
+                                            用户将在右下角悬浮窗口中看到此二维码
+                                        </p>
+                                    </div>
+
+                                    <Button
+                                        onClick={saveProfile}
+                                        disabled={savingProfile}
+                                        className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white hover:opacity-90"
+                                    >
+                                        {savingProfile && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
+                                        <Save className="w-4 h-4 mr-2" />
+                                        保存设置
+                                    </Button>
                                 </div>
                             </motion.div>
                         )}

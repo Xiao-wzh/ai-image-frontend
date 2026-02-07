@@ -60,6 +60,9 @@ model User {
   isVIP           Boolean   @default(false)    /// 是否VIP会员
   vipLevel        Int       @default(0)        // 0=无, 1=月卡Pro, 2=年卡Ultra (预留)
   vipValidUntil   DateTime?                    /// VIP有效期
+
+  // 代理客制化配置
+  agentProfile    Json?                        /// { siteName, welcomeMsg, contactQr }
 }
 
 

@@ -10,6 +10,7 @@ import { AnnouncementModalProvider } from "@/hooks/use-announcement-modal"
 import { AnnouncementModalRoot } from "@/components/announcement-modal-root"
 import { FloatingCustomerService } from "@/components/floating-customer-service"
 import prisma from "@/lib/prisma"
+import { getCurrentAgentProfile } from "@/lib/agent-helper"
 import "./globals.css"
 
 // 强制动态渲染，确保每次请求都从数据库获取最新配置
@@ -38,8 +39,8 @@ export const metadata: Metadata = {
   },
 }
 
-// 获取客服二维码配置
-async function getCustomerServiceConfig() {
+// 获取系统客服二维码配置
+async function getSystemCustomerServiceConfig() {
   try {
     const configs = await prisma.systemConfig.findMany({
       where: { key: { in: ['CUSTOMER_SERVICE_QR', 'AFTER_SALE_GROUP_QR'] } },
@@ -62,7 +63,15 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const qrConfig = await getCustomerServiceConfig()
+  // 并行获取系统配置和代理配置
+  const [systemQrConfig, agentContext] = await Promise.all([
+    getSystemCustomerServiceConfig(),
+    getCurrentAgentProfile(),
+  ])
+
+  // 代理客服二维码优先于系统配置
+  const customerServiceQr = systemQrConfig.customerServiceQr
+  const afterSaleGroupQr = agentContext.profile.contactQr || systemQrConfig.afterSaleGroupQr
 
   return (
     <html lang="zh-CN" suppressHydrationWarning>
@@ -75,8 +84,8 @@ export default async function RootLayout({
                 <LoginModalRoot />
                 <AnnouncementModalRoot />
                 <FloatingCustomerService
-                  customerServiceQr={qrConfig.customerServiceQr}
-                  afterSaleGroupQr={qrConfig.afterSaleGroupQr}
+                  customerServiceQr={customerServiceQr}
+                  afterSaleGroupQr={afterSaleGroupQr}
                 />
                 <Toaster richColors closeButton position="top-center" />
                 <Analytics />
@@ -88,6 +97,3 @@ export default async function RootLayout({
     </html>
   )
 }
-
-
-
