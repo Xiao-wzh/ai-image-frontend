@@ -89,6 +89,17 @@ export default async function RootLayout({
                 />
                 <Toaster richColors closeButton position="top-center" />
                 <Analytics />
+                {/* ICP 备案号 */}
+                <footer className="fixed bottom-0 left-0 right-0 z-50 py-2 text-center pointer-events-none">
+                  <a
+                    href="https://beian.miit.gov.cn/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-slate-500/60 hover:text-slate-400 transition-colors pointer-events-auto"
+                  >
+                    粤ICP备2026011207号
+                  </a>
+                </footer>
               </ThemeProvider>
             </AnnouncementModalProvider>
           </LoginModalProviderClient>
