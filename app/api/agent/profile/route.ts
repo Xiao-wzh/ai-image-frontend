@@ -72,7 +72,7 @@ export async function PUT(request: NextRequest) {
         // 更新数据库
         await prisma.user.update({
             where: { id: session.user.id },
-            data: { agentProfile: profile },
+            data: { agentProfile: profile as any },
         })
 
         return NextResponse.json({
