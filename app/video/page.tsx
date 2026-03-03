@@ -76,13 +76,13 @@ export default function VideoPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
-  // 暂时仅管理员可访问
-  React.useEffect(() => {
-    if (status === "loading") return
-    if (!session?.user || (session.user as any).role !== "ADMIN") {
-      router.replace("/")
-    }
-  }, [session, status, router])
+  // // 暂时仅管理员可访问
+  // React.useEffect(() => {
+  //   if (status === "loading") return
+  //   if (!session?.user || (session.user as any).role !== "ADMIN") {
+  //     router.replace("/")
+  //   }
+  // }, [session, status, router])
 
   const [refFiles, setRefFiles] = React.useState<File[]>([])
   const [refPreviews, setRefPreviews] = React.useState<string[]>([])
