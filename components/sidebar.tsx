@@ -22,7 +22,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { icon: Sparkles, label: "AI 生图", href: "/" },
-  { icon: Video, label: "AI 视频", href: "/video" },
+  // { icon: Video, label: "AI 视频", href: "/video" }, // 暂时关闭
   { icon: FileText, label: "智能商品描述", href: "/copywriting" },
   { icon: Droplets, label: "水印模板", href: "/settings/watermark" },
   { icon: Eraser, label: "智能去水印", href: "/watermark", badge: "limited_free" },
