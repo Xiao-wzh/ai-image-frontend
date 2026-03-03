@@ -15,7 +15,7 @@ export interface AgentProfile {
 /** 默认的代理配置 */
 export const DEFAULT_AGENT_PROFILE: Required<AgentProfile> = {
     siteName: "AI Species",
-    welcomeMsg: "专业AI电商图片生成平台",
+    welcomeMsg: "专业AI电商图片视频生成平台",
     contactQr: "",
 }
 

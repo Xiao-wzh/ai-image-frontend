@@ -572,7 +572,7 @@ export default function AgentCenterPage() {
                         )}
 
                         {/* 品牌设置 - 仅代理可见 */}
-                        {profileLoaded && (
+                        {/* {profileLoaded && (
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -681,7 +681,7 @@ export default function AgentCenterPage() {
                                     </Button>
                                 </div>
                             </motion.div>
-                        )}
+                        )} */}
 
                         {/* 团队管理 */}
                         <motion.div

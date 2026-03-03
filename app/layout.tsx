@@ -17,9 +17,9 @@ import "./globals.css"
 export const dynamic = "force-dynamic"
 
 export const metadata: Metadata = {
-  title: "AI 图像生成器 - 仪表盘",
+  title: "ai-species-淯隆",
   description: "使用我们现代化的图像生成器创建令人惊叹的 AI 生成艺术作品",
-  generator: "v0.app",
+  generator: "ai-species-淯隆",
   icons: {
     icon: [
       {
@@ -97,6 +97,8 @@ export default async function RootLayout({
                     rel="noopener noreferrer"
                     className="text-xs text-slate-500/60 hover:text-slate-400 transition-colors pointer-events-auto"
                   >
+                    @ 2026 深圳市淯隆电子商务有限公司
+                    <br />
                     粤ICP备2026011207号
                   </a>
                 </footer>

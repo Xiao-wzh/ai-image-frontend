@@ -14,10 +14,10 @@ import {
   Layers,
   Zap,
   User,
-  Tag,
   Video,
   Film,
   Clapperboard,
+  Loader2,
 } from "lucide-react"
 import { Sidebar } from "@/components/sidebar"
 import { UserAccountNav } from "@/components/user-account-nav"
@@ -37,18 +37,26 @@ import {
 import { PromptWizardDialog, type StoryboardShot } from "@/components/video/prompt-wizard"
 import { StoryboardTimeline } from "@/components/video/storyboard-timeline"
 
+type VideoModel = "veo3.1-pro" | "sora-2-pro"
+
 type VideoParams = {
+  model: VideoModel
   ratio: "16:9" | "9:16" | "1:1"
   duration: number
   quality: "标准" | "高清" | "超清"
   count: 1 | 2 | 3 | 4
 }
 
+const MODEL_DURATIONS: Record<VideoModel, number[]> = {
+  "sora-2-pro": [8, 12, 15],
+  "veo3.1-pro": [8, 16, 24],
+}
+
 function clamp(n: number, a: number, b: number) {
   return Math.min(b, Math.max(a, n))
 }
 
-/* ── animation variants ── */
+/* ── 动画变体 ── */
 const fadeUp = {
   hidden: { opacity: 0, y: 24 },
   visible: (i: number) => ({
@@ -67,9 +75,13 @@ export default function VideoPage() {
   const { data: session, status } = useSession()
   const [refFiles, setRefFiles] = React.useState<File[]>([])
   const [refPreviews, setRefPreviews] = React.useState<string[]>([])
+  // VEO 尾帧状态
+  const [endFrameFiles, setEndFrameFiles] = React.useState<File[]>([])
+  const [endFramePreviews, setEndFramePreviews] = React.useState<string[]>([])
   const [videoParams, setVideoParams] = React.useState<VideoParams>({
+    model: "sora-2-pro",
     ratio: "9:16",
-    duration: 15,
+    duration: 8,
     quality: "标准",
     count: 1,
   })
@@ -79,7 +91,7 @@ export default function VideoPage() {
   const [focusMode, setFocusMode] = React.useState(false)
   const textareaRef = React.useRef<HTMLTextAreaElement>(null)
 
-  // Auto-resize textarea
+  // 自动调整文本框高度
   React.useEffect(() => {
     const el = textareaRef.current
     if (!el) return
@@ -96,19 +108,91 @@ export default function VideoPage() {
     return () => urls.forEach((u) => URL.revokeObjectURL(u))
   }, [refFiles])
 
+  React.useEffect(() => {
+    const urls = endFrameFiles.map((f) => URL.createObjectURL(f))
+    setEndFramePreviews(urls)
+    return () => urls.forEach((u) => URL.revokeObjectURL(u))
+  }, [endFrameFiles])
+
+  // 切换模型时重置时长并清空图片
+  const handleModelChange = React.useCallback((newModel: VideoModel) => {
+    setVideoParams((p) => ({
+      ...p,
+      model: newModel,
+      duration: MODEL_DURATIONS[newModel][0],
+    }))
+    setRefFiles([])
+    setEndFrameFiles([])
+  }, [])
+
   const promptLen = prompt.length
   const progress = clamp(promptLen / 8000, 0, 1)
   const canSend = prompt.trim().length > 0
+  const [isSubmitting, setIsSubmitting] = React.useState(false)
+
+  const handleSubmit = React.useCallback(async () => {
+    if (!canSend || isSubmitting) return
+    setIsSubmitting(true)
+    try {
+      if (videoParams.model === "veo3.1-pro") {
+        // ── VEO 模式：FormData 提交，后端上传 TOS 获取 CDN URL 再发 N8N ──
+        const fd = new FormData()
+        fd.append("prompt", prompt)
+        fd.append("videoParams", JSON.stringify(videoParams))
+        // 首帧和尾帧都放到 images 字段
+        refFiles.forEach((file) => {
+          fd.append("images", file)
+        })
+        endFrameFiles.forEach((file) => {
+          fd.append("images", file)
+        })
+
+        const res = await fetch("/api/video/veo", {
+          method: "POST",
+          body: fd,
+        })
+        const json = await res.json()
+        if (!res.ok || !json.success) {
+          console.error("[VEO] 提交失败:", json.error)
+          return
+        }
+        console.log("[VEO] 提交成功:", json.data)
+      } else {
+        // ── Sora 模式：FormData 提交 ──
+        const fd = new FormData()
+        fd.append("prompt", prompt)
+        fd.append("videoParams", JSON.stringify(videoParams))
+        refFiles.forEach((file) => {
+          fd.append("images", file)
+        })
+
+        const res = await fetch("/api/video/submit", {
+          method: "POST",
+          body: fd,
+        })
+        const json = await res.json()
+        if (!res.ok || !json.success) {
+          console.error("[SORA] 提交失败:", json.error)
+          return
+        }
+        console.log("[SORA] 提交成功:", json.data)
+      }
+    } catch (err) {
+      console.error("[VIDEO] 提交异常:", err)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [canSend, isSubmitting, prompt, videoParams, refFiles, endFrameFiles])
 
   return (
     <div className="relative flex h-screen bg-slate-950 text-white">
-      {/* ── Aurora Background ── */}
+      {/* ── 极光背景 ── */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-40 left-1/2 h-[600px] w-[600px] -translate-x-1/2 rounded-full bg-blue-600/15 blur-[140px] animate-aurora" />
         <div className="absolute top-40 -left-20 h-[480px] w-[480px] rounded-full bg-fuchsia-500/12 blur-[130px] animate-aurora-delay" />
         <div className="absolute -bottom-40 right-10 h-[560px] w-[560px] rounded-full bg-cyan-400/10 blur-[150px] animate-aurora-slow" />
         <div className="absolute top-1/2 left-1/3 h-[300px] w-[300px] rounded-full bg-violet-500/8 blur-[100px] animate-aurora-delay" />
-        {/* Dot grid */}
+        {/* 点阵网格 */}
         <div
           className="absolute inset-0 opacity-[0.04]"
           style={{
@@ -135,7 +219,7 @@ export default function VideoPage() {
         <main className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="mx-auto max-w-5xl px-8 py-12">
 
-            {/* ── Hero Section ── */}
+            {/* ── 标题区域 ── */}
             <motion.div
               initial="hidden"
               animate="visible"
@@ -165,7 +249,7 @@ export default function VideoPage() {
               </motion.p>
             </motion.div>
 
-            {/* ── Console Card ── */}
+            {/* ── 控制台卡片 ── */}
             <motion.div
               variants={fadeUp}
               initial="hidden"
@@ -179,55 +263,155 @@ export default function VideoPage() {
                   : "border-white/10 video-glow bg-slate-900/35",
               ].join(" ")}
             >
-              {/* Glass highlight layer */}
+              {/* 玻璃高光层 */}
               <div className="pointer-events-none absolute inset-0 rounded-[32px] bg-gradient-to-b from-white/[0.07] via-transparent to-transparent opacity-60" />
-              {/* Inner aurora accent */}
+              {/* 内部极光点缀 */}
               <div className="pointer-events-none absolute -top-20 -right-20 h-40 w-40 rounded-full bg-blue-500/10 blur-[60px] animate-aurora" />
               <div className="pointer-events-none absolute -bottom-16 -left-16 h-32 w-32 rounded-full bg-violet-500/8 blur-[50px] animate-aurora-delay" />
 
               <div className="relative p-6">
                 <div className="flex items-start gap-6">
-                  {/* Left: Image Upload */}
-                  <motion.div
-                    className="relative shrink-0"
-                    whileHover={{ scale: 1.03 }}
-                    transition={{ type: "spring", stiffness: 300, damping: 20 }}
-                  >
-                    {refPreviews.length > 0 ? (
-                      <div className="group relative h-28 w-28 overflow-hidden rounded-2xl border border-white/15 bg-white/5 shadow-inner ring-1 ring-white/5">
-                        <img src={refPreviews[0]} alt="Ref" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
-                        <button
-                          onClick={() => setRefFiles([])}
-                          className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1.5 text-white opacity-0 backdrop-blur-sm transition-all group-hover:opacity-100 hover:bg-red-500/80 hover:scale-110"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ) : (
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button className="group flex h-28 w-28 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 bg-white/[0.03] shadow-inner transition-all duration-300 hover:bg-white/[0.08] hover:border-blue-500/30 hover:shadow-blue-500/10 hover:shadow-lg">
-                            <motion.div
-                              className="rounded-xl bg-white/5 p-3 transition-colors group-hover:bg-blue-500/15"
-                              whileHover={{ rotate: [0, -5, 5, 0] }}
-                              transition={{ duration: 0.4 }}
+                  {/* 左侧：图片上传 — 模型切换动画 */}
+                  <AnimatePresence mode="wait">
+                    {videoParams.model === "sora-2-pro" ? (
+                      /* ── Sora：单张参考图 ── */
+                      <motion.div
+                        key="sora-upload"
+                        className="relative shrink-0"
+                        initial={{ opacity: 0, x: -30, scale: 0.92 }}
+                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                        exit={{ opacity: 0, x: 30, scale: 0.92 }}
+                        transition={{ type: "spring", stiffness: 260, damping: 24 }}
+                        whileHover={{ scale: 1.03 }}
+                      >
+                        {refPreviews.length > 0 ? (
+                          <div className="group relative h-28 w-28 overflow-hidden rounded-2xl border border-white/15 bg-white/5 shadow-inner ring-1 ring-white/5">
+                            <img src={refPreviews[0]} alt="Ref" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                            <button
+                              onClick={() => setRefFiles([])}
+                              className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1.5 text-white opacity-0 backdrop-blur-sm transition-all group-hover:opacity-100 hover:bg-red-500/80 hover:scale-110"
                             >
-                              <ImageIcon className="h-7 w-7 text-slate-400 transition-colors group-hover:text-blue-400" />
-                            </motion.div>
-                            <span className="text-xs font-medium text-slate-400 transition-colors group-hover:text-blue-300">参考图</span>
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-80 overflow-hidden rounded-2xl border-white/10 bg-slate-900/95 p-0 backdrop-blur-xl shadow-2xl" side="bottom" align="start">
-                          <div className="p-4">
-                            <ImageUploadZone files={refFiles} previewUrls={refPreviews} onFilesChange={setRefFiles} maxFiles={1} />
+                              <X className="h-3 w-3" />
+                            </button>
                           </div>
-                        </PopoverContent>
-                      </Popover>
-                    )}
-                  </motion.div>
+                        ) : (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button className="group flex h-28 w-28 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/15 bg-white/[0.03] shadow-inner transition-all duration-300 hover:bg-white/[0.08] hover:border-blue-500/30 hover:shadow-blue-500/10 hover:shadow-lg">
+                                <motion.div
+                                  className="rounded-xl bg-white/5 p-3 transition-colors group-hover:bg-blue-500/15"
+                                  whileHover={{ rotate: [0, -5, 5, 0] }}
+                                  transition={{ duration: 0.4 }}
+                                >
+                                  <ImageIcon className="h-7 w-7 text-slate-400 transition-colors group-hover:text-blue-400" />
+                                </motion.div>
+                                <span className="text-xs font-medium text-slate-400 transition-colors group-hover:text-blue-300">参考图</span>
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-80 overflow-hidden rounded-2xl border-white/10 bg-slate-900/95 p-0 backdrop-blur-xl shadow-2xl" side="bottom" align="start">
+                              <div className="p-4">
+                                <ImageUploadZone files={refFiles} previewUrls={refPreviews} onFilesChange={setRefFiles} maxFiles={1} />
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )}
+                      </motion.div>
+                    ) : (
+                      /* ── VEO：首帧 + 尾帧 ── */
+                      <motion.div
+                        key="veo-upload"
+                        className="relative shrink-0 flex items-center gap-3"
+                        initial={{ opacity: 0, x: -30, scale: 0.92 }}
+                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                        exit={{ opacity: 0, x: 30, scale: 0.92 }}
+                        transition={{ type: "spring", stiffness: 260, damping: 24 }}
+                      >
+                        {/* 首帧 */}
+                        <motion.div whileHover={{ scale: 1.03 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
+                          {refPreviews.length > 0 ? (
+                            <div className="group relative h-28 w-28 overflow-hidden rounded-2xl border border-white/15 bg-white/5 shadow-inner ring-1 ring-white/5">
+                              <img src={refPreviews[0]} alt="首帧" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                              <span className="absolute left-1.5 bottom-1.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300 backdrop-blur-sm">首帧</span>
+                              <button
+                                onClick={() => setRefFiles([])}
+                                className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1.5 text-white opacity-0 backdrop-blur-sm transition-all group-hover:opacity-100 hover:bg-red-500/80 hover:scale-110"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button className="group flex h-28 w-28 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-emerald-500/20 bg-emerald-500/[0.03] shadow-inner transition-all duration-300 hover:bg-emerald-500/[0.08] hover:border-emerald-500/30 hover:shadow-emerald-500/10 hover:shadow-lg">
+                                  <motion.div
+                                    className="rounded-xl bg-emerald-500/5 p-2.5 transition-colors group-hover:bg-emerald-500/15"
+                                    whileHover={{ rotate: [0, -5, 5, 0] }}
+                                    transition={{ duration: 0.4 }}
+                                  >
+                                    <ImageIcon className="h-6 w-6 text-emerald-400/70 transition-colors group-hover:text-emerald-400" />
+                                  </motion.div>
+                                  <span className="text-[11px] font-medium text-emerald-300/60 transition-colors group-hover:text-emerald-300">首帧</span>
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80 overflow-hidden rounded-2xl border-white/10 bg-slate-900/95 p-0 backdrop-blur-xl shadow-2xl" side="bottom" align="start">
+                                <div className="p-4">
+                                  <ImageUploadZone files={refFiles} previewUrls={refPreviews} onFilesChange={setRefFiles} maxFiles={1} />
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
+                        </motion.div>
 
-                  {/* Right: Prompt */}
+                        {/* 箭头连接线 */}
+                        <div className="flex flex-col items-center gap-0.5 text-slate-600">
+                          <div className="h-px w-6 bg-gradient-to-r from-emerald-500/30 to-violet-500/30" />
+                          <span className="text-[9px] font-medium tracking-wider uppercase">→</span>
+                          <div className="h-px w-6 bg-gradient-to-r from-emerald-500/30 to-violet-500/30" />
+                        </div>
+
+                        {/* 尾帧 */}
+                        <motion.div whileHover={{ scale: 1.03 }} transition={{ type: "spring", stiffness: 300, damping: 20 }}>
+                          {endFramePreviews.length > 0 ? (
+                            <div className="group relative h-28 w-28 overflow-hidden rounded-2xl border border-white/15 bg-white/5 shadow-inner ring-1 ring-white/5">
+                              <img src={endFramePreviews[0]} alt="尾帧" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-110" />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent opacity-0 transition-opacity group-hover:opacity-100" />
+                              <span className="absolute left-1.5 bottom-1.5 rounded-md bg-black/70 px-1.5 py-0.5 text-[10px] font-semibold text-violet-300 backdrop-blur-sm">尾帧</span>
+                              <button
+                                onClick={() => setEndFrameFiles([])}
+                                className="absolute right-1.5 top-1.5 rounded-full bg-black/60 p-1.5 text-white opacity-0 backdrop-blur-sm transition-all group-hover:opacity-100 hover:bg-red-500/80 hover:scale-110"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button className="group flex h-28 w-28 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-violet-500/20 bg-violet-500/[0.03] shadow-inner transition-all duration-300 hover:bg-violet-500/[0.08] hover:border-violet-500/30 hover:shadow-violet-500/10 hover:shadow-lg">
+                                  <motion.div
+                                    className="rounded-xl bg-violet-500/5 p-2.5 transition-colors group-hover:bg-violet-500/15"
+                                    whileHover={{ rotate: [0, -5, 5, 0] }}
+                                    transition={{ duration: 0.4 }}
+                                  >
+                                    <ImageIcon className="h-6 w-6 text-violet-400/70 transition-colors group-hover:text-violet-400" />
+                                  </motion.div>
+                                  <span className="text-[11px] font-medium text-violet-300/60 transition-colors group-hover:text-violet-300">尾帧</span>
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-80 overflow-hidden rounded-2xl border-white/10 bg-slate-900/95 p-0 backdrop-blur-xl shadow-2xl" side="bottom" align="start">
+                                <div className="p-4">
+                                  <ImageUploadZone files={endFrameFiles} previewUrls={endFramePreviews} onFilesChange={setEndFrameFiles} maxFiles={1} />
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          )}
+                        </motion.div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* 右侧：提示词输入 */}
                   <div className="flex-1 space-y-4">
                     <p className="text-sm font-medium text-slate-400">上传商品图并描述视频要素，避免真人或 IP 形象。</p>
                     <div className="relative">
@@ -242,7 +426,7 @@ export default function VideoPage() {
                         className="w-full resize-none border-0 bg-transparent p-0 text-base leading-relaxed text-white placeholder:text-slate-600 outline-none ring-0 focus:outline-none focus:ring-0 focus:border-0 shadow-none"
                         style={{ minHeight: '48px', maxHeight: '360px' }}
                       />
-                      {/* Animated gradient underline */}
+                      {/* 渐变动画下划线 */}
                       <div className="pointer-events-none absolute -bottom-1 left-0 right-0">
                         <div className="h-[2px] w-full overflow-hidden rounded-full bg-white/5">
                           <motion.div
@@ -262,12 +446,24 @@ export default function VideoPage() {
                   </div>
                 </div>
 
-                {/* ── Settings Toolbar ── */}
+
+                {/* ── 设置工具栏 ── */}
                 <div className="mt-6 border-t border-white/[0.06] pt-5 space-y-4">
-                  {/* Row 1: Parameter pills + feature buttons */}
+                  {/* 第一行：参数胶囊 + 功能按钮 */}
                   <div className="overflow-x-auto whitespace-nowrap [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                     <div className="inline-flex items-center gap-2.5">
-                      {/* Ratio */}
+                      {/* 模型选择 */}
+                      <motion.div {...pillSpring}>
+                        <Select value={videoParams.model} onValueChange={(v) => handleModelChange(v as VideoModel)}>
+                          <SelectTrigger className="h-9 w-auto gap-2 rounded-full border border-cyan-500/20 bg-cyan-500/5 px-3.5 text-sm font-medium text-cyan-200 transition-all hover:bg-cyan-500/10 hover:border-cyan-500/30 active:scale-[0.97] shadow-sm">
+                            <Film className="h-3.5 w-3.5 text-cyan-400" />
+                            <SelectValue placeholder="模型" />
+                          </SelectTrigger>
+                          <SelectContent><SelectItem value="sora-2-pro">Sora 2 Pro</SelectItem><SelectItem value="veo3.1-pro">VEO 3.1 Pro</SelectItem></SelectContent>
+                        </Select>
+                      </motion.div>
+
+                      {/* 比例 */}
                       <motion.div {...pillSpring}>
                         <Select value={videoParams.ratio} onValueChange={(v) => setVideoParams((p) => ({ ...p, ratio: v as any }))}>
                           <SelectTrigger className="h-9 w-auto gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 text-sm font-medium text-slate-200 transition-all hover:bg-white/10 hover:border-white/20 active:scale-[0.97] shadow-sm">
@@ -278,18 +474,22 @@ export default function VideoPage() {
                         </Select>
                       </motion.div>
 
-                      {/* Duration */}
+                      {/* 时长 — 根据模型动态切换 */}
                       <motion.div {...pillSpring}>
                         <Select value={String(videoParams.duration)} onValueChange={(v) => setVideoParams((p) => ({ ...p, duration: Number(v) }))}>
                           <SelectTrigger className="h-9 w-auto gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 text-sm font-medium text-slate-200 transition-all hover:bg-white/10 hover:border-white/20 active:scale-[0.97] shadow-sm">
                             <Clock className="h-3.5 w-3.5 text-emerald-400" />
                             <SelectValue placeholder="时长" />
                           </SelectTrigger>
-                          <SelectContent><SelectItem value="3">3 秒</SelectItem><SelectItem value="5">5 秒</SelectItem><SelectItem value="8">8 秒</SelectItem><SelectItem value="10">10 秒</SelectItem><SelectItem value="15">15 秒</SelectItem></SelectContent>
+                          <SelectContent>
+                            {MODEL_DURATIONS[videoParams.model].map((d) => (
+                              <SelectItem key={d} value={String(d)}>{d} 秒</SelectItem>
+                            ))}
+                          </SelectContent>
                         </Select>
                       </motion.div>
 
-                      {/* Quality */}
+                      {/* 画质 */}
                       <motion.div {...pillSpring}>
                         <Select value={videoParams.quality} onValueChange={(v) => setVideoParams((p) => ({ ...p, quality: v as any }))}>
                           <SelectTrigger className="h-9 w-auto gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 text-sm font-medium text-slate-200 transition-all hover:bg-white/10 hover:border-white/20 active:scale-[0.97] shadow-sm">
@@ -300,7 +500,7 @@ export default function VideoPage() {
                         </Select>
                       </motion.div>
 
-                      {/* Count */}
+                      {/* 条数 */}
                       <motion.div {...pillSpring}>
                         <Select value={String(videoParams.count)} onValueChange={(v) => setVideoParams((p) => ({ ...p, count: Number(v) as any }))}>
                           <SelectTrigger className="h-9 w-auto gap-2 rounded-full border border-white/10 bg-white/5 px-3.5 text-sm font-medium text-slate-200 transition-all hover:bg-white/10 hover:border-white/20 active:scale-[0.97] shadow-sm">
@@ -311,10 +511,10 @@ export default function VideoPage() {
                         </Select>
                       </motion.div>
 
-                      {/* Divider */}
+                      {/* 分隔线 */}
                       <div className="h-5 w-px bg-white/10 mx-0.5" />
 
-                      {/* Wizard Button */}
+                      {/* 提示词增强按钮 */}
                       <motion.div {...pillSpring}>
                         <Button
                           variant="ghost"
@@ -331,17 +531,13 @@ export default function VideoPage() {
                         </Button>
                       </motion.div>
 
-                      <motion.div {...pillSpring}>
-                        <Button variant="ghost" className="h-9 rounded-full border border-white/10 bg-white/5 px-4 text-sm font-medium text-slate-200 transition-all hover:bg-white/10 active:scale-[0.97] shadow-sm">
-                          <Tag className="mr-2 h-3.5 w-3.5 text-pink-400" />标签
-                        </Button>
-                      </motion.div>
+
                     </div>
                   </div>
 
-                  {/* Row 2: Progress + clear + send */}
+                  {/* 第二行：进度条 + 发送 */}
                   <div className="flex items-center justify-between">
-                    {/* Left: progress bar + counter */}
+                    {/* 左侧：进度条 + 字数 */}
                     <div className="flex items-center gap-3">
                       <div className="h-1.5 w-28 overflow-hidden rounded-full bg-white/5">
                         <motion.div
@@ -353,7 +549,7 @@ export default function VideoPage() {
                       <span className="text-xs font-medium tabular-nums text-slate-500">{promptLen}/8000</span>
                     </div>
 
-                    {/* Right: clear + send */}
+                    {/* 右侧：清除 + 发送 */}
                     <div className="flex items-center gap-3">
                       <AnimatePresence>
                         {promptLen > 0 && (
@@ -369,26 +565,30 @@ export default function VideoPage() {
                         )}
                       </AnimatePresence>
 
-                      {/* Send button */}
+                      {/* 发送按钮 */}
                       <motion.div
-                        whileHover={canSend ? { scale: 1.08, y: -1 } : {}}
-                        whileTap={canSend ? { scale: 0.92 } : {}}
-                        transition={{ type: "spring", stiffness: 400, damping: 15 }}
+                        whileHover={canSend && !isSubmitting ? { scale: 1.08, y: -1 } : {}}
+                        whileTap={canSend && !isSubmitting ? { scale: 0.92 } : {}}
+                        transition={{ type: "spring" as const, stiffness: 400, damping: 15 }}
                       >
                         <Button
-                          disabled={!canSend}
+                          disabled={!canSend || isSubmitting}
+                          onClick={handleSubmit}
                           className={[
-                            "group relative h-10 rounded-full px-5 shadow-lg transition-all duration-300 gap-2",
-                            canSend
+                            "group relative h-10 w-10 rounded-full p-0 shadow-lg transition-all duration-300",
+                            canSend && !isSubmitting
                               ? "bg-gradient-to-r from-blue-500 to-violet-600 text-white hover:shadow-blue-500/30 hover:shadow-xl"
                               : "bg-white/10 text-white/30 cursor-not-allowed",
                           ].join(" ")}
                         >
-                          {canSend && (
+                          {canSend && !isSubmitting && (
                             <span className="absolute inset-0 rounded-full bg-gradient-to-r from-blue-400/20 to-violet-500/20 animate-ping opacity-20" />
                           )}
-                          <Send className="relative h-4 w-4 stroke-[2px]" />
-                          <span className="relative text-sm font-medium">生成分镜</span>
+                          {isSubmitting ? (
+                            <Loader2 className="relative h-4 w-4 animate-spin" />
+                          ) : (
+                            <Send className="relative h-4 w-4 stroke-[2px]" />
+                          )}
                         </Button>
                       </motion.div>
                     </div>
@@ -397,7 +597,7 @@ export default function VideoPage() {
               </div>
             </motion.div>
 
-            {/* ── Storyboard Section ── */}
+            {/* ── 分镜预览区域 ── */}
             <motion.div
               variants={fadeUp}
               initial="hidden"

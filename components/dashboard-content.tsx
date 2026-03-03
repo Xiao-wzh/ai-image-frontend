@@ -20,7 +20,7 @@ export interface DashboardContentProps {
 }
 
 // 内部组件：使用 useSearchParams
-export function DashboardContent({ siteName = "AI Species", welcomeMsg = "专业AI电商图片生成平台" }: DashboardContentProps) {
+export function DashboardContent({ siteName = "AI Species", welcomeMsg = "专业AI电商图片视频生成平台" }: DashboardContentProps) {
     const { data: session, status } = useSession()
     const searchParams = useSearchParams()
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
