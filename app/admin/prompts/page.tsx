@@ -14,8 +14,10 @@ export default async function AdminPromptsPage() {
   return (
     <div className="flex h-screen bg-slate-950">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">
-        <PromptsAdminClient />
+      <main className="flex-1 p-6 md:p-8 overflow-y-auto">
+        <div className="max-w-7xl mx-auto">
+          <PromptsAdminClient />
+        </div>
       </main>
     </div>
   )

@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState, useCallback } from "react"
 import useSWR from "swr"
 import { toast } from "sonner"
+import { motion, AnimatePresence } from "framer-motion"
 import {
   Save,
-  RotateCcw,
   Loader2,
   Plus,
   Trash2,
@@ -17,6 +17,14 @@ import {
   ChevronRight,
   Power,
   PowerOff,
+  Settings,
+  Wand2,
+  Zap,
+  Hash,
+  Globe,
+  Lock,
+  LayoutList,
+  X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -30,7 +38,7 @@ interface Prompt {
   id: string
   productType: string
   taskType: string
-  mode: string  // 添加 mode 字段
+  mode: string
   description: string | null
   promptTemplate: string
   isActive: boolean
@@ -87,10 +95,24 @@ const userLabel = (u?: AdminUser | null) => {
   return u.username || u.name || u.email
 }
 
+function formatRelativeTime(dateString: string): string {
+  const date = new Date(dateString)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMins = Math.floor(diffMs / (1000 * 60))
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+  if (diffMins < 60) return `${diffMins} 分钟前`
+  if (diffHours < 24) return `${diffHours} 小时前`
+  if (diffDays < 30) return `${diffDays} 天前`
+  return `${Math.floor(diffDays / 30)} 个月前`
+}
+
 export function PromptsAdminClient() {
   // Filters
   const [taskType, setTaskType] = useState<TaskType>("MAIN_IMAGE")
-  const [promptMode, setPromptMode] = useState<"CREATIVE" | "CLONE">("CREATIVE")  // New: mode filter
+  const [promptMode, setPromptMode] = useState<"CREATIVE" | "CLONE">("CREATIVE")
   const [activePlatformId, setActivePlatformId] = useState<string | null>(null)
   const [scope, setScope] = useState<Scope>("all")
   const [searchQuery, setSearchQuery] = useState("")
@@ -101,7 +123,7 @@ export function PromptsAdminClient() {
   const [editDraft, setEditDraft] = useState("")
   const [editDescription, setEditDescription] = useState("")
   const [editProductType, setEditProductType] = useState("")
-  const [editMode, setEditMode] = useState<"CREATIVE" | "CLONE">("CREATIVE")  // New: mode for create/edit
+  const [editMode, setEditMode] = useState<"CREATIVE" | "CLONE">("CREATIVE")
   const [editIsActive, setEditIsActive] = useState(true)
   const [editUserId, setEditUserId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -149,6 +171,18 @@ export function PromptsAdminClient() {
     return prompts
   }, [currentPlatform, taskType, promptMode, searchQuery])
 
+  // Compute stats
+  const stats = useMemo(() => {
+    const allPrompts = platforms.flatMap((p) => p.prompts)
+    return {
+      total: allPrompts.length,
+      system: allPrompts.filter((p) => !p.userId).length,
+      private: allPrompts.filter((p) => p.userId).length,
+      active: allPrompts.filter((p) => p.isActive).length,
+      inactive: allPrompts.filter((p) => !p.isActive).length,
+    }
+  }, [platforms])
+
   // Get selected prompt
   const selectedPrompt = useMemo(() => {
     if (!selectedPromptId) return null
@@ -170,7 +204,7 @@ export function PromptsAdminClient() {
   useEffect(() => {
     setSelectedPromptId(null)
     setIsCreating(false)
-  }, [taskType, activePlatformId, promptMode])  // 添加 promptMode 到依赖
+  }, [taskType, activePlatformId, promptMode])
 
   const isDirty = useMemo(() => {
     if (isCreating) return editDraft.trim().length > 0
@@ -285,7 +319,7 @@ export function PromptsAdminClient() {
     setEditDraft("")
     setEditDescription("")
     setEditProductType("")
-    setEditMode(promptMode)  // Use current mode filter
+    setEditMode(promptMode)
     setEditIsActive(true)
     setEditUserId(null)
   }, [promptMode])
@@ -304,177 +338,278 @@ export function PromptsAdminClient() {
   }
 
   return (
-    <div className="h-[calc(100vh-120px)] flex flex-col gap-4">
-      {/* Top Control Bar */}
-      <div className="space-y-4 shrink-0">
+    <div className="space-y-6">
+      {/* ── Page Header ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col md:flex-row md:items-center md:justify-between gap-4"
+      >
+        <div>
+          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+            <div className="p-2 bg-purple-500/10 rounded-xl">
+              <Settings className="w-7 h-7 text-purple-400" />
+            </div>
+            提示词管理
+          </h1>
+          <p className="text-slate-400 mt-1.5 ml-14">管理各平台的 Prompt 模板配置</p>
+        </div>
+
+        {/* Stats Capsules */}
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.1 }}
+          className="flex items-center gap-2 flex-wrap"
+        >
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800/80 border border-white/10">
+            <Hash className="w-3.5 h-3.5 text-slate-400" />
+            <span className="text-xs text-slate-400">总计</span>
+            <span className="text-sm font-semibold text-white">{stats.total}</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20">
+            <Globe className="w-3.5 h-3.5 text-blue-400" />
+            <span className="text-xs text-blue-300">系统</span>
+            <span className="text-sm font-semibold text-blue-300">{stats.system}</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 border border-purple-500/20">
+            <Lock className="w-3.5 h-3.5 text-purple-400" />
+            <span className="text-xs text-purple-300">私有</span>
+            <span className="text-sm font-semibold text-purple-300">{stats.private}</span>
+          </div>
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-500/10 border border-green-500/20">
+            <Power className="w-3.5 h-3.5 text-green-400" />
+            <span className="text-xs text-green-300">启用</span>
+            <span className="text-sm font-semibold text-green-300">{stats.active}</span>
+          </div>
+        </motion.div>
+      </motion.div>
+
+      {/* ── Unified Toolbar ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.15 }}
+        className="flex flex-wrap items-center gap-3 bg-slate-900/60 backdrop-blur-sm border border-white/10 rounded-xl p-3"
+      >
         {/* Task Type Toggle */}
         <Tabs value={taskType} onValueChange={(v) => setTaskType(v as TaskType)}>
-          <TabsList className="bg-slate-800/50 border border-white/10 p-1">
+          <TabsList className="bg-slate-800/60 border border-white/10 p-0.5 h-9">
             <TabsTrigger
               value="MAIN_IMAGE"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-purple-600 data-[state=active]:text-white px-6 gap-2"
+              className="cursor-pointer data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-600 data-[state=active]:to-purple-600 data-[state=active]:text-white px-4 gap-1.5 h-8 text-xs"
             >
-              <Image className="w-4 h-4" />
+              <Image className="w-3.5 h-3.5" />
               电商主图
             </TabsTrigger>
             <TabsTrigger
               value="DETAIL_PAGE"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-pink-600 data-[state=active]:text-white px-6 gap-2"
+              className="cursor-pointer data-[state=active]:bg-gradient-to-r data-[state=active]:from-purple-600 data-[state=active]:to-pink-600 data-[state=active]:text-white px-4 gap-1.5 h-8 text-xs"
             >
-              <FileText className="w-4 h-4" />
+              <FileText className="w-3.5 h-3.5" />
               详情长图
             </TabsTrigger>
           </TabsList>
         </Tabs>
 
+        {/* Divider */}
+        <div className="w-px h-7 bg-white/10 hidden sm:block" />
+
         {/* Mode Toggle - Creative vs Clone */}
         <Tabs value={promptMode} onValueChange={(v) => setPromptMode(v as "CREATIVE" | "CLONE")}>
-          <TabsList className="bg-slate-800/50 border border-white/10 p-1">
+          <TabsList className="bg-slate-800/60 border border-white/10 p-0.5 h-9">
             <TabsTrigger
               value="CREATIVE"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white px-5"
+              className="cursor-pointer data-[state=active]:bg-gradient-to-r data-[state=active]:from-emerald-600 data-[state=active]:to-teal-600 data-[state=active]:text-white px-4 gap-1.5 h-8 text-xs"
             >
-              ✨ 创意模式
+              <Wand2 className="w-3.5 h-3.5" />
+              创意模式
             </TabsTrigger>
             <TabsTrigger
               value="CLONE"
-              className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-600 data-[state=active]:to-orange-600 data-[state=active]:text-white px-5"
+              className="cursor-pointer data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-600 data-[state=active]:to-orange-600 data-[state=active]:text-white px-4 gap-1.5 h-8 text-xs"
             >
-              ⚡ 克隆模式
+              <Zap className="w-3.5 h-3.5" />
+              克隆模式
             </TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {/* Platform Tabs */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-2">
-          {platforms.map((p) => (
+        {/* Divider */}
+        <div className="w-px h-7 bg-white/10 hidden sm:block" />
+
+        {/* Scope Filter */}
+        <div className="flex items-center gap-1 bg-slate-800/40 rounded-lg p-0.5 border border-white/5">
+          {(
+            [
+              { value: "all" as Scope, label: "全部", icon: LayoutList },
+              { value: "system" as Scope, label: "系统", icon: Shield },
+              { value: "private" as Scope, label: "私有", icon: User },
+            ] as const
+          ).map((item) => (
             <button
+              key={item.value}
+              onClick={() => setScope(item.value)}
+              className={cn(
+                "flex items-center gap-1 px-3 py-1.5 text-xs rounded-md transition-all cursor-pointer",
+                scope === item.value
+                  ? "bg-white/10 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+              )}
+            >
+              <item.icon className="w-3 h-3" />
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </motion.div>
+
+      {/* ── Platform Tabs ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="flex items-center gap-2 overflow-x-auto pb-1"
+      >
+        {platforms.map((p, i) => {
+          const promptCount = p.prompts.filter(
+            (pr) => pr.taskType === taskType && (pr.mode || "CREATIVE") === promptMode
+          ).length
+          return (
+            <motion.button
               key={p.id}
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.2 + i * 0.03 }}
               onClick={() => setActivePlatformId(p.id)}
               className={cn(
-                "px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap",
+                "px-4 py-2 rounded-lg text-sm font-medium transition-all whitespace-nowrap cursor-pointer",
                 activePlatformId === p.id
-                  ? "bg-white/10 text-white border border-white/20"
+                  ? "bg-gradient-to-r from-blue-600/20 to-purple-600/20 text-white border border-blue-500/30 shadow-lg shadow-blue-500/5"
                   : "bg-white/5 text-slate-400 hover:text-white hover:bg-white/10 border border-transparent"
               )}
             >
               {p.label}
-              <span className="ml-2 text-xs opacity-60">
-                ({p.prompts.filter((pr) => pr.taskType === taskType).length})
+              <span className={cn(
+                "ml-2 text-[10px] px-1.5 py-0.5 rounded-full",
+                activePlatformId === p.id
+                  ? "bg-white/15 text-white/80"
+                  : "bg-white/5 text-slate-500"
+              )}>
+                {promptCount}
               </span>
-            </button>
-          ))}
-        </div>
-      </div>
+            </motion.button>
+          )
+        })}
+      </motion.div>
 
-      {/* Main Content - Split View */}
-      <div className="flex-1 flex gap-4 min-h-0">
-        {/* Left Sidebar - Prompt List */}
-        <div className="w-80 shrink-0 flex flex-col bg-slate-900/50 rounded-xl border border-white/10 overflow-hidden">
+      {/* ── Main Content — Split View ── */}
+      <div className="flex gap-4" style={{ height: "calc(100vh - 340px)", minHeight: "400px" }}>
+        {/* Left Sidebar — Prompt List */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.25 }}
+          className="w-80 shrink-0 flex flex-col bg-slate-900/50 backdrop-blur-sm rounded-xl border border-white/10 overflow-hidden"
+        >
           {/* Sidebar Header */}
-          <div className="p-3 border-b border-white/10 space-y-3">
-            {/* Search */}
+          <div className="p-3 border-b border-white/10">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <Input
                 placeholder="搜索 prompt..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-slate-500"
+                className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-slate-500 h-9"
               />
-            </div>
-
-            {/* Scope Filter */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setScope("all")}
-                className={cn(
-                  "flex-1 py-1.5 text-xs rounded-lg transition-colors",
-                  scope === "all" ? "bg-white/10 text-white" : "text-slate-400 hover:text-white"
-                )}
-              >
-                全部
-              </button>
-              <button
-                onClick={() => setScope("system")}
-                className={cn(
-                  "flex-1 py-1.5 text-xs rounded-lg transition-colors flex items-center justify-center gap-1",
-                  scope === "system" ? "bg-blue-500/20 text-blue-300" : "text-slate-400 hover:text-white"
-                )}
-              >
-                <Shield className="w-3 h-3" />
-                系统
-              </button>
-              <button
-                onClick={() => setScope("private")}
-                className={cn(
-                  "flex-1 py-1.5 text-xs rounded-lg transition-colors flex items-center justify-center gap-1",
-                  scope === "private" ? "bg-purple-500/20 text-purple-300" : "text-slate-400 hover:text-white"
-                )}
-              >
-                <User className="w-3 h-3" />
-                私有
-              </button>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
 
           {/* Prompt List */}
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
             {isLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-slate-400" />
+              <div className="flex items-center justify-center py-12">
+                <div className="flex flex-col items-center gap-3">
+                  <Loader2 className="w-6 h-6 animate-spin text-purple-400" />
+                  <span className="text-xs text-slate-500">加载中...</span>
+                </div>
               </div>
             ) : filteredPrompts.length === 0 ? (
-              <div className="text-center py-8 text-slate-500 text-sm">
-                暂无 Prompt
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="p-3 bg-slate-800/50 rounded-xl mb-3">
+                  <FileText className="w-8 h-8 text-slate-600" />
+                </div>
+                <p className="text-sm text-slate-500">暂无 Prompt</p>
+                <p className="text-xs text-slate-600 mt-1">点击下方按钮创建新的 Prompt</p>
               </div>
             ) : (
-              filteredPrompts.map((prompt) => (
-                <button
-                  key={prompt.id}
-                  onClick={() => {
-                    setIsCreating(false)
-                    setSelectedPromptId(prompt.id)
-                  }}
-                  className={cn(
-                    "w-full p-3 rounded-lg text-left transition-all group",
-                    selectedPromptId === prompt.id && !isCreating
-                      ? "bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30"
-                      : "hover:bg-white/5 border border-transparent"
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-white text-sm truncate">
-                        {prompt.description || prompt.productType}
+              <AnimatePresence mode="wait">
+                {filteredPrompts.map((prompt, i) => (
+                  <motion.button
+                    key={prompt.id}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    transition={{ delay: i * 0.02, duration: 0.2 }}
+                    onClick={() => {
+                      setIsCreating(false)
+                      setSelectedPromptId(prompt.id)
+                    }}
+                    className={cn(
+                      "w-full p-3 rounded-lg text-left transition-all group cursor-pointer",
+                      selectedPromptId === prompt.id && !isCreating
+                        ? "bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-500/30 shadow-lg shadow-blue-500/5"
+                        : "hover:bg-white/5 border border-transparent"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-white text-sm truncate">
+                          {prompt.description || prompt.productType}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-400 font-mono">
+                            {prompt.productType}
+                          </span>
+                          {prompt.userId ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 flex items-center gap-0.5">
+                              <User className="w-2.5 h-2.5" />
+                              私有
+                            </span>
+                          ) : (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 flex items-center gap-0.5">
+                              <Shield className="w-2.5 h-2.5" />
+                              系统
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] text-slate-600 mt-1">
+                          {formatRelativeTime(prompt.updatedAt)}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-slate-400">
-                          {prompt.productType}
-                        </span>
-                        {prompt.userId ? (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300">
-                            私有
-                          </span>
-                        ) : (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300">
-                            系统
-                          </span>
-                        )}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span
+                          className={cn(
+                            "w-2 h-2 rounded-full ring-2",
+                            prompt.isActive
+                              ? "bg-green-500 ring-green-500/20"
+                              : "bg-red-500 ring-red-500/20"
+                          )}
+                        />
+                        <ChevronRight className="w-4 h-4 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span
-                        className={cn(
-                          "w-2 h-2 rounded-full",
-                          prompt.isActive ? "bg-green-500" : "bg-red-500"
-                        )}
-                      />
-                      <ChevronRight className="w-4 h-4 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                  </div>
-                </button>
-              ))
+                  </motion.button>
+                ))}
+              </AnimatePresence>
             )}
           </div>
 
@@ -482,37 +617,71 @@ export function PromptsAdminClient() {
           <div className="p-3 border-t border-white/10">
             <Button
               onClick={startCreate}
-              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700"
+              className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 shadow-lg shadow-green-500/10 cursor-pointer transition-all"
             >
               <Plus className="w-4 h-4 mr-2" />
               新建 Prompt
             </Button>
           </div>
-        </div>
+        </motion.div>
 
         {/* Right Editor */}
-        <div className="flex-1 flex flex-col bg-slate-900/50 rounded-xl border border-white/10 overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.3 }}
+          className="flex-1 flex flex-col bg-slate-900/50 backdrop-blur-sm rounded-xl border border-white/10 overflow-hidden"
+        >
           {!selectedPrompt && !isCreating ? (
-            <div className="flex-1 flex items-center justify-center text-slate-500">
-              选择一个 Prompt 进行编辑，或点击 "新建 Prompt"
+            <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
+              <div className="p-5 bg-slate-800/30 rounded-2xl">
+                <FileText className="w-12 h-12 text-slate-600" />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium text-slate-400">选择一个 Prompt 进行编辑</p>
+                <p className="text-xs text-slate-600 mt-1">或点击左侧 &quot;新建 Prompt&quot; 创建新模板</p>
+              </div>
             </div>
           ) : (
             <>
               {/* Editor Header */}
               <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-semibold text-white">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg font-semibold text-white truncate">
                     {isCreating ? "新建 Prompt" : selectedPrompt?.description || selectedPrompt?.productType}
                   </h3>
-                  <div className="text-xs text-slate-500 mt-1">
+                  <div className="text-xs text-slate-500 mt-1 flex items-center gap-2">
                     {isCreating ? (
-                      `${currentPlatform?.label} / ${taskType === "MAIN_IMAGE" ? "电商主图" : "详情长图"}`
+                      <>
+                        <span className="flex items-center gap-1">
+                          <Globe className="w-3 h-3" />
+                          {currentPlatform?.label}
+                        </span>
+                        <span className="text-slate-700">/</span>
+                        <span>{taskType === "MAIN_IMAGE" ? "电商主图" : "详情长图"}</span>
+                      </>
                     ) : (
-                      `ID: ${selectedPrompt?.id.slice(0, 8)}... | ${selectedPrompt?.userId ? `私有: ${selectedPrompt?.user?.email}` : "系统默认"}`
+                      <>
+                        <span className="font-mono text-slate-600">
+                          {selectedPrompt?.id.slice(0, 8)}...
+                        </span>
+                        <span className="text-slate-700">|</span>
+                        {selectedPrompt?.userId ? (
+                          <span className="flex items-center gap-1 text-purple-400">
+                            <User className="w-3 h-3" />
+                            {selectedPrompt?.user?.email}
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-blue-400">
+                            <Shield className="w-3 h-3" />
+                            系统默认
+                          </span>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0 ml-4">
                   {!isCreating && (
                     <>
                       <Button
@@ -520,10 +689,10 @@ export function PromptsAdminClient() {
                         size="sm"
                         onClick={handleToggleActive}
                         className={cn(
-                          "border-white/10",
+                          "border-white/10 cursor-pointer transition-all",
                           selectedPrompt?.isActive
-                            ? "text-green-400 hover:text-green-300"
-                            : "text-red-400 hover:text-red-300"
+                            ? "text-green-400 hover:text-green-300 hover:border-green-500/30"
+                            : "text-red-400 hover:text-red-300 hover:border-red-500/30"
                         )}
                       >
                         {selectedPrompt?.isActive ? (
@@ -543,14 +712,14 @@ export function PromptsAdminClient() {
                         size="sm"
                         onClick={handleDelete}
                         disabled={deleting}
-                        className="border-red-500/30 text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                        className="border-red-500/30 text-red-400 hover:text-red-300 hover:bg-red-500/10 cursor-pointer transition-all"
                       >
                         {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                       </Button>
                     </>
                   )}
                   {isCreating && (
-                    <Button variant="outline" size="sm" onClick={cancelCreate} className="border-white/10 text-slate-400">
+                    <Button variant="outline" size="sm" onClick={cancelCreate} className="border-white/10 text-slate-400 cursor-pointer">
                       取消
                     </Button>
                   )}
@@ -558,7 +727,7 @@ export function PromptsAdminClient() {
                     size="sm"
                     onClick={isCreating ? handleCreate : handleSave}
                     disabled={saving || (!isDirty && !isCreating)}
-                    className="bg-gradient-to-r from-blue-600 to-purple-600"
+                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 shadow-lg shadow-blue-500/10 cursor-pointer transition-all"
                   >
                     {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
                     {isCreating ? "创建" : "保存"}
@@ -575,12 +744,16 @@ export function PromptsAdminClient() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium text-slate-400">创建模式:</span>
                         <span className={cn(
-                          "px-3 py-1 rounded-full text-xs font-semibold",
-                          editMode === "CREATIVE" 
+                          "px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5",
+                          editMode === "CREATIVE"
                             ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white"
                             : "bg-gradient-to-r from-amber-600 to-orange-600 text-white"
                         )}>
-                          {editMode === "CREATIVE" ? "✨ 创意模式" : "⚡ 克隆模式"}
+                          {editMode === "CREATIVE" ? (
+                            <><Wand2 className="w-3 h-3" /> 创意模式</>
+                          ) : (
+                            <><Zap className="w-3 h-3" /> 克隆模式</>
+                          )}
                         </span>
                         <span className="text-xs text-slate-500 ml-auto">
                           (由当前选中的标签决定)
@@ -595,7 +768,7 @@ export function PromptsAdminClient() {
                         value={editProductType}
                         onChange={(e) => setEditProductType(e.target.value.toUpperCase())}
                         placeholder="例如: MENSWEAR, BEDDING"
-                        className="bg-white/5 border-white/10 text-white"
+                        className="bg-white/5 border-white/10 text-white h-10"
                       />
                     </div>
 
@@ -606,7 +779,7 @@ export function PromptsAdminClient() {
                         value={editDescription}
                         onChange={(e) => setEditDescription(e.target.value)}
                         placeholder="例如: 男装, 寝具"
-                        className="bg-white/5 border-white/10 text-white"
+                        className="bg-white/5 border-white/10 text-white h-10"
                       />
                     </div>
 
@@ -614,7 +787,7 @@ export function PromptsAdminClient() {
                     <div>
                       <label className="block text-sm font-medium text-slate-400 mb-2">归属用户 (留空为系统默认)</label>
                       <Select value={editUserId || "_system"} onValueChange={(v) => setEditUserId(v === "_system" ? null : v)}>
-                        <SelectTrigger className="bg-white/5 border-white/10 text-white">
+                        <SelectTrigger className="bg-white/5 border-white/10 text-white h-10">
                           <SelectValue placeholder="系统默认" />
                         </SelectTrigger>
                         <SelectContent className="bg-slate-900 border-white/10">
@@ -632,21 +805,38 @@ export function PromptsAdminClient() {
 
                 {/* Prompt Template */}
                 <div className="flex-1 flex flex-col">
-                  <label className="block text-sm font-medium text-slate-400 mb-2">Prompt 模板</label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-slate-400">Prompt 模板</label>
+                    <span className="text-xs text-slate-600 font-mono">
+                      {editDraft.length.toLocaleString()} 字符
+                    </span>
+                  </div>
                   <Textarea
                     value={editDraft}
                     onChange={(e) => setEditDraft(e.target.value)}
                     placeholder="输入 Prompt 模板内容..."
-                    className="flex-1 min-h-[400px] bg-white/5 border-white/10 text-white font-mono text-sm resize-none"
+                    className="flex-1 min-h-[400px] bg-white/5 border-white/10 text-white font-mono text-sm resize-none leading-relaxed"
                   />
-                  <div className="text-xs text-slate-500 mt-2">
-                    支持变量: <code className="text-blue-400">{'${productName}'}</code>
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="text-xs text-slate-500">
+                      支持变量: <code className="text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">{'${productName}'}</code>
+                    </div>
+                    {isDirty && !isCreating && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="text-xs text-amber-400 flex items-center gap-1"
+                      >
+                        <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                        未保存的更改
+                      </motion.div>
+                    )}
                   </div>
                 </div>
               </div>
             </>
           )}
-        </div>
+        </motion.div>
       </div>
     </div>
   )
