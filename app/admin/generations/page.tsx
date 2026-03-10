@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, Filter, RefreshCw, ChevronLeft, ChevronRight, User, Loader2, X, ZoomIn } from "lucide-react"
+import { Search, Filter, RefreshCw, ChevronLeft, ChevronRight, User, Loader2, X, ZoomIn, Crown } from "lucide-react"
 import { format } from "date-fns"
 
 import { Sidebar } from "@/components/sidebar"
@@ -35,7 +35,12 @@ type Generation = {
     productName: string
     productType: string
     productTypeDescription: string | null
+    taskType: string | null
     status: string
+    qualityMode: string | null    // PRO / STANDARD
+    imageCount: number | null     // PRO: 期望张数
+    costPerImage: number | null   // PRO: 单张成本快照
+    totalCost: number | null      // 总费用
     originalImage: string[]
     refImages: string[]
     generatedImage: string | null
@@ -72,8 +77,30 @@ export default function AdminGenerationsPage() {
     const [totalPages, setTotalPages] = useState(0)
     const limit = 20
 
-    // Image preview lightbox
-    const [previewImage, setPreviewImage] = useState<string | null>(null)
+    // Image preview lightbox（支持多图左右切换）
+    const [previewImages, setPreviewImages] = useState<string[]>([])
+    const [previewImageIndex, setPreviewImageIndex] = useState(0)
+    const previewImage = previewImages[previewImageIndex] ?? null
+
+    const openPreview = useCallback((images: string[], index = 0) => {
+        setPreviewImages(images)
+        setPreviewImageIndex(index)
+    }, [])
+    const closePreview = useCallback(() => setPreviewImages([]), [])
+    const prevImage = useCallback(() => setPreviewImageIndex(i => Math.max(0, i - 1)), [])
+    const nextImage = useCallback(() => setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1)), [previewImages.length])
+
+    // 键盘左右切换
+    useEffect(() => {
+        if (!previewImages.length) return
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === "ArrowLeft") prevImage()
+            else if (e.key === "ArrowRight") nextImage()
+            else if (e.key === "Escape") closePreview()
+        }
+        window.addEventListener("keydown", onKey)
+        return () => window.removeEventListener("keydown", onKey)
+    }, [previewImages.length, prevImage, nextImage, closePreview])
 
     // Fetch platforms from database
     useEffect(() => {
@@ -221,6 +248,7 @@ export default function AdminGenerationsPage() {
             PENDING: { color: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", label: "处理中" },
             PROCESSING: { color: "bg-blue-500/20 text-blue-400 border-blue-500/30", label: "生成中" },
             COMPLETED: { color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", label: "已完成" },
+            PARTIAL_SUCCESS: { color: "bg-amber-500/20 text-amber-400 border-amber-500/30", label: "部分成功" },
             FAILED: { color: "bg-red-500/20 text-red-400 border-red-500/30", label: "失败" },
         }
         const config = statusConfig[s] || { color: "bg-gray-500/20 text-gray-400", label: s }
@@ -406,6 +434,7 @@ export default function AdminGenerationsPage() {
                                     <SelectItem value="PENDING" className="text-white">处理中</SelectItem>
                                     <SelectItem value="PROCESSING" className="text-white">生成中</SelectItem>
                                     <SelectItem value="COMPLETED" className="text-white">已完成</SelectItem>
+                                    <SelectItem value="PARTIAL_SUCCESS" className="text-white">部分成功</SelectItem>
                                     <SelectItem value="FAILED" className="text-white">失败</SelectItem>
                                 </SelectContent>
                             </Select>
@@ -467,7 +496,7 @@ export default function AdminGenerationsPage() {
                         <div className="col-span-2">产品</div>
                         <div className="col-span-1">语言</div>
                         <div className="col-span-2">原图</div>
-                        <div className="col-span-2">九宫格</div>
+                        <div className="col-span-2">生成图片</div>
                         <div className="col-span-1">状态</div>
                         <div className="col-span-2">时间</div>
                     </div>
@@ -512,9 +541,17 @@ export default function AdminGenerationsPage() {
                                     {/* Product */}
                                     <div className="col-span-2">
                                         <div className="text-sm text-white truncate" title={item.productName}>{item.productName}</div>
-                                        <Badge variant="outline" className="text-xs mt-1 border-white/20 text-slate-400">
-                                            {getProductTypeLabel(item)}
-                                        </Badge>
+                                        <div className="flex items-center gap-1 mt-1 flex-wrap">
+                                            <Badge variant="outline" className="text-xs border-white/20 text-slate-400">
+                                                {getProductTypeLabel(item)}
+                                            </Badge>
+                                            {item.qualityMode === "PRO" && (
+                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-[10px] text-white font-bold">
+                                                    <Crown className="w-2.5 h-2.5" />
+                                                    PRO
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Language */}
@@ -532,7 +569,7 @@ export default function AdminGenerationsPage() {
                                                         <div
                                                             key={idx}
                                                             className="relative w-10 h-10 rounded-lg border-2 border-[#0a0a0f] overflow-hidden cursor-pointer hover:z-10 hover:scale-110 transition-transform group"
-                                                            onClick={() => setPreviewImage(img)}
+                                                            onClick={() => openPreview(item.originalImage, idx)}
                                                         >
                                                             <img
                                                                 src={img}
@@ -565,7 +602,7 @@ export default function AdminGenerationsPage() {
                                                             <div
                                                                 key={idx}
                                                                 className="relative w-10 h-10 rounded-lg border-2 border-blue-500/30 overflow-hidden cursor-pointer hover:z-10 hover:scale-110 transition-transform group"
-                                                                onClick={() => setPreviewImage(img)}
+                                                                onClick={() => openPreview(item.refImages, idx)}
                                                             >
                                                                 <img
                                                                     src={img}
@@ -589,21 +626,35 @@ export default function AdminGenerationsPage() {
                                         </div>
                                     </div>
 
-                                    {/* Generated Image (九宫格) - Admin Only */}
+                                    {/* Generated Image - Admin Only */}
                                     <div className="col-span-2">
-                                        {item.generatedImage ? (
-                                            <div
-                                                className="relative w-16 h-16 rounded-lg border-2 border-emerald-500/30 overflow-hidden cursor-pointer hover:scale-110 transition-transform group"
-                                                onClick={() => setPreviewImage(item.generatedImage!)}
-                                            >
-                                                <img
-                                                    src={item.generatedImage}
-                                                    alt="九宫格"
-                                                    className="w-full h-full object-cover"
-                                                />
-                                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                    <ZoomIn className="w-4 h-4 text-white" />
+                                        {item.generatedImage || item.generatedImages?.length > 0 ? (
+                                            <div className="flex flex-col gap-1">
+                                                <div
+                                                    className="relative w-16 h-16 rounded-lg border-2 border-emerald-500/30 overflow-hidden cursor-pointer hover:scale-110 transition-transform group"
+                                                    onClick={() => {
+                                                        // PRO 多图用列表导航；STANDARD 单图
+                                                        const imgs = item.qualityMode === "PRO" && item.generatedImages?.length > 0
+                                                            ? item.generatedImages
+                                                            : [item.generatedImage || item.generatedImages?.[0]!]
+                                                        openPreview(imgs, 0)
+                                                    }}
+                                                >
+                                                    <img
+                                                        src={item.generatedImage || item.generatedImages?.[0]}
+                                                        alt="生成图片"
+                                                        className={`w-full h-full ${item.qualityMode === "PRO" ? "object-contain" : "object-cover"}`}
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                        <ZoomIn className="w-4 h-4 text-white" />
+                                                    </div>
                                                 </div>
+                                                <span className="text-[10px] text-slate-500">
+                                                    {item.qualityMode === "PRO"
+                                                        ? `PRO · ${item.generatedImages?.length || 0}/${item.imageCount ?? "?"}张`
+                                                        : `${item.generatedImages?.length || 0}张`
+                                                    }
+                                                </span>
                                             </div>
                                         ) : (
                                             <div className="w-16 h-16 bg-white/5 rounded-lg flex items-center justify-center">
@@ -657,15 +708,15 @@ export default function AdminGenerationsPage() {
                 </motion.div>
             </main>
 
-            {/* Image Preview Lightbox */}
+            {/* Image Preview Lightbox（支持多图左右切换） */}
             <AnimatePresence>
-                {previewImage && (
+                {previewImages.length > 0 && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
-                        onClick={() => setPreviewImage(null)}
+                        onClick={closePreview}
                     >
                         <motion.div
                             initial={{ scale: 0.9, opacity: 0 }}
@@ -675,18 +726,48 @@ export default function AdminGenerationsPage() {
                             onClick={(e) => e.stopPropagation()}
                         >
                             <img
-                                src={previewImage}
+                                src={previewImage || ""}
                                 alt="Preview"
                                 className="max-w-full max-h-[90vh] object-contain rounded-lg"
                             />
+
+                            {/* 关闭按钮 */}
                             <Button
                                 variant="outline"
                                 size="icon"
                                 className="absolute top-2 right-2 bg-black/50 border-white/20 text-white hover:bg-black/70"
-                                onClick={() => setPreviewImage(null)}
+                                onClick={closePreview}
                             >
                                 <X className="w-5 h-5" />
                             </Button>
+
+                            {/* 多图切换按钮 */}
+                            {previewImages.length > 1 && (
+                                <>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        disabled={previewImageIndex === 0}
+                                        onClick={prevImage}
+                                        className="absolute left-2 top-1/2 -translate-y-1/2 bg-black/50 border-white/20 text-white hover:bg-black/70 disabled:opacity-30"
+                                    >
+                                        <ChevronLeft className="w-5 h-5" />
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        disabled={previewImageIndex === previewImages.length - 1}
+                                        onClick={nextImage}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 bg-black/50 border-white/20 text-white hover:bg-black/70 disabled:opacity-30"
+                                    >
+                                        <ChevronRight className="w-5 h-5" />
+                                    </Button>
+                                    {/* 图片计数 */}
+                                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-black/60 text-white text-xs">
+                                        {previewImageIndex + 1} / {previewImages.length}
+                                    </div>
+                                </>
+                            )}
                         </motion.div>
                     </motion.div>
                 )}

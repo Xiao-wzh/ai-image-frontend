@@ -21,6 +21,7 @@ export const DEFAULT_COSTS: SystemCostConfig = {
     DETAIL_PAGE_RETRY_COST: 199, // 详情页重试消耗积分（折扣价）
     IMAGE_EDIT_COST: 45, // 图片编辑（重绘）消耗积分
     COPYWRITING_COST: 15, // 智能文案生成消耗积分
+    PRO_COST_PER_IMAGE: 15, // PRO模式每张图消耗积分
 }
 
 

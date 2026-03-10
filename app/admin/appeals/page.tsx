@@ -11,7 +11,8 @@ import {
     AlertTriangle,
     Image as ImageIcon,
     X,
-    Loader2
+    Loader2,
+    Crown,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -47,6 +48,10 @@ type Appeal = {
         productType: string
         productTypeDescription?: string | null
         outputLanguage?: string | null
+        qualityMode?: string | null      // PRO / STANDARD
+        imageCount?: number | null       // PRO: 期望张数
+        costPerImage?: number | null     // PRO: 单张成本快照
+        totalCost?: number | null        // 总费用
         generatedImages: string[]
         generatedImage: string | null
         originalImage: string[]
@@ -406,8 +411,17 @@ export default function AdminAppealsPage() {
                                                     <div className="text-sm text-white">
                                                         {appeal.generation.productTypeDescription || (ProductTypeLabel as any)[appeal.generation.productType] || appeal.generation.productType || "-"}
                                                     </div>
-                                                    <div className="text-xs text-slate-500">
-                                                        {appeal.generation.hasUsedDiscountedRetry ? "优惠重试" : "正常生成"}
+                                                    <div className="flex items-center gap-1 mt-1 flex-wrap">
+                                                        {appeal.generation.qualityMode === "PRO" ? (
+                                                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-[10px] text-white font-bold">
+                                                                <Crown className="w-2.5 h-2.5" />
+                                                                PRO · {appeal.generation.imageCount ?? "?"}张
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-xs text-slate-500">
+                                                                {appeal.generation.hasUsedDiscountedRetry ? "优惠重试" : "正常生成"}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </td>
 
@@ -454,6 +468,11 @@ export default function AdminAppealsPage() {
                                                 <td className="p-4">
                                                     <span className="text-purple-400 font-semibold">{appeal.refundAmount}</span>
                                                     <span className="text-slate-500 text-xs ml-1">积分</span>
+                                                    {appeal.generation.qualityMode === "PRO" && appeal.generation.costPerImage && (
+                                                        <div className="text-[10px] text-amber-400/70 mt-0.5">
+                                                            {appeal.generation.costPerImage}×{appeal.generation.imageCount ?? "?"}
+                                                        </div>
+                                                    )}
                                                 </td>
 
                                                 {/* Status */}

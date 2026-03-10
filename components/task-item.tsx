@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useSession } from "next-auth/react"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
-import { AlertCircle, Eye, Loader2, RefreshCw, Pencil } from "lucide-react"
+import { AlertCircle, Crown, Eye, Loader2, RefreshCw, Pencil } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 
@@ -32,20 +32,32 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
     const isFailed = status === "FAILED"
     const isCompleted = status === "COMPLETED"
     const isEditing = (item.editingImageIndexes?.length || 0) > 0
+    const isPro = item.qualityMode === "PRO"
+    const isDetailPage = item.taskType === "DETAIL_PAGE"
+    const isDiscountAvailable = !item.hasUsedDiscountedRetry
 
     const typeLabel = item.productTypeDescription
         || (item.productType ? (ProductTypeLabel as any)[item.productType] : null)
         || item.productType
         || ""
 
-    // Get cover image based on status
-    const getCoverImage = () => {
-        if (isCompleted) {
-            return item.generatedImages?.[0] || item.originalImage?.[0] || null
+    // 计算重试费用：PRO 按张计费，STANDARD 按次计费
+    const retryCost = (() => {
+        if (isPro) {
+            // PRO 无论是否用过折扣，均按原始 costPerImage × imageCount 计费
+            const perImage = item.costPerImage ?? costs.PRO_COST_PER_IMAGE
+            const count = item.imageCount ?? 1
+            return perImage * count
         }
-        return null
-    }
-    const cover = getCoverImage()
+        if (isDiscountAvailable) {
+            return isDetailPage ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST
+        }
+        return isDetailPage ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
+    })()
+
+    const cover = isCompleted
+        ? (item.generatedImages?.[0] || item.originalImage?.[0] || null)
+        : null
 
     const handleRegenerate = async () => {
         if (!item) return
@@ -54,44 +66,37 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
         const bonus = (session?.user as any)?.bonusCredits ?? 0
         const total = paid + bonus
 
-        // Determine cost based on discount availability and task type
-        const isDiscountAvailable = !item.hasUsedDiscountedRetry
-        const isDetailPage = item.taskType === "DETAIL_PAGE"
-        const standardCost = isDetailPage ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
-        const retryCost = isDetailPage ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST
-        const cost = isDiscountAvailable ? retryCost : standardCost
-
-        if (total < cost) {
-            toast.error("余额不足", { description: `重新生成需要 ${cost} 积分，请先充值` })
+        if (total < retryCost) {
+            toast.error("余额不足", { description: `重新生成需要 ${retryCost} 积分，请先充值` })
             return
         }
 
-        // Close modal immediately and show toast
         setShowConfirm(false)
         toast.success("正在重新生成...", { description: "新任务已提交，请等待处理" })
 
-        // Optimistically update the discount flag to prevent double usage
-        if (isDiscountAvailable) {
+        // STANDARD 折扣：乐观标记已用
+        if (isDiscountAvailable && !isPro) {
             item.hasUsedDiscountedRetry = true
         }
 
         onRegenerateSuccess()
 
-        // Make API call in background
         try {
-            // If discount is available, use the retry endpoint which only needs retryFromId
-            const requestBody = isDiscountAvailable
+            // PRO 或 STANDARD 折扣重试：走 retryFromId（后端从原始记录读取所有参数）
+            // STANDARD 已用折扣：全量传参，后端按标准价计费
+            const requestBody = (isDiscountAvailable || isPro)
                 ? { retryFromId: item.id }
                 : {
                     productName: item.productName,
                     productType: item.productType,
                     taskType: item.taskType || "MAIN_IMAGE",
                     images: item.originalImage,
-                    platformKey: "SHOPEE",
-                    outputLanguage: item.outputLanguage || "繁体中文",
-                    mode: item.mode || "CREATIVE",  // 添加模式
-                    features: item.features || "",  // 添加卖点
-                    refImages: item.refImages || [],  // 添加参考图
+                    platformKey: (item as any).platformKey || "SHOPEE",
+                    outputLanguage: item.outputLanguage || "简体中文",
+                    mode: item.mode || "CREATIVE",
+                    features: item.features || "",
+                    refImages: item.refImages || [],
+                    qualityMode: item.qualityMode || "STANDARD",
                 }
 
             const res = await fetch("/api/generate", {
@@ -127,7 +132,8 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                 animate={{ opacity: 1, y: 0 }}
                 className={cn(
                     "flex items-center gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/40 hover:border-white/20 hover:bg-slate-900/60 transition-all",
-                    isFailed && "border-red-500/20 bg-red-950/20 hover:border-red-400/30"
+                    isFailed && "border-red-500/20 bg-red-950/20 hover:border-red-400/30",
+                    isPro && !isFailed && "border-amber-500/15 hover:border-amber-400/25",
                 )}
             >
                 {/* Left: Thumbnail */}
@@ -155,23 +161,32 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                             src={cover}
                             alt={item.productName || "任务缩略图"}
                             className={cn(
-                                "w-full h-full object-cover",
-                                item.taskType === "DETAIL_PAGE" && "object-top"
+                                "w-full h-full",
+                                isDetailPage ? "object-cover object-top"
+                                    : isPro ? "object-contain"
+                                        : "object-cover"
                             )}
                             loading="lazy"
                         />
                     ) : (
                         <div className="text-slate-500 text-xs">无图</div>
                     )}
+
+                    {/* PRO 角标 */}
+                    {isPro && !isPending && !isFailed && (
+                        <div className="absolute top-1 left-1 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 shadow-sm">
+                            <Crown className="w-2.5 h-2.5 text-white" />
+                            <span className="text-[9px] text-white font-bold">PRO</span>
+                        </div>
+                    )}
                 </div>
 
                 {/* Middle: Info */}
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <h3 className="font-semibold text-white text-sm truncate" title={item.productName}>
                             {item.productName || "未命名"}
                         </h3>
-                        {/* Status Badge */}
                         {isPending && (
                             <Badge className="bg-yellow-500/20 text-yellow-400 border-yellow-500/30 text-[10px] px-1.5 py-0">
                                 进行中
@@ -187,7 +202,6 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                                 失败
                             </Badge>
                         )}
-                        {/* Editing indicator */}
                         {isEditing && (
                             <Badge className="bg-purple-500/20 text-purple-400 border-purple-400/30 text-[10px] px-1.5 py-0 flex items-center gap-1">
                                 <Pencil className="w-2.5 h-2.5 animate-pulse" />
@@ -196,9 +210,9 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                         )}
                     </div>
 
-                    <div className="flex items-center gap-3 text-xs text-slate-400">
+                    <div className="flex items-center gap-2 flex-wrap text-xs text-slate-400">
                         {/* taskType badge */}
-                        {item.taskType === "DETAIL_PAGE" ? (
+                        {isDetailPage ? (
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30">
                                 详情页
                             </span>
@@ -207,6 +221,15 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                                 主图
                             </span>
                         ) : null}
+
+                        {/* PRO 模式标签 */}
+                        {isPro && (
+                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-0.5">
+                                <Crown className="w-2.5 h-2.5" />
+                                PRO · {item.imageCount ?? 1}张
+                            </span>
+                        )}
+
                         {typeLabel && (
                             <span className="border border-white/10 px-1.5 py-0.5 rounded text-[10px]">
                                 {typeLabel}
@@ -235,7 +258,12 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                         variant="ghost"
                         onClick={() => setShowConfirm(true)}
                         disabled={regenerating}
-                        className="text-xs text-purple-300 hover:text-purple-200 hover:bg-purple-500/10 gap-1.5"
+                        className={cn(
+                            "text-xs gap-1.5",
+                            isPro
+                                ? "text-amber-300 hover:text-amber-200 hover:bg-amber-500/10"
+                                : "text-purple-300 hover:text-purple-200 hover:bg-purple-500/10"
+                        )}
                     >
                         <RefreshCw className={cn("w-3.5 h-3.5", regenerating && "animate-spin")} />
                         重新生成
@@ -243,7 +271,7 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                 </div>
             </motion.div>
 
-            {/* Confirm Dialog - shows different price based on discount availability */}
+            {/* Confirm Dialog */}
             {showConfirm && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
                     <motion.div
@@ -251,22 +279,27 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                         animate={{ opacity: 1, scale: 1 }}
                         className="glass rounded-2xl p-6 max-w-sm w-full mx-4 border border-white/10"
                     >
-                        {!item.hasUsedDiscountedRetry ? (
-                            <>
-                                <h4 className="text-lg font-semibold text-white mb-2">确认重新生成</h4>
-                                <p className="text-sm text-slate-400 mb-4">
-                                    将使用相同参数重新生成图片，消耗 <span className="text-yellow-400 font-semibold">{item.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST} 积分</span>。
-                                    <br />
-                                    <span className="text-xs text-slate-500">（每条记录仅限一次优惠机会）</span>
-                                </p>
-                            </>
+                        <h4 className="text-lg font-semibold text-white mb-2">确认重新生成</h4>
+                        {isPro ? (
+                            <p className="text-sm text-slate-400 mb-4">
+                                将使用相同参数重新生成{" "}
+                                <span className="text-amber-300 font-semibold">{item.imageCount ?? 1} 张 PRO 图片</span>，消耗{" "}
+                                <span className="text-amber-400 font-semibold">{retryCost} 积分</span>。
+                                <br />
+                                <span className="text-xs text-slate-500">（PRO 模式按张计费，每条记录限重试一次）</span>
+                            </p>
+                        ) : isDiscountAvailable ? (
+                            <p className="text-sm text-slate-400 mb-4">
+                                将使用相同参数重新生成图片，消耗{" "}
+                                <span className="text-yellow-400 font-semibold">{retryCost} 积分</span>。
+                                <br />
+                                <span className="text-xs text-slate-500">（每条记录仅限一次优惠机会）</span>
+                            </p>
                         ) : (
-                            <>
-                                <h4 className="text-lg font-semibold text-white mb-2">确认重新生成</h4>
-                                <p className="text-sm text-slate-400 mb-4">
-                                    将使用相同参数重新生成图片，消耗 <span className="text-purple-400 font-semibold">{item.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST} 积分</span>。
-                                </p>
-                            </>
+                            <p className="text-sm text-slate-400 mb-4">
+                                将使用相同参数重新生成图片，消耗{" "}
+                                <span className="text-purple-400 font-semibold">{retryCost} 积分</span>。
+                            </p>
                         )}
                         <div className="flex gap-3">
                             <Button
@@ -281,9 +314,11 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                                 disabled={regenerating}
                                 className={cn(
                                     "flex-1 text-white hover:opacity-90",
-                                    !item.hasUsedDiscountedRetry
-                                        ? "bg-gradient-to-r from-yellow-500 to-orange-500"
-                                        : "bg-gradient-to-r from-blue-600 to-purple-600"
+                                    isPro
+                                        ? "bg-gradient-to-r from-amber-500 to-orange-500"
+                                        : isDiscountAvailable
+                                            ? "bg-gradient-to-r from-yellow-500 to-orange-500"
+                                            : "bg-gradient-to-r from-blue-600 to-purple-600"
                                 )}
                             >
                                 {regenerating ? (
@@ -291,9 +326,7 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                                         <Loader2 className="w-4 h-4 animate-spin mr-2" />
                                         处理中...
                                     </>
-                                ) : (
-                                    "确认生成"
-                                )}
+                                ) : "确认生成"}
                             </Button>
                         </div>
                     </motion.div>

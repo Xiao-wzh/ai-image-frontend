@@ -45,6 +45,10 @@ export async function GET(req: NextRequest) {
                             productName: true,
                             productType: true,
                             outputLanguage: true,
+                            qualityMode: true,       // PRO / STANDARD
+                            imageCount: true,        // PRO: 期望张数
+                            costPerImage: true,      // PRO: 单张成本快照
+                            totalCost: true,         // 总费用
                             generatedImages: true,
                             generatedImage: true,
                             originalImage: true,

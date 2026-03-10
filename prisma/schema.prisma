@@ -232,18 +232,30 @@ model Generation {
   platformKey     String?  /// 仅记录：提交/重试时的 platformKey（不参与 prompt 查询）
   taskType        String   @default("MAIN_IMAGE") /// MAIN_IMAGE / DETAIL_PAGE
   mode            String   @default("CREATIVE")   /// CREATIVE / CLONE
+  qualityMode     String   @default("STANDARD")   /// STANDARD / PRO
   features        String?  @db.Text               /// 卖点（克隆模式）
   refImages       String[]                        /// 参考图片（克隆模式）
   originalImage   String[]
   generatedImage  String?  @db.Text /// 存储完整的、未裁剪的原图 URL
   generatedImages String[] /// 存储九宫格切片图片 URL 数组
   editingImageIndexes Int[] @default([]) /// 正在编辑中的图片索引
-  status                   String   @default("PENDING")
+  status                   String   @default("PENDING") /// PENDING / PROCESSING / COMPLETED / PARTIAL_SUCCESS / FAILED
   hasUsedDiscountedRetry Boolean @default(false)
   isWatermarkUnlocked    Boolean @default(false) /// 是否已解锁水印功能
   outputLanguage         String  @default("中文") /// 输出文字语言
-  createdAt                DateTime @default(now())
 
+  // PRO 模式参数
+  imageCount      Int      @default(9)             /// PRO: 用户指定生成张数
+  aspectRatio     String   @default("1:1")         /// PRO: 用户指定图片比例
+  proFeatures     String?  @db.Text               /// PRO: 产品功能描述（可选）
+  proStyle        String?  @db.Text               /// PRO: 画面风格描述（可选）
+
+  // 资金快照（用于退款防坏账）
+  costPerImage    Int      @default(0)             /// 单张成本快照 (PRO: >0, STANDARD: 0=按次计费)
+  totalCost       Int      @default(0)             /// 本次总扣费快照
+  refundAmount    Int      @default(0)             /// 已退款金额
+
+  createdAt                DateTime @default(now())
 
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
   appeal Appeal? /// One-to-One: A generation can only be appealed once
@@ -266,6 +278,7 @@ model ProductTypePrompt {
   productType    String
   taskType       String   @default("MAIN_IMAGE") /// MAIN_IMAGE / DETAIL_PAGE
   mode           String   @default("CREATIVE")   /// CREATIVE / CLONE
+  qualityMode    String   @default("STANDARD")   /// STANDARD / PRO
 
   // 内容
   promptTemplate String   @db.Text
@@ -275,8 +288,8 @@ model ProductTypePrompt {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  @@unique([productType, taskType, mode, userId])
-  @@index([platformId, productType, taskType, mode])
+  @@unique([productType, taskType, mode, qualityMode, userId])
+  @@index([platformId, productType, taskType, mode, qualityMode])
   @@index([userId])
 }
 

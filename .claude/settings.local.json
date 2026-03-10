@@ -4,7 +4,16 @@
       "Bash(ls:*)",
       "Bash(tree:*)",
       "Bash(npx prisma generate:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(cd \"E:/ai-image/ai-image-frontend\" && npx tsc --noEmit --skipLibCheck 2>&1 | grep -E \"\\(generation/status|upload-zone|history/route|generation-result\\)\" | head -20)",
+      "Bash(cd \"E:/ai-image/ai-image-frontend\" && npx prisma migrate dev --name add_pro_features_style 2>&1)",
+      "Bash(cd \"E:/ai-image/ai-image-frontend\" && npx tsc --noEmit --skipLibCheck 2>&1 | grep -E \"\\(generate/route|generation/status\\)\" | head -20)",
+      "Bash(cd \"E:/ai-image/ai-image-frontend\" && npx tsc --noEmit --skipLibCheck 2>&1 | grep -E \"\\(task-item|history-detail|history-card|history/route\\)\" | head -20)",
+      "Bash(cd E:/ai-image/ai-image-frontend && npx tsc --noEmit --skipLibCheck 2>&1 | head -50)",
+      "Bash(grep -r \"qualityMode\\\\|PRO_COST_PER_IMAGE\\\\|imageCount\\\\|aspectRatio\\\\|proFeatures\\\\|proStyle\" /E/ai-image/ai-image-frontend/components/*.tsx --include=\"*.tsx\" | head -50)",
+      "Bash(grep -r \"qualityMode\\\\|imageCount\\\\|PRO\" /E/ai-image/ai-image-frontend/app/api/*.ts --include=\"*.ts\" | grep -E \"\\(POST|GET|route\\)\" | head -30)",
+      "Bash(grep -r \"PARTIAL_SUCCESS\\\\|refundAmount\" /E/ai-image/ai-image-frontend/components/*.tsx --include=\"*.tsx\" | head -20)",
+      "Bash(cd E:/ai-image/ai-image-frontend && npx tsc --noEmit --skipLibCheck 2>&1)"
     ]
   }
 }

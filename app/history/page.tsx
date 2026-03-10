@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, Sparkles, Image as ImageIcon, Download, Eye, ChevronLeft, ChevronRight } from "lucide-react"
+import { Search, Sparkles, Image as ImageIcon, Download, Eye, ChevronLeft, ChevronRight, Crown } from "lucide-react"
 
 import { Sidebar } from "@/components/sidebar"
 import { TopBanner } from "@/components/top-banner"
@@ -81,7 +81,7 @@ export default function GalleryPage() {
   const empty = !loading && items.length === 0
 
   // Stats
-  const totalImages = total * 9 // Each work has 9 images
+  const totalImages = items.reduce((sum, item) => sum + (item.generatedImages?.length || 0), 0)
 
   return (
     <div className="flex h-screen bg-slate-950">
@@ -122,7 +122,7 @@ export default function GalleryPage() {
                   <div className="w-px h-10 bg-white/10" />
                   <div className="text-center">
                     <div className="text-2xl font-bold text-purple-400">{totalImages}</div>
-                    <div className="text-xs text-slate-400">图片总数</div>
+                    <div className="text-xs text-slate-400">本页图片</div>
                   </div>
                 </div>
               </div>
@@ -198,6 +198,9 @@ export default function GalleryPage() {
                           transition={{ duration: 0.2, delay: idx * 0.02 }}
                           className="min-w-0"
                         >
+                          {(() => {
+                            const isPro = item.qualityMode === "PRO"
+                            return (
                           <div
                             onClick={() => {
                               setActiveIndex(idx)
@@ -210,7 +213,7 @@ export default function GalleryPage() {
                               <img
                                 src={item.generatedImages?.[0] || item.generatedImage || "/placeholder.svg"}
                                 alt={item.productName}
-                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                className={`w-full h-full transition-transform duration-500 group-hover:scale-105 ${isPro ? "object-contain" : "object-cover"}`}
                               />
 
                               {/* Hover Overlay */}
@@ -222,8 +225,13 @@ export default function GalleryPage() {
                                 </div>
                               </div>
 
-                              {/* Task Type Badge - top left */}
-                              {item.taskType === "DETAIL_PAGE" ? (
+                              {/* Task Type Badge - top left（PRO 模式显示 PRO 徽章，否则显示任务类型） */}
+                              {isPro ? (
+                                <div className="absolute top-3 left-3 flex items-center gap-1 px-2 py-1 rounded-lg bg-gradient-to-r from-amber-500 to-orange-500 backdrop-blur-sm shadow-lg shadow-amber-500/30">
+                                  <Crown className="w-3 h-3 text-white" />
+                                  <span className="text-[10px] text-white font-bold">PRO</span>
+                                </div>
+                              ) : item.taskType === "DETAIL_PAGE" ? (
                                 <div className="absolute top-3 left-3 px-2 py-1 rounded-lg bg-purple-500/90 backdrop-blur-sm text-xs text-white font-medium">
                                   详情页
                                 </div>
@@ -232,6 +240,8 @@ export default function GalleryPage() {
                                   主图
                                 </div>
                               ) : null}
+
+                              {/* PRO 任务类型同时显示在 top-right 的图片计数旁 */}
 
                               {/* Editing indicator - bottom left */}
                               {(item.editingImageIndexes?.length || 0) > 0 && (
@@ -246,14 +256,14 @@ export default function GalleryPage() {
                               {/* Image count badge */}
                               <div className="absolute top-3 right-3 px-2 py-1 rounded-lg bg-black/50 backdrop-blur-sm text-xs text-white flex items-center gap-1">
                                 <ImageIcon className="w-3 h-3" />
-                                <span>{item.generatedImages?.length || 9}</span>
+                                <span>{item.generatedImages?.length || item.imageCount || 1}</span>
                               </div>
 
                             </div>
 
 
                             {/* Info */}
-                            <div className="p-4">
+                            <div className={`p-4 ${isPro ? "border-t border-amber-500/15" : ""}`}>
                               <h3 className="text-white font-medium truncate group-hover:text-purple-300 transition-colors">
                                 {item.productName}
                               </h3>
@@ -266,6 +276,8 @@ export default function GalleryPage() {
                               </p>
                             </div>
                           </div>
+                            )
+                          })()}
                         </motion.div>
                       ))}
                     </AnimatePresence>

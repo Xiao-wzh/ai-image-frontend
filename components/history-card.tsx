@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { ProductTypeLabel } from "@/lib/constants"
-import { AlertCircle, Loader2, Pencil } from "lucide-react"
+import { AlertCircle, Loader2, Pencil, Crown, AlertTriangle } from "lucide-react"
 
 export type HistoryItem = {
   id: string
@@ -16,6 +16,7 @@ export type HistoryItem = {
   productTypeDescription?: string | null // Chinese name from database
   taskType?: string // MAIN_IMAGE / DETAIL_PAGE
   mode?: string // CREATIVE / CLONE
+  qualityMode?: string // STANDARD / PRO
   features?: string // 卖点（克隆模式）
   refImages?: string[] // 参考图（克隆模式）
   generatedImages: string[]
@@ -26,6 +27,9 @@ export type HistoryItem = {
   hasUsedDiscountedRetry?: boolean
   isWatermarkUnlocked?: boolean
   outputLanguage?: string // Output language for regeneration
+  imageCount?: number // PRO: 用户指定生成张数
+  costPerImage?: number // PRO: 单张成本快照（用于重试费用计算）
+  refundAmount?: number // 已退款金额
   editingImageIndexes?: number[] // Images currently being edited
   appeal?: {
     id: string
@@ -51,10 +55,12 @@ export function HistoryCard({
     || ""
 
   const status = (item.status || "COMPLETED").toUpperCase()
-  const isPending = status === "PENDING"
+  const isPending = status === "PENDING" || status === "PROCESSING"
   const isFailed = status === "FAILED"
+  const isPartialSuccess = status === "PARTIAL_SUCCESS"
   const isDetailPage = item.taskType === "DETAIL_PAGE"
   const isEditing = (item.editingImageIndexes?.length || 0) > 0
+  const isPro = item.qualityMode === "PRO"
 
   const handleClick = () => {
     if (isPending) {
@@ -63,6 +69,11 @@ export function HistoryCard({
     }
     if (isFailed) {
       toast.error("生成失败", { description: "该任务未生成成功，积分已退回（如未退回请联系申诉）" })
+      return
+    }
+    if (isPartialSuccess) {
+      // 部分成功仍可查看
+      onClick?.()
       return
     }
     onClick?.()
@@ -79,6 +90,8 @@ export function HistoryCard({
         // 强制卡片宽度占满 grid 单元格，flex-col 使内部元素垂直排列
         "group w-full relative text-left rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 hover:border-white/20 hover:shadow-lg hover:shadow-purple-500/10 transition-all flex flex-col disabled:opacity-90 disabled:cursor-not-allowed",
         isFailed && "border-red-500/20 bg-red-950/20 hover:border-red-400/30",
+        isPartialSuccess && "border-amber-500/20 bg-amber-950/10 hover:border-amber-400/30",
+        isPro && !isFailed && "border-amber-500/15 hover:border-amber-400/25",
         className,
       )}
     >
@@ -101,6 +114,24 @@ export function HistoryCard({
             <div className="text-sm font-semibold text-red-200">生成失败</div>
             <Badge className="bg-white/10 text-slate-200 border-white/10">已退款</Badge>
           </div>
+        ) : isPartialSuccess ? (
+          <>
+            {cover ? (
+              <img
+                src={cover}
+                alt={item.productName || "历史作品"}
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <div className="h-full w-full flex items-center justify-center text-slate-500">无封面</div>
+            )}
+            {/* 部分失败角标 */}
+            <div className="absolute bottom-2 left-2 right-2 flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/90 backdrop-blur-sm">
+              <AlertTriangle className="w-3 h-3 text-white" />
+              <span className="text-[10px] text-white font-medium">部分生成失败，已退还积分</span>
+            </div>
+          </>
         ) : cover ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -142,6 +173,14 @@ export function HistoryCard({
           <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-purple-500/80 backdrop-blur-sm border border-purple-400/30">
             <Pencil className="w-3 h-3 text-white animate-pulse" />
             <span className="text-[10px] text-white font-medium">重绘中</span>
+          </div>
+        )}
+
+        {/* PRO 彽标 */}
+        {isPro && !isPending && !isFailed && (
+          <div className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 backdrop-blur-sm shadow-lg shadow-amber-500/30">
+            <Crown className="w-3 h-3 text-white" />
+            <span className="text-[10px] text-white font-bold">PRO</span>
           </div>
         )}
       </div>

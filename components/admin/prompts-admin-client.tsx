@@ -25,6 +25,7 @@ import {
   Lock,
   LayoutList,
   X,
+  Crown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
@@ -32,6 +33,7 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
+import { PromptEditor } from "@/components/admin/prompt-editor"
 
 // Types
 interface Prompt {
@@ -39,6 +41,7 @@ interface Prompt {
   productType: string
   taskType: string
   mode: string
+  qualityMode: string
   description: string | null
   promptTemplate: string
   isActive: boolean
@@ -113,6 +116,7 @@ export function PromptsAdminClient() {
   // Filters
   const [taskType, setTaskType] = useState<TaskType>("MAIN_IMAGE")
   const [promptMode, setPromptMode] = useState<"CREATIVE" | "CLONE">("CREATIVE")
+  const [qualityModeFilter, setQualityModeFilter] = useState<"STANDARD" | "PRO">("STANDARD")
   const [activePlatformId, setActivePlatformId] = useState<string | null>(null)
   const [scope, setScope] = useState<Scope>("all")
   const [searchQuery, setSearchQuery] = useState("")
@@ -124,6 +128,7 @@ export function PromptsAdminClient() {
   const [editDescription, setEditDescription] = useState("")
   const [editProductType, setEditProductType] = useState("")
   const [editMode, setEditMode] = useState<"CREATIVE" | "CLONE">("CREATIVE")
+  const [editQualityMode, setEditQualityMode] = useState<"STANDARD" | "PRO">("STANDARD")
   const [editIsActive, setEditIsActive] = useState(true)
   const [editUserId, setEditUserId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -155,7 +160,7 @@ export function PromptsAdminClient() {
   const filteredPrompts = useMemo(() => {
     if (!currentPlatform) return []
     let prompts = currentPlatform.prompts.filter(
-      (p) => p.taskType === taskType && (p.mode || "CREATIVE") === promptMode
+      (p) => p.taskType === taskType && (p.mode || "CREATIVE") === promptMode && (p.qualityMode || "STANDARD") === qualityModeFilter
     )
 
     if (searchQuery.trim()) {
@@ -169,7 +174,7 @@ export function PromptsAdminClient() {
     }
 
     return prompts
-  }, [currentPlatform, taskType, promptMode, searchQuery])
+  }, [currentPlatform, taskType, promptMode, qualityModeFilter, searchQuery])
 
   // Compute stats
   const stats = useMemo(() => {
@@ -197,6 +202,7 @@ export function PromptsAdminClient() {
       setEditProductType(selectedPrompt.productType)
       setEditIsActive(selectedPrompt.isActive)
       setEditUserId(selectedPrompt.userId)
+      setEditQualityMode((selectedPrompt.qualityMode as "STANDARD" | "PRO") || "STANDARD")
     }
   }, [selectedPrompt, isCreating])
 
@@ -204,7 +210,7 @@ export function PromptsAdminClient() {
   useEffect(() => {
     setSelectedPromptId(null)
     setIsCreating(false)
-  }, [taskType, activePlatformId, promptMode])
+  }, [taskType, activePlatformId, promptMode, qualityModeFilter])
 
   const isDirty = useMemo(() => {
     if (isCreating) return editDraft.trim().length > 0
@@ -225,7 +231,7 @@ export function PromptsAdminClient() {
       const res = await fetch("/api/admin/prompts/update", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: selectedPrompt.id, promptTemplate: editDraft }),
+        body: JSON.stringify({ id: selectedPrompt.id, promptTemplate: editDraft, qualityMode: editQualityMode }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "保存失败")
@@ -254,6 +260,7 @@ export function PromptsAdminClient() {
           productType: editProductType.trim(),
           taskType,
           mode: editMode,
+          qualityMode: editQualityMode,
           description: editDescription.trim() || null,
           promptTemplate: editDraft.trim(),
           userId: editUserId,
@@ -270,7 +277,7 @@ export function PromptsAdminClient() {
     } finally {
       setSaving(false)
     }
-  }, [activePlatformId, editProductType, taskType, editMode, editDescription, editDraft, editUserId, mutate])
+  }, [activePlatformId, editProductType, taskType, editMode, editQualityMode, editDescription, editDraft, editUserId, mutate])
 
   const handleDelete = useCallback(async () => {
     if (!selectedPrompt) return
@@ -320,9 +327,10 @@ export function PromptsAdminClient() {
     setEditDescription("")
     setEditProductType("")
     setEditMode(promptMode)
+    setEditQualityMode(qualityModeFilter)
     setEditIsActive(true)
     setEditUserId(null)
-  }, [promptMode])
+  }, [promptMode, qualityModeFilter])
 
   const cancelCreate = useCallback(() => {
     setIsCreating(false)
@@ -438,6 +446,37 @@ export function PromptsAdminClient() {
         {/* Divider */}
         <div className="w-px h-7 bg-white/10 hidden sm:block" />
 
+        {/* Quality Mode Toggle */}
+        <div className="flex items-center gap-1 bg-slate-800/60 rounded-lg p-0.5 border border-white/10">
+          <button
+            onClick={() => setQualityModeFilter("STANDARD")}
+            className={cn(
+              "flex items-center gap-1 px-3 py-1.5 text-xs rounded-md transition-all cursor-pointer h-8",
+              qualityModeFilter === "STANDARD"
+                ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+            )}
+          >
+            <Zap className="w-3.5 h-3.5" />
+            标准极速
+          </button>
+          <button
+            onClick={() => setQualityModeFilter("PRO")}
+            className={cn(
+              "flex items-center gap-1 px-3 py-1.5 text-xs rounded-md transition-all cursor-pointer h-8",
+              qualityModeFilter === "PRO"
+                ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-sm shadow-amber-500/20"
+                : "text-slate-400 hover:text-slate-200 hover:bg-white/5"
+            )}
+          >
+            <Crown className="w-3.5 h-3.5" />
+            PRO 增强
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div className="w-px h-7 bg-white/10 hidden sm:block" />
+
         {/* Scope Filter */}
         <div className="flex items-center gap-1 bg-slate-800/40 rounded-lg p-0.5 border border-white/5">
           {(
@@ -473,7 +512,7 @@ export function PromptsAdminClient() {
       >
         {platforms.map((p, i) => {
           const promptCount = p.prompts.filter(
-            (pr) => pr.taskType === taskType && (pr.mode || "CREATIVE") === promptMode
+            (pr) => pr.taskType === taskType && (pr.mode || "CREATIVE") === promptMode && (pr.qualityMode || "STANDARD") === qualityModeFilter
           ).length
           return (
             <motion.button
@@ -588,6 +627,17 @@ export function PromptsAdminClient() {
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 flex items-center gap-0.5">
                               <Shield className="w-2.5 h-2.5" />
                               系统
+                            </span>
+                          )}
+                          {(prompt.qualityMode || "STANDARD") === "PRO" ? (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 flex items-center gap-0.5 font-medium">
+                              <Crown className="w-2.5 h-2.5" />
+                              PRO
+                            </span>
+                          ) : (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-500/15 text-slate-400 flex items-center gap-0.5">
+                              <Zap className="w-2.5 h-2.5" />
+                              标准
                             </span>
                           )}
                         </div>
@@ -741,7 +791,7 @@ export function PromptsAdminClient() {
                   <>
                     {/* Mode Display */}
                     <div className="p-3 rounded-lg bg-gradient-to-r from-slate-800/50 to-slate-700/50 border border-white/10">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm font-medium text-slate-400">创建模式:</span>
                         <span className={cn(
                           "px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5",
@@ -753,6 +803,18 @@ export function PromptsAdminClient() {
                             <><Wand2 className="w-3 h-3" /> 创意模式</>
                           ) : (
                             <><Zap className="w-3 h-3" /> 克隆模式</>
+                          )}
+                        </span>
+                        <span className={cn(
+                          "px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5",
+                          editQualityMode === "PRO"
+                            ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white"
+                            : "bg-gradient-to-r from-blue-600 to-purple-600 text-white"
+                        )}>
+                          {editQualityMode === "PRO" ? (
+                            <><Crown className="w-3 h-3" /> PRO 增强</>
+                          ) : (
+                            <><Zap className="w-3 h-3" /> 标准极速</>
                           )}
                         </span>
                         <span className="text-xs text-slate-500 ml-auto">
@@ -800,7 +862,37 @@ export function PromptsAdminClient() {
                         </SelectContent>
                       </Select>
                     </div>
+
+                    {/* Quality Mode (edit only for create) */}
+                    <div>
+                      <label className="block text-sm font-medium text-slate-400 mb-2">画质引擎模式</label>
+                      <Select value={editQualityMode} onValueChange={(v) => setEditQualityMode(v as "STANDARD" | "PRO")}>
+                        <SelectTrigger className="bg-white/5 border-white/10 text-white h-10">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="bg-slate-900 border-white/10">
+                          <SelectItem value="STANDARD" className="text-white">⚡ 标准极速 (STANDARD)</SelectItem>
+                          <SelectItem value="PRO" className="text-white">👑 PRO 增强</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </>
+                )}
+
+                {/* Quality Mode — edit mode */}
+                {!isCreating && selectedPrompt && (
+                  <div className="p-3 rounded-lg bg-slate-800/50 border border-white/10">
+                    <label className="block text-sm font-medium text-slate-400 mb-2">画质引擎模式</label>
+                    <Select value={editQualityMode} onValueChange={(v) => setEditQualityMode(v as "STANDARD" | "PRO")}>
+                      <SelectTrigger className="bg-white/5 border-white/10 text-white h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-slate-900 border-white/10">
+                        <SelectItem value="STANDARD" className="text-white">⚡ 标准极速 (STANDARD)</SelectItem>
+                        <SelectItem value="PRO" className="text-white">👑 PRO 增强</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 )}
 
                 {/* Prompt Template */}
@@ -811,15 +903,17 @@ export function PromptsAdminClient() {
                       {editDraft.length.toLocaleString()} 字符
                     </span>
                   </div>
-                  <Textarea
+                  <PromptEditor
                     value={editDraft}
-                    onChange={(e) => setEditDraft(e.target.value)}
+                    onChange={setEditDraft}
                     placeholder="输入 Prompt 模板内容..."
-                    className="flex-1 min-h-[400px] bg-white/5 border-white/10 text-white font-mono text-sm resize-none leading-relaxed"
                   />
                   <div className="flex items-center justify-between mt-2">
-                    <div className="text-xs text-slate-500">
-                      支持变量: <code className="text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">{'${productName}'}</code>
+                    <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+                      <span>支持:</span>
+                      <code className="text-cyan-400 bg-cyan-500/10 px-1.5 py-0.5 rounded">{'{{productName}}'}</code>
+                      <code className="text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded">{'{{#if proStyle}}...{{/if}}'}</code>
+                      <code className="text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">{'{{else}}'}</code>
                     </div>
                     {isDirty && !isCreating && (
                       <motion.div

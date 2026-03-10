@@ -11,6 +11,8 @@ import {
   Loader2,
   Sparkles as SparklesIcon,
   Flag,
+  Crown,
+  AlertTriangle,
 } from "lucide-react"
 import JSZip from "jszip"
 import { Button } from "@/components/ui/button"
@@ -26,6 +28,9 @@ interface GenerationResultProps {
   onTryAnother: () => void
   onDiscountRetry: (generationId: string) => void
   onPreview: (url: string) => void
+  qualityMode?: string  // STANDARD / PRO
+  imageCount?: number   // PRO: 用户指定生成张数
+  costPerImage?: number // PRO: 单张成本（用于显示重试费用）
 }
 
 export function GenerationResult({
@@ -36,11 +41,22 @@ export function GenerationResult({
   onTryAnother,
   onDiscountRetry,
   onPreview,
+  qualityMode = "STANDARD",
+  imageCount = 9,
+  costPerImage,
 }: GenerationResultProps) {
   const { costs } = useCosts()
   const [viewMode, setViewMode] = useState<"grid" | "full">("grid")
   const [isDownloading, setIsDownloading] = useState(false)
   const [hasUsedRetry, setHasUsedRetry] = useState(false)
+  const isPro = qualityMode === "PRO"
+  const totalExpected = isPro ? imageCount : generatedImages.length
+  const failedCount = Math.max(totalExpected - generatedImages.length, 0)
+
+  // PRO 自适应网格布局
+  const gridColsClass = isPro
+    ? totalExpected === 1 ? "grid-cols-1" : totalExpected === 2 ? "grid-cols-2" : "grid-cols-2"
+    : "grid-cols-3"
 
   const handleDownload = async () => {
     if (generatedImages.length === 0) return
@@ -125,6 +141,17 @@ export function GenerationResult({
           <Flag className="w-4 h-4 mr-2" />
           图片与实物不符？点击申述退还积分
         </Button>
+        {/* PRO Badge */}
+        {isPro && (
+          <motion.div
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg shadow-amber-500/30"
+          >
+            <Crown className="w-3.5 h-3.5 text-white" />
+            <span className="text-xs text-white font-bold">PRO</span>
+          </motion.div>
+        )}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -136,7 +163,7 @@ export function GenerationResult({
             transition={{ duration: 1, repeat: 3 }}
             className="w-2 h-2 rounded-full bg-green-500"
           />
-          生成完成
+          {failedCount > 0 ? "部分生成完成" : "生成完成"}
         </motion.div>
 
         {fullImageUrl && (
@@ -152,7 +179,7 @@ export function GenerationResult({
               )}
             >
               <Grid className="w-4 h-4 mr-2" />
-              九宫格视图
+              {isPro ? "图片列表" : "九宫格视图"}
             </Button>
             <Button
               size="sm"
@@ -181,7 +208,7 @@ export function GenerationResult({
           transition={{ duration: 0.3 }}
         >
           {viewMode === "grid" ? (
-            <div className="grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/20 backdrop-blur-sm bg-slate-900/50 p-2 max-h-[62vh] overflow-y-auto">
+            <div className={`grid ${gridColsClass} gap-2 rounded-2xl overflow-hidden border border-white/20 backdrop-blur-sm bg-slate-900/50 p-2 max-h-[62vh] overflow-y-auto`}>
               {generatedImages.map((img, i) => (
                 <motion.div
                   key={i}
@@ -191,13 +218,27 @@ export function GenerationResult({
                   transition={{ duration: 0.3, delay: i * 0.05 }}
                   whileHover={{ scale: 1.05 }}
                 >
-                  <img src={img} alt={`Generated slice ${i + 1}`} className="w-full h-full object-cover" />
+                  <img src={img} alt={`生成图片 ${i + 1}`} className={`w-full h-full ${isPro ? "object-contain" : "object-cover"}`} />
                   <div
                     className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
                     onClick={() => onPreview(img)}
                   >
                     <ZoomIn className="w-8 h-8 text-white" />
                   </div>
+                </motion.div>
+              ))}
+
+              {/* 失败占位块 */}
+              {failedCount > 0 && Array.from({ length: failedCount }).map((_, i) => (
+                <motion.div
+                  key={`failed-${i}`}
+                  className="relative aspect-square rounded-lg bg-slate-800/60 border border-dashed border-slate-600/50 flex flex-col items-center justify-center gap-2"
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ duration: 0.3, delay: (generatedImages.length + i) * 0.05 }}
+                >
+                  <AlertTriangle className="w-6 h-6 text-slate-500" />
+                  <span className="text-[11px] text-slate-500 text-center px-2">生成失败，已退还积分</span>
                 </motion.div>
               ))}
             </div>
@@ -244,7 +285,20 @@ export function GenerationResult({
           }
         </Button>
 
-        {!hasUsedRetry && (
+        {/* PRO 模式重试按钮 */}
+        {isPro && !hasUsedRetry && (
+          <Button
+            onClick={handleDiscountRetryClick}
+            variant="outline"
+            className="h-12 rounded-xl border-amber-400/50 bg-amber-400/10 hover:bg-amber-400/20 text-amber-300 backdrop-blur-sm transition-all group"
+          >
+            <Crown className="w-4 h-4 mr-2 transition-transform group-hover:scale-110" />
+            PRO 重试 ({(costPerImage ?? costs.PRO_COST_PER_IMAGE) * imageCount}积分)
+          </Button>
+        )}
+
+        {/* STANDARD 模式优惠重试按钮 */}
+        {!hasUsedRetry && !isPro && (
           <Button
             onClick={handleDiscountRetryClick}
             variant="outline"

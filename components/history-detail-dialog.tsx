@@ -27,6 +27,7 @@ import {
   Eye,
   AlertTriangle,
   Pencil,
+  Crown,
 } from "lucide-react"
 
 
@@ -252,7 +253,11 @@ export function HistoryDetailDialog({
     const bonus = (session?.user as any)?.bonusCredits ?? 0
     const total = paid + bonus
 
-    const standardCost = item.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
+    const isPro = item.qualityMode === "PRO"
+    const standardCost = isPro
+      ? (item.costPerImage ?? costs.PRO_COST_PER_IMAGE) * (item.imageCount ?? 1)
+      : item.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
+
     if (total < standardCost) {
       toast.error("余额不足", { description: `再次生成需要 ${standardCost} 积分，请先充值` })
       return
@@ -272,11 +277,17 @@ export function HistoryDetailDialog({
           productType: item.productType,
           taskType: item.taskType || "MAIN_IMAGE",
           images: item.originalImage,
-          platformKey: "SHOPEE",
-          mode: item.mode || "CREATIVE",  // 添加模式
-          features: item.features || "",  // 添加卖点
-          refImages: item.refImages || [],  // 添加参考图
-          outputLanguage: item.outputLanguage || "简体中文",  // 添加输出语言
+          platformKey: (item as any).platformKey || "SHOPEE",
+          mode: item.mode || "CREATIVE",
+          features: item.features || "",
+          refImages: item.refImages || [],
+          outputLanguage: item.outputLanguage || "简体中文",
+          // PRO 全量重试：传递 PRO 参数
+          qualityMode: item.qualityMode || "STANDARD",
+          ...(isPro ? {
+            imageCount: item.imageCount,
+            aspectRatio: (item as any).aspectRatio,
+          } : {}),
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -295,13 +306,19 @@ export function HistoryDetailDialog({
     const bonus = (session?.user as any)?.bonusCredits ?? 0
     const total = paid + bonus
 
-    if (total < 99) {
-      toast.error("余额不足", { description: "优惠重试需要 99 积分，请先充值" })
+    const isPro = item.qualityMode === "PRO"
+    // PRO 无折扣，按原始成本；STANDARD 按折扣价
+    const retryCost = isPro
+      ? (item.costPerImage ?? costs.PRO_COST_PER_IMAGE) * (item.imageCount ?? 1)
+      : item.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST
+
+    if (total < retryCost) {
+      toast.error("余额不足", { description: `重试需要 ${retryCost} 积分，请先充值` })
       return
     }
 
     setShowDiscountConfirm(false)
-    toast.success("优惠重试任务已提交", { description: "新任务已加入队列" })
+    toast.success(isPro ? "PRO 重试任务已提交" : "优惠重试任务已提交", { description: "新任务已加入队列" })
 
     // Optimistically update the discount flag to prevent double usage
     if (item) {
@@ -359,6 +376,7 @@ export function HistoryDetailDialog({
   const canAppeal = useMemo(() => {
     if (!item) return false
     if (item.status !== "COMPLETED") return false
+    if (item.qualityMode === "PRO") return false  // PRO 模式暂不支持申诉
     if (!item.appeal) return true
     return item.appeal.status === "REJECTED"
   }, [item])
@@ -444,8 +462,21 @@ export function HistoryDetailDialog({
         )}>
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-white/10 pr-12 shrink-0">
-            <DialogTitle className="text-white">
+            <DialogTitle className="text-white flex items-center gap-2">
               <span className="truncate block">{title}</span>
+              {/* PRO 徽章 */}
+              {item?.qualityMode === "PRO" && (
+                <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white text-[10px] font-bold shrink-0">
+                  <Crown className="w-3 h-3" />
+                  PRO
+                </span>
+              )}
+              {/* 详情页标签 */}
+              {item?.taskType === "DETAIL_PAGE" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
+                  详情页
+                </span>
+              )}
             </DialogTitle>
 
             <div className="flex items-center gap-2">
@@ -734,44 +765,56 @@ export function HistoryDetailDialog({
                   </div>
 
                 ) : viewMode === "grid" ? (
-                  /* Main Image: Grid Mode */
-                  <div className={`grid grid-cols-3 gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2 ${previewImage || selectedImage ? "pointer-events-none" : ""}`}>
-                    {displayImages.map((img, i) => (
-                      <motion.button
-                        key={i}
-                        type="button"
-                        className="relative aspect-square group overflow-hidden rounded-lg cursor-pointer"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.2, delay: i * 0.03 }}
-                        whileHover={item?.editingImageIndexes?.includes(i) ? undefined : { scale: 1.03 }}
-                        onClick={() => {
-                          if (item?.editingImageIndexes?.length) return // Disable click while editing
-                          setSelectedImage(img)
-                          setSelectedImageIndex(i)
-                        }}
-                        disabled={!!item?.editingImageIndexes?.length}
-                        title={item?.editingImageIndexes?.includes(i) ? "重绘中..." : "点击查看/编辑"}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={img} alt={`Generated ${i + 1}`} className="w-full h-full object-cover" />
+                  /* Main Image: Grid Mode — PRO 根据张数自适应列数 */
+                  (() => {
+                    const isPro = item?.qualityMode === "PRO"
+                    const count = displayImages.length
+                    const gridCols = isPro
+                      ? count === 1 ? "grid-cols-1" : count === 2 ? "grid-cols-2" : "grid-cols-2"
+                      : "grid-cols-3"
+                    return (
+                      <div className={`grid ${gridCols} gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2 ${previewImage || selectedImage ? "pointer-events-none" : ""}`}>
+                        {displayImages.map((img, i) => (
+                          <motion.button
+                            key={i}
+                            type="button"
+                            className="relative aspect-square group overflow-hidden rounded-lg cursor-pointer"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.2, delay: i * 0.03 }}
+                            whileHover={item?.editingImageIndexes?.includes(i) ? undefined : { scale: 1.03 }}
+                            onClick={() => {
+                              if (item?.editingImageIndexes?.length) return
+                              setSelectedImage(img)
+                              setSelectedImageIndex(i)
+                            }}
+                            disabled={!!item?.editingImageIndexes?.length}
+                            title={item?.editingImageIndexes?.includes(i) ? "重绘中..." : "点击查看/编辑"}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={img}
+                              alt={`Generated ${i + 1}`}
+                              className={`w-full h-full ${isPro ? "object-contain" : "object-cover"}`}
+                            />
 
-                        {/* Editing overlay */}
-                        {item?.editingImageIndexes?.includes(i) ? (
-                          <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
-                            <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
-                            <span className="text-xs text-white/80">重绘中...</span>
-                          </div>
-                        ) : (
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
-                            <Pencil className="w-6 h-6 text-white drop-shadow-md" />
-                            <span className="text-xs text-white/80">点击编辑</span>
-                          </div>
-                        )}
-
-                      </motion.button>
-                    ))}
-                  </div>
+                            {/* Editing overlay */}
+                            {item?.editingImageIndexes?.includes(i) ? (
+                              <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
+                                <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                                <span className="text-xs text-white/80">重绘中...</span>
+                              </div>
+                            ) : (
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                                <Pencil className="w-6 h-6 text-white drop-shadow-md" />
+                                <span className="text-xs text-white/80">点击编辑</span>
+                              </div>
+                            )}
+                          </motion.button>
+                        ))}
+                      </div>
+                    )
+                  })()
                 ) : (
                   /* Main Image: Full Mode */
                   <motion.div
@@ -795,24 +838,56 @@ export function HistoryDetailDialog({
           {/* Footer */}
           <div className="p-4 border-t border-white/10 shrink-0 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
-              {!item?.hasUsedDiscountedRetry ? (
-                <Button
-                  onClick={() => setShowDiscountConfirm(true)}
-                  variant="outline"
-                  className="h-11 rounded-xl border-yellow-400/50 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-300"
-                >
-                  <SparklesIcon className="w-4 h-4 mr-2" />
-                  重新生成 ({item?.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST}积分)
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => setShowRegenerateConfirm(true)}
-                  variant="outline"
-                  className="h-11 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white"
-                >
-                  🔄 重新生成 ({item?.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST}积分)
-                </Button>
-              )}
+              {(() => {
+                const isPro = item?.qualityMode === "PRO"
+                const proRetryCost = isPro
+                  ? (item?.costPerImage ?? costs.PRO_COST_PER_IMAGE) * (item?.imageCount ?? 1)
+                  : 0
+                const stdRetryCost = item?.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST
+                const stdFullCost = item?.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
+
+                if (isPro) {
+                  // PRO：只显示一个按钮，走 retryFromId 路径，按原价计费
+                  return !item?.hasUsedDiscountedRetry ? (
+                    <Button
+                      onClick={() => setShowDiscountConfirm(true)}
+                      variant="outline"
+                      className="h-11 rounded-xl border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300"
+                    >
+                      <Crown className="w-4 h-4 mr-2" />
+                      PRO 重试 ({proRetryCost}积分)
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => setShowRegenerateConfirm(true)}
+                      variant="outline"
+                      className="h-11 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white"
+                    >
+                      🔄 PRO 重新生成 ({proRetryCost}积分)
+                    </Button>
+                  )
+                }
+
+                // STANDARD 模式
+                return !item?.hasUsedDiscountedRetry ? (
+                  <Button
+                    onClick={() => setShowDiscountConfirm(true)}
+                    variant="outline"
+                    className="h-11 rounded-xl border-yellow-400/50 bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-300"
+                  >
+                    <SparklesIcon className="w-4 h-4 mr-2" />
+                    重新生成 ({stdRetryCost}积分)
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={() => setShowRegenerateConfirm(true)}
+                    variant="outline"
+                    className="h-11 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white"
+                  >
+                    🔄 重新生成 ({stdFullCost}积分)
+                  </Button>
+                )
+              })()}
 
               {item?.status === "COMPLETED" && (
                 canAppeal ? (

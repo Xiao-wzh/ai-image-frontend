@@ -55,17 +55,22 @@ export async function GET(req: NextRequest) {
           productName: true,
           productType: true,
           taskType: true,
-          mode: true,  // 添加 mode 字段
-          features: true,  // 添加 features 字段
-          refImages: true,  // 添加 refImages 字段
+          mode: true,
+          qualityMode: true,  // PRO 模式标识
+          features: true,
+          refImages: true,
           platformKey: true,
           generatedImages: true,
+          generatedImage: true,  // PRO 完整拼接图
           originalImage: true,
           status: true,
           createdAt: true,
           hasUsedDiscountedRetry: true,
           isWatermarkUnlocked: true,
           outputLanguage: true,
+          imageCount: true,    // PRO 期望张数
+          costPerImage: true,  // PRO 单张成本快照（用于重试费用计算）
+          refundAmount: true,  // PRO 部分失败退款金额
           editingImageIndexes: true,
           appeal: {
             select: {

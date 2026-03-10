@@ -5,6 +5,8 @@ import { ProductTypePromptKey, ProductTypeKey } from "@/lib/constants"
 import { getSystemCosts } from "@/lib/system-config"
 import type { SystemCostConfig } from "@/lib/types/config"
 import { toCdnUrlArray, extractObjectKey, keyToCdnUrl } from "@/lib/cdnUrl"
+import { refundCredits } from "@/lib/credit-service"
+import { compilePrompt } from "@/lib/prompt-compiler"
 import "dotenv/config"
 
 
@@ -23,21 +25,30 @@ function getRetryCost(taskType: string, costs: SystemCostConfig): number {
   return taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST
 }
 
-// Helper: Fill prompt template with variables
+// Helper: Fill prompt template with variables (legacy wrapper → delegates to compilePrompt)
 function fillPromptTemplate(
   template: string,
   productName: string,
   language: string,
   detailBatch: string,
   features?: string,
-  refImageCount?: number
+  refImageCount?: number,
+  proFeatures?: string,
+  proStyle?: string,
+  imageCount?: number,
+  aspectRatio?: string,
 ): string {
-  return template
-    .replace(/\$\{productName\}/g, productName)
-    .replace(/\$\{language\}/g, language)
-    .replace(/\$\{detailBatch\}/g, detailBatch)
-    .replace(/\$\{features\}/g, features || "")
-    .replace(/\$\{numberOfReferenceImages\}/g, String(refImageCount || 0))
+  return compilePrompt(template, {
+    productName,
+    language,
+    detailBatch,
+    features: features || "",
+    numberOfReferenceImages: refImageCount || 0,
+    proFeatures: proFeatures || null,
+    proStyle: proStyle || null,
+    imageCount: imageCount || 9,
+    aspectRatio: aspectRatio || "1:1",
+  })
 }
 
 // Helper: Call N8N with timeout
@@ -93,23 +104,15 @@ async function callN8N(
   }
 }
 
-// Helper: Refund a specific amount
-async function refundCredits(
+// 本地退款包装器：自带 $transaction（用于非事务上下文的退款场景）
+async function refundCreditsStandalone(
   userId: string,
   amount: number,
   description: string
 ): Promise<void> {
   await prisma.$transaction(async (tx: TxClient) => {
-    // Refund to paid credits (simpler than tracking bonus)
-    await tx.user.update({
-      where: { id: userId },
-      data: { credits: { increment: amount } },
-    })
-    await tx.creditRecord.create({
-      data: { userId, amount, type: "REFUND", description },
-    })
+    await refundCredits(tx, userId, amount, description)
   })
-  console.log(`💸 Refunded ${amount} credits to user ${userId}: ${description}`)
 }
 
 export async function POST(req: NextRequest) {
@@ -341,7 +344,7 @@ async function handleComboGeneration(
   } else {
     // Mark as failed and refund immediately
     await prisma.generation.update({ where: { id: mainGen.id }, data: { status: "FAILED" } })
-    await refundCredits(userId, mainImageCost, "套餐主图生成失败退款 (缺少模板或配置)")
+    await refundCreditsStandalone(userId, mainImageCost, "套餐主图生成失败退款 (缺少模板或配置)")
     results.push({ taskType: "MAIN_IMAGE", id: mainGen.id, status: "FAILED", error: "缺少主图模板或 Webhook 配置" })
   }
 
@@ -365,7 +368,7 @@ async function handleComboGeneration(
     })
   } else {
     await prisma.generation.update({ where: { id: detailGen.id }, data: { status: "FAILED" } })
-    await refundCredits(userId, detailPageCost, "套餐详情页生成失败退款 (缺少模板或配置)")
+    await refundCreditsStandalone(userId, detailPageCost, "套餐详情页生成失败退款 (缺少模板或配置)")
     results.push({ taskType: "DETAIL_PAGE", id: detailGen.id, status: "FAILED", error: "缺少详情页模板或 Webhook 配置" })
   }
 
@@ -425,7 +428,7 @@ async function handleComboGeneration(
         })
 
         // Refund for this specific task
-        await refundCredits(
+        await refundCreditsStandalone(
           userId,
           task.cost,
           `套餐${task.taskType === "MAIN_IMAGE" ? "主图" : "详情页"}生成失败退款`
@@ -548,6 +551,13 @@ async function handleSingleGeneration(
     let mode: string = "CREATIVE"  // Clone Mode support
     let features: string = ""      // 卖点 (Clone Mode)
     let refImages: string[] = []   // 参考图 (Clone Mode)
+    let qualityMode: string = "STANDARD"  // PRO mode support
+    let imageCount: number = 9
+    let aspectRatio: string = "1:1"
+    let costPerImage: number = 0
+    let totalCost: number = 0
+    let proFeatures: string = ""
+    let proStyle: string = ""
 
     if (retryFromId) {
       // --- 重试流程 ---
@@ -563,12 +573,28 @@ async function handleSingleGeneration(
         return NextResponse.json({ error: "你无权重试此记录" }, { status: 403 })
       }
       if (originalGeneration.hasUsedDiscountedRetry) {
-        return NextResponse.json({ error: "该记录已使用过折扣重试机会" }, { status: 400 })
+        const retryQualityMode = (originalGeneration as any).qualityMode || "STANDARD"
+        const errMsg = retryQualityMode === "PRO"
+          ? "该记录已使用过重试机会（每条记录限重试一次）"
+          : "该记录已使用过折扣重试机会"
+        return NextResponse.json({ error: errMsg }, { status: 400 })
       }
 
       taskType = originalGeneration.taskType || "MAIN_IMAGE"
-      actualCost = getRetryCost(taskType, costs)
-      console.log(`[GENERATE_API] Discount retry mode for ${taskType} - setting actualCost to ${actualCost}`)
+      qualityMode = (originalGeneration as any).qualityMode || "STANDARD"
+
+      // PRO 模式重试：按原始 costPerImage 计费
+      if (qualityMode === "PRO") {
+        costPerImage = (originalGeneration as any).costPerImage || costs.PRO_COST_PER_IMAGE
+        imageCount = (originalGeneration as any).imageCount || 9
+        aspectRatio = (originalGeneration as any).aspectRatio || "1:1"
+        totalCost = costPerImage * imageCount
+        actualCost = totalCost
+      } else {
+        actualCost = getRetryCost(taskType, costs)
+        totalCost = actualCost
+      }
+      console.log(`[GENERATE_API] Retry mode for ${taskType} (${qualityMode}) - actualCost: ${actualCost}`)
 
       productName = originalGeneration.productName
       productType = originalGeneration.productType as ProductTypeKey
@@ -578,6 +604,9 @@ async function handleSingleGeneration(
       mode = originalGeneration.mode || "CREATIVE"  // 从原始记录获取模式
       features = originalGeneration.features || ""  // 从原始记录获取卖点
       refImages = originalGeneration.refImages || []  // 从原始记录获取参考图
+      // PRO 专属：从原始记录恢复，避免重试时 AI 行为改变
+      proFeatures = (originalGeneration as any).proFeatures || ""
+      proStyle = (originalGeneration as any).proStyle || ""
     } else {
       // --- 标准流程 ---
       productName = String(body?.productName ?? "").trim()
@@ -587,7 +616,23 @@ async function handleSingleGeneration(
       outputLanguage = String(body?.outputLanguage ?? "简体中文").trim()
       mode = String(body?.mode ?? "CREATIVE").trim().toUpperCase()
       features = String(body?.features ?? "").trim()
-      actualCost = getStandardCost(taskType, costs)
+      qualityMode = String(body?.qualityMode ?? "STANDARD").trim().toUpperCase()
+      proFeatures = String(body?.proFeatures ?? "").trim()
+      proStyle = String(body?.proStyle ?? "").trim()
+
+      // PRO 计费逻辑
+      if (qualityMode === "PRO") {
+        imageCount = Math.min(Math.max(Number(body?.imageCount) || 1, 1), 20)
+        aspectRatio = String(body?.aspectRatio ?? "1:1").trim()
+        costPerImage = costs.PRO_COST_PER_IMAGE
+        totalCost = costPerImage * imageCount
+        actualCost = totalCost
+        console.log(`[GENERATE_API] PRO mode: ${imageCount} images × ${costPerImage} = ${totalCost} credits`)
+      } else {
+        totalCost = getStandardCost(taskType, costs)
+        actualCost = totalCost
+      }
+
       const rawImages = body?.images
       const rawRefImages = body?.refImages
 
@@ -696,12 +741,19 @@ async function handleSingleGeneration(
         platformKey,
         taskType,
         mode,
+        qualityMode,
         features: features || null,
         refImages,
         originalImage: imageUrls,
         status: "PENDING",
         hasUsedDiscountedRetry: Boolean(retryFromId),
         outputLanguage,
+        imageCount,
+        aspectRatio,
+        costPerImage,
+        totalCost,
+        proFeatures: proFeatures || null,  // PRO: 产品功能，供重试时恢复
+        proStyle: proStyle || null,        // PRO: 画面风格，供重试时恢复
       },
     })
     generationId = pending.id
@@ -716,6 +768,7 @@ async function handleSingleGeneration(
       productType,
       taskType,
       mode,
+      qualityMode,
       userId,
     })
 
@@ -724,7 +777,7 @@ async function handleSingleGeneration(
 
       // Clone Mode: First try to find a prompt matching the specific productType
       // Step 1: Try to find specific productType Clone prompt for user
-      const step1Params = { isActive: true, mode: "CLONE", productType, taskType, userId, }
+      const step1Params = { isActive: true, mode: "CLONE", qualityMode, productType, taskType, userId, }
       console.log(`[PROMPT_LOOKUP] Step 1 - User specific:`, step1Params)
       promptRecord = await prisma.productTypePrompt.findFirst({
         where: step1Params,
@@ -734,7 +787,7 @@ async function handleSingleGeneration(
 
       // Step 2: Try specific productType Clone prompt (system default)
       if (!promptRecord) {
-        const step2Params = { isActive: true, mode: "CLONE", productType, taskType, userId: null, }
+        const step2Params = { isActive: true, mode: "CLONE", qualityMode, productType, taskType, userId: null, }
         console.log(`[PROMPT_LOOKUP] Step 2 - System specific:`, step2Params)
         promptRecord = await prisma.productTypePrompt.findFirst({
           where: step2Params,
@@ -745,7 +798,7 @@ async function handleSingleGeneration(
 
       // Step 3: Fallback to CLONE_GENERAL for user on the platform
       if (!promptRecord) {
-        const step3Params = { isActive: true, mode: "CLONE", productType: "CLONE_GENERAL", taskType, userId, }
+        const step3Params = { isActive: true, mode: "CLONE", qualityMode, productType: "CLONE_GENERAL", taskType, userId, }
         console.log(`[PROMPT_LOOKUP] Step 3 - User CLONE_GENERAL:`, step3Params)
         promptRecord = await prisma.productTypePrompt.findFirst({
           where: step3Params,
@@ -756,7 +809,7 @@ async function handleSingleGeneration(
 
       // Step 4: Fallback to CLONE_GENERAL (system default) on the platform
       if (!promptRecord) {
-        const step4Params = { isActive: true, mode: "CLONE", productType: "CLONE_GENERAL", taskType, userId: null, }
+        const step4Params = { isActive: true, mode: "CLONE", qualityMode, productType: "CLONE_GENERAL", taskType, userId: null, }
         console.log(`[PROMPT_LOOKUP] Step 4 - System CLONE_GENERAL on platform:`, step4Params)
         promptRecord = await prisma.productTypePrompt.findFirst({
           where: step4Params,
@@ -767,7 +820,7 @@ async function handleSingleGeneration(
 
       // Step 5: Fallback to CLONE_GENERAL on GENERAL platform
       if (!promptRecord) {
-        const step5Params = { isActive: true, mode: "CLONE", productType: "CLONE_GENERAL", taskType, userId: null, platform: { key: "GENERAL" } }
+        const step5Params = { isActive: true, mode: "CLONE", qualityMode, productType: "CLONE_GENERAL", taskType, userId: null, platform: { key: "GENERAL" } }
         console.log(`[PROMPT_LOOKUP] Step 5 - System CLONE_GENERAL on GENERAL:`, step5Params)
         promptRecord = await prisma.productTypePrompt.findFirst({
           where: step5Params,
@@ -778,7 +831,7 @@ async function handleSingleGeneration(
     } else if (taskType === "DETAIL_PAGE") {
       console.log(`[PROMPT_LOOKUP] CREATIVE mode - DETAIL_PAGE - trying 3 fallback steps...`)
 
-      const step1Params = { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", userId, }
+      const step1Params = { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", qualityMode, userId, }
       console.log(`[PROMPT_LOOKUP] Step 1 - User specific:`, step1Params)
       promptRecord = await prisma.productTypePrompt.findFirst({
         where: step1Params,
@@ -787,7 +840,7 @@ async function handleSingleGeneration(
       if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 1`)
 
       if (!promptRecord) {
-        const step2Params = { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", userId: null, }
+        const step2Params = { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", qualityMode, userId: null, }
         console.log(`[PROMPT_LOOKUP] Step 2 - System on platform:`, step2Params)
         promptRecord = await prisma.productTypePrompt.findFirst({
           where: step2Params,
@@ -797,7 +850,7 @@ async function handleSingleGeneration(
       }
 
       if (!promptRecord) {
-        const step3Params = { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", userId: null, platform: { key: "GENERAL" } }
+        const step3Params = { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", qualityMode, userId: null, platform: { key: "GENERAL" } }
         console.log(`[PROMPT_LOOKUP] Step 3 - System on GENERAL:`, step3Params)
         promptRecord = await prisma.productTypePrompt.findFirst({
           where: step3Params,
@@ -809,7 +862,7 @@ async function handleSingleGeneration(
       console.log(`[PROMPT_LOOKUP] CREATIVE mode - MAIN_IMAGE - trying 3 fallback steps...`)
 
       // Creative Mode - MAIN_IMAGE
-      const step1Params = { isActive: true, productType, taskType, mode: "CREATIVE", userId, }
+      const step1Params = { isActive: true, productType, taskType, mode: "CREATIVE", qualityMode, userId, }
       console.log(`[PROMPT_LOOKUP] Step 1 - User specific:`, step1Params)
       promptRecord = await prisma.productTypePrompt.findFirst({
         where: step1Params,
@@ -818,7 +871,7 @@ async function handleSingleGeneration(
       if (promptRecord) console.log(`[PROMPT_LOOKUP] ✅ Found at Step 1`)
 
       if (!promptRecord) {
-        const step2Params = { isActive: true, productType, taskType, mode: "CREATIVE", userId: null, }
+        const step2Params = { isActive: true, productType, taskType, mode: "CREATIVE", qualityMode, userId: null, }
         console.log(`[PROMPT_LOOKUP] Step 2 - System on platform:`, step2Params)
         promptRecord = await prisma.productTypePrompt.findFirst({
           where: step2Params,
@@ -828,7 +881,7 @@ async function handleSingleGeneration(
       }
 
       if (!promptRecord) {
-        const step3Params = { isActive: true, productType, taskType, mode: "CREATIVE", userId: null, platform: { key: "GENERAL" } }
+        const step3Params = { isActive: true, productType, taskType, mode: "CREATIVE", qualityMode, userId: null, platform: { key: "GENERAL" } }
         console.log(`[PROMPT_LOOKUP] Step 3 - System on GENERAL:`, step3Params)
         promptRecord = await prisma.productTypePrompt.findFirst({
           where: step3Params,
@@ -840,6 +893,10 @@ async function handleSingleGeneration(
 
     if (!promptRecord) {
       console.error(`[PROMPT_LOOKUP] ❌ No prompt found after all fallback steps`)
+      // PRO 模式硬拦截：决不允许 fallback 到 STANDARD
+      if (qualityMode === "PRO") {
+        throw new Error("当前类目暂未配置 PRO 专属提示词")
+      }
       throw new Error(`未找到 Prompt 模板：platformKey=${platformKey}, productType=${productType}, taskType=${taskType}, mode=${mode}`)
     }
 
@@ -851,11 +908,17 @@ async function handleSingleGeneration(
       description: promptRecord.description,
     })
 
-    // 根据 taskType 和提示词内容选择不同的 webhook
-    // MAIN_IMAGE: 提示词以"你是"开头用 AUTO，否则用 GRSAI
-    // DETAIL_PAGE: 用 DETAIL webhook
+    // 根据 qualityMode 和 taskType 选择不同的 webhook
+    // PRO 模式: 使用独立的 PRO webhook
+    // STANDARD - MAIN_IMAGE: 提示词以"你是"开头用 AUTO，否则用 GRSAI
+    // STANDARD - DETAIL_PAGE: 用 DETAIL webhook
     let webhookUrl: string | undefined
-    if (taskType === "DETAIL_PAGE") {
+    if (qualityMode === "PRO") {
+      webhookUrl = process.env.N8N_PRO_WEBHOOK_URL
+      if (!webhookUrl) {
+        throw new Error("N8N_PRO_WEBHOOK_URL 未配置")
+      }
+    } else if (taskType === "DETAIL_PAGE") {
       webhookUrl = process.env.N8N_DETAIL_WEBHOOK_URL
     } else {
       // MAIN_IMAGE - check prompt content
@@ -867,14 +930,18 @@ async function handleSingleGeneration(
       throw new Error(taskType === "DETAIL_PAGE" ? "N8N_DETAIL_WEBHOOK_URL 未配置" : "N8N 主图 Webhook 未配置")
     }
 
-    // Fill in template variables before sending
+    // Fill in template variables before sending (Handlebars-powered)
     const filledPrompt = fillPromptTemplate(
       promptRecord.promptTemplate,
       productName,
       outputLanguage,
       "A",
       features,
-      refImages.length
+      refImages.length,
+      proFeatures,
+      proStyle,
+      imageCount,
+      aspectRatio,
     )
 
     const n8nPayload: Record<string, any> = {
@@ -887,6 +954,7 @@ async function handleSingleGeneration(
       image_count: mode === "CLONE" ? refImages.length + imageUrls.length : imageUrls.length,
       output_language: outputLanguage,
       mode,
+      quality_mode: qualityMode,
     }
 
     // Add Clone Mode specific fields
@@ -895,9 +963,67 @@ async function handleSingleGeneration(
       n8nPayload.ref_image_count = refImages.length
     }
 
+    // Add PRO Mode specific fields
+    if (qualityMode === "PRO") {
+      n8nPayload.pro_image_count = imageCount
+      n8nPayload.aspect_ratio = aspectRatio
+      n8nPayload.pro_features = proFeatures || null
+      n8nPayload.pro_style = proStyle || null
+    }
+
     console.log(`[N8N_REQUEST] User: ${userId}, Payload: `, JSON.stringify(n8nPayload, null, 2))
 
-    // 超时设置：主图 6 分钟，详情页 10 分钟
+    // PRO 模式：异步调用 N8N，立即返回 PENDING 状态
+    if (qualityMode === "PRO") {
+      console.log(`[GENERATE_API] PRO mode - firing N8N async, returning PENDING immediately`)
+
+      // 更新状态为 PROCESSING
+      await prisma.generation.update({
+        where: { id: pending.id },
+        data: { status: "PROCESSING" },
+      })
+
+      // 异步触发 N8N（fire-and-forget：只关心 HTTP 是否送达，不解析响应体）
+      // 结果由 N8N webhook 回调 (/api/webhook/n8n) 处理，该回调有 CAS 锁防双重退款
+      fetch(webhookUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(n8nPayload),
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            // HTTP 级别失败（N8N 服务不可达、路由404 等）
+            console.error(`[PRO_ASYNC] N8N HTTP error for ${pending.id}: ${res.status} ${res.statusText}`)
+            await prisma.generation.update({ where: { id: pending.id }, data: { status: "FAILED" } }).catch(() => { })
+            await refundCreditsStandalone(userId, totalCost, `PRO模式生图失败退款 (N8N HTTP ${res.status})`)
+          } else {
+            console.log(`[PRO_ASYNC] N8N request delivered for ${pending.id}, awaiting webhook callback`)
+          }
+          // 成功送达后，由 N8N webhook 回调处理最终结果
+        })
+        .catch(async (err) => {
+          // 网络级别失败（DNS、连接拒绝等）
+          console.error(`[PRO_ASYNC] Network error for ${pending.id}:`, err)
+          await prisma.generation.update({ where: { id: pending.id }, data: { status: "FAILED" } }).catch(() => { })
+          await refundCreditsStandalone(userId, totalCost, `PRO模式生图失败退款 (网络异常)`)
+        })
+
+      const updatedUser = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true, bonusCredits: true } })
+
+      return NextResponse.json({
+        success: true,
+        id: pending.id,
+        status: "PROCESSING",
+        qualityMode: "PRO",
+        imageCount,
+        totalCost,
+        credits: updatedUser?.credits ?? 0,
+        bonusCredits: updatedUser?.bonusCredits ?? 0,
+        totalCredits: (updatedUser?.credits ?? 0) + (updatedUser?.bonusCredits ?? 0),
+      })
+    }
+
+    // STANDARD 模式：同步等待 N8N 结果
     const timeoutMs = taskType === "DETAIL_PAGE" ? 600_000 : 360_000
     const n8nResult = await callN8N(webhookUrl, n8nPayload, timeoutMs)
 
@@ -942,20 +1068,16 @@ async function handleSingleGeneration(
       console.log("🔄 准备执行退款...")
       try {
         await prisma.$transaction(async (tx) => {
-          await tx.user.update({
-            where: { id: userId },
-            data: { bonusCredits: { increment: deductedBonus }, credits: { increment: deductedPaid } },
-          })
-          await tx.creditRecord.create({
-            data: { userId, amount: actualCost, type: "REFUND", description: retryFromId ? "折扣重试失败退款" : "生成失败退款" },
-          })
+          // 使用通用退款服务
+          await refundCredits(tx, userId, actualCost, retryFromId ? "折扣重试失败退款" : "生成失败退款")
+          // 重试场景：回滚折扣重试标记
           if (retryFromId) {
             await tx.generation.update({ where: { id: retryFromId }, data: { hasUsedDiscountedRetry: false } })
           }
         })
-        console.log(`💸 生成失败，已退款：bonus=${deductedBonus}，paid=${deductedPaid} 给用户 ${userId}`)
+        console.log(`[生成API] 💸 生成失败，已退款 ${actualCost} 积分给用户 ${userId}`)
       } catch (refundErr) {
-        console.error("❌ 退款失败:", refundErr)
+        console.error("[生成API] ❌ 退款失败:", refundErr)
       }
     }
 

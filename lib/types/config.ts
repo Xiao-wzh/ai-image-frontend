@@ -22,6 +22,9 @@ export type SystemCostConfig = {
 
     // 智能文案
     COPYWRITING_COST: number
+
+    // PRO 模式
+    PRO_COST_PER_IMAGE: number
 }
 
 // All cost config keys
@@ -38,6 +41,7 @@ export const SYSTEM_COST_KEYS: SystemCostKey[] = [
     "DETAIL_PAGE_RETRY_COST",
     "IMAGE_EDIT_COST",
     "COPYWRITING_COST",
+    "PRO_COST_PER_IMAGE",
 ]
 
 // Descriptions for admin UI
@@ -51,4 +55,5 @@ export const SYSTEM_COST_DESCRIPTIONS: Record<SystemCostKey, string> = {
     DETAIL_PAGE_RETRY_COST: "详情页重试消耗积分（折扣价）",
     IMAGE_EDIT_COST: "图片编辑（重绘）消耗积分",
     COPYWRITING_COST: "智能文案生成消耗积分",
+    PRO_COST_PER_IMAGE: "PRO模式每张图消耗积分",
 }

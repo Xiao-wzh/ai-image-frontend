@@ -57,6 +57,7 @@
     "embla-carousel-react": "8.5.1",
     "file-saver": "^2.0.5",
     "framer-motion": "^12.23.26",
+    "handlebars": "^4.7.8",
     "input-otp": "1.4.1",
     "ioredis": "^5.9.1",
     "jszip": "^3.10.1",

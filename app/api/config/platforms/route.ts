@@ -8,6 +8,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const taskType = searchParams.get("taskType") || "MAIN_IMAGE"
   const mode = searchParams.get("mode") || "CREATIVE"
+  const qualityMode = searchParams.get("qualityMode") || "STANDARD"
 
   const platforms = await prisma.platform.findMany({
     where: { isActive: true },
@@ -22,6 +23,7 @@ export async function GET(req: NextRequest) {
           userId: null,
           taskType,
           mode,
+          qualityMode,
         },
         select: {
           productType: true,

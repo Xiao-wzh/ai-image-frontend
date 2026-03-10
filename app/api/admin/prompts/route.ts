@@ -40,6 +40,7 @@ export async function GET(req: NextRequest) {
           productType: true,
           taskType: true,
           mode: true,
+          qualityMode: true,
           description: true,
           promptTemplate: true,
           isActive: true,
