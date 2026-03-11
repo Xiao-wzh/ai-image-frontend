@@ -160,9 +160,12 @@ export function ProForm(props: CockpitFormProps) {
                 </div>
             </div>
 
-            {/* ═══ 创意/克隆 — 仅详情页 (放在控制台外，避免 z-index 问题) ═══ */}
+            {/* ═══ 第三步：创意/克隆 — 仅详情页 (放在控制台外，避免 z-index 问题) ═══ */}
             {taskType === "DETAIL_PAGE" && (
                 <div>
+                    <div className="flex items-center gap-3 mb-2">
+                        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest shrink-0">③ 详情页风格</p>
+                    </div>
                     <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/50 border border-white/10 w-fit">
                         <button
                             type="button"

@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
         const zombieTasks = await prisma.generation.findMany({
             where: {
                 status: { in: ["PENDING", "PROCESSING"] },
-                updatedAt: { lt: timeoutThreshold },
+                createdAt: { lt: timeoutThreshold },
             },
             take: BATCH_LIMIT,
             orderBy: { createdAt: "asc" }, // 优先处理最久的僵尸订单

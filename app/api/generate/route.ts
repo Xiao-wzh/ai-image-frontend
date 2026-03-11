@@ -164,6 +164,31 @@ async function handleComboGeneration(
   const platformKey = String(body?.platformKey ?? "SHOPEE").trim().toUpperCase()
   const outputLanguage = String(body?.outputLanguage ?? "简体中文").trim()
   const rawImages = body?.images
+  const comboRequestId = body?.requestId as string | undefined
+
+  // 幂等性检查：如果提供了 requestId，检查套餐记录是否已存在
+  if (comboRequestId) {
+    const existingCombo = await prisma.generation.findFirst({
+      where: { requestId: comboRequestId, userId },
+      select: { id: true, status: true },
+    })
+    if (existingCombo) {
+      console.log(`[COMBO] 幂等性检查：requestId ${comboRequestId} 已存在，跳过重复提交`)
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { credits: true, bonusCredits: true },
+      })
+      return NextResponse.json({
+        success: true,
+        isCombo: true,
+        isDuplicate: true,
+        results: [],
+        credits: user?.credits ?? 0,
+        bonusCredits: user?.bonusCredits ?? 0,
+        message: "重复请求，已忽略",
+      })
+    }
+  }
 
   // Validation
   if (!productName) {
@@ -272,6 +297,7 @@ async function handleComboGeneration(
   const [mainGen, detailGen] = await Promise.all([
     prisma.generation.create({
       data: {
+        requestId: comboRequestId || null, // 保存幂等键，防止网络重试时重复创建
         userId,
         productName,
         productType,
@@ -292,6 +318,7 @@ async function handleComboGeneration(
         status: "PENDING",
         isWatermarkUnlocked: true, // Bonus: auto-unlock watermark for combo
         outputLanguage,
+        requestId: comboRequestId ? `${comboRequestId}_detail` : null, // 加后缀区分，因为 requestId 字段有唯一约束
       },
     }),
   ])
@@ -372,12 +399,11 @@ async function handleComboGeneration(
     results.push({ taskType: "DETAIL_PAGE", id: detailGen.id, status: "FAILED", error: "缺少详情页模板或 Webhook 配置" })
   }
 
-  // Execute remaining tasks in parallel
+  // Execute remaining tasks in parallel（同步等待 N8N 结果，与单任务模式保持一致）
   if (tasks.length > 0) {
     const username = (session?.user as any)?.username ?? (session?.user as any)?.name ?? null
 
     const n8nPromises = tasks.map((task) => {
-      // Fill in template variables before sending
       const filledPrompt = fillPromptTemplate(task.prompt.promptTemplate, productName, outputLanguage, task.prompt.detailBatch)
 
       const payload = {
@@ -396,51 +422,33 @@ async function handleComboGeneration(
 
     const n8nResults = await Promise.allSettled(n8nPromises)
 
-    // Process results
     for (let i = 0; i < tasks.length; i++) {
       const task = tasks[i]
       const result = n8nResults[i]
 
       if (result.status === "fulfilled" && result.value.success) {
-        // Success - extract keys from URLs before saving
         const imageKeys = result.value.images.map(url => extractObjectKey(url) as string)
         const fullImageKey = result.value.fullImageUrl ? extractObjectKey(result.value.fullImageUrl) as string : null
 
         await prisma.generation.update({
           where: { id: task.generationId },
-          data: {
-            generatedImages: imageKeys,
-            generatedImage: fullImageKey,
-            status: "COMPLETED",
-          },
+          data: { generatedImages: imageKeys, generatedImage: fullImageKey, status: "COMPLETED" },
         })
         results.push({ taskType: task.taskType, id: task.generationId, status: "COMPLETED" })
         console.log(`[COMBO] ${task.taskType} completed successfully`)
       } else {
-        // Failed
         const errorMsg = result.status === "rejected"
           ? result.reason?.message || "未知错误"
           : (result.value as any).error || "未知错误"
 
-        await prisma.generation.update({
-          where: { id: task.generationId },
-          data: { status: "FAILED" },
-        })
-
-        // Refund for this specific task
-        await refundCreditsStandalone(
-          userId,
-          task.cost,
-          `套餐${task.taskType === "MAIN_IMAGE" ? "主图" : "详情页"}生成失败退款`
-        )
-
+        await prisma.generation.update({ where: { id: task.generationId }, data: { status: "FAILED" } })
+        await refundCreditsStandalone(userId, task.cost, `套餐${task.taskType === "MAIN_IMAGE" ? "主图" : "详情页"}生成失败退款`)
         results.push({ taskType: task.taskType, id: task.generationId, status: "FAILED", error: errorMsg })
         console.log(`[COMBO] ${task.taskType} failed: ${errorMsg}`)
       }
     }
   }
 
-  // Get updated user credits
   const updatedUser = await prisma.user.findUnique({
     where: { id: userId },
     select: { credits: true, bonusCredits: true },
@@ -456,11 +464,7 @@ async function handleComboGeneration(
     credits: updatedUser?.credits ?? 0,
     bonusCredits: updatedUser?.bonusCredits ?? 0,
     totalCredits: (updatedUser?.credits ?? 0) + (updatedUser?.bonusCredits ?? 0),
-    message: allSucceeded
-      ? "套餐生成完成"
-      : allFailed
-        ? "套餐生成失败，积分已退回"
-        : "套餐部分生成成功，失败部分已退款",
+    message: allSucceeded ? "套餐生成完成" : allFailed ? "套餐生成失败，积分已退回" : "套餐部分生成成功，失败部分已退款",
   })
 }
 
@@ -574,10 +578,10 @@ async function handleSingleGeneration(
       }
       if (originalGeneration.hasUsedDiscountedRetry) {
         const retryQualityMode = (originalGeneration as any).qualityMode || "STANDARD"
-        const errMsg = retryQualityMode === "PRO"
-          ? "该记录已使用过重试机会（每条记录限重试一次）"
-          : "该记录已使用过折扣重试机会"
-        return NextResponse.json({ error: errMsg }, { status: 400 })
+        // PRO 模式不限制重试次数，只有 STANDARD 折扣重试限一次
+        if (retryQualityMode !== "PRO") {
+          return NextResponse.json({ error: "该记录已使用过折扣重试机会" }, { status: 400 })
+        }
       }
 
       taskType = originalGeneration.taskType || "MAIN_IMAGE"
@@ -712,7 +716,8 @@ async function handleSingleGeneration(
         },
       })
 
-      if (retryFromId) {
+      // PRO 模式不设折扣标记，只有 STANDARD 折扣重试才限一次
+      if (retryFromId && qualityMode !== "PRO") {
         await tx.generation.update({
           where: { id: retryFromId },
           data: { hasUsedDiscountedRetry: true },

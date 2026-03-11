@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Sparkles, Crown, Zap } from "lucide-react"
+import { ModeCompareModal } from "./mode-compare-modal"
 import { toast } from "sonner"
 import type { CascaderPlatformItem } from "@/components/cascader-panel"
 import { GenerationLoading } from "./generation-loading"
@@ -59,6 +60,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const [features, setFeatures] = useState("")
   const [refFiles, setRefFiles] = useState<File[]>([])
   const [refPreviewUrls, setRefPreviewUrls] = useState<string[]>([])
+
+  // 模式对比弹窗
+  const [isModeCompareOpen, setIsModeCompareOpen] = useState(false)
 
   // PRO 模式 — qualityMode 是全局开关
   const [qualityMode, setQualityMode] = useState<"STANDARD" | "PRO">("STANDARD")
@@ -250,7 +254,27 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
         const data = await res.json().catch(() => ({}))
         if (!res.ok) throw new Error(data?.error || `请求失败: ${res.status}`)
 
-        if (!data.generatedImages || data.generatedImages.length === 0) {
+        if (data.isCombo) {
+          // 套餐模式完成，重置表单防止重复提交
+          const allFailed = data.results?.every((r: any) => r.status === "FAILED")
+          if (allFailed) {
+            toast.error("套餐生成失败，积分已退回")
+          } else {
+            toast.success("套餐生成完成！请前往历史记录查看主图和详情页")
+          }
+          setGeneratedImages([])
+          setFullImageUrl(null)
+          setCurrentGenerationId(null)
+          setFiles([])
+          setPreviewUrls([])
+          setProductName("")
+          setProductType("")
+          setGenerationMode("CREATIVE")
+          setFeatures("")
+          setRefFiles([])
+          setRefPreviewUrls([])
+          setIsComboMode(false)
+        } else if (!data.generatedImages || data.generatedImages.length === 0) {
           if (data.status === "PROCESSING" && data.qualityMode === "PRO" && data.id) {
             toast.success("PRO 任务已提交，正在生成中...")
             setCurrentGenerationId(data.id)
@@ -450,14 +474,99 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           )}
         </motion.div>
 
-        {/* ── 导航条：TaskType + 全局 Quality Toggle ── */}
+        {/* ── 第一步：生成模式选择（最优先决策） ── */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="flex items-center justify-between flex-wrap gap-3"
+          className="space-y-3"
         >
-          {/* 左侧：主图 / 详情页 */}
+          <div className="flex items-center gap-2">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">① 选择生成模式</p>
+            <button
+              type="button"
+              onClick={() => setIsModeCompareOpen(true)}
+              className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-blue-400 transition-colors group"
+            >
+              <span className="group-hover:text-amber-400 transition-colors">✨</span>
+              <span className="underline underline-offset-2 decoration-dotted">查看模式对比</span>
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {/* 标准极速卡片 */}
+            <button
+              type="button"
+              onClick={() => setQualityMode("STANDARD")}
+              className={`relative flex flex-col gap-2 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                qualityMode === "STANDARD"
+                  ? "border-blue-500/50 bg-blue-950/30 shadow-lg shadow-blue-500/10"
+                  : "border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`p-1.5 rounded-lg transition-colors ${qualityMode === "STANDARD" ? "bg-blue-500/20" : "bg-white/10"}`}>
+                    <Zap className={`w-4 h-4 transition-colors ${qualityMode === "STANDARD" ? "text-blue-400" : "text-slate-400"}`} />
+                  </div>
+                  <span className={`text-sm font-bold transition-colors ${qualityMode === "STANDARD" ? "text-white" : "text-slate-400"}`}>标准极速</span>
+                </div>
+                <motion.div
+                  animate={{ scale: qualityMode === "STANDARD" ? 1 : 0, opacity: qualityMode === "STANDARD" ? 1 : 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="w-2 h-2 rounded-full bg-blue-400 shadow-lg shadow-blue-400/60"
+                />
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">快速出图，适合批量操作</p>
+              <div className={`text-xs font-semibold transition-colors ${qualityMode === "STANDARD" ? "text-blue-400" : "text-slate-600"}`}>
+                {costs.MAIN_IMAGE_STANDARD_COST} 积分起
+              </div>
+              {qualityMode === "STANDARD" && (
+                <div className="absolute inset-0 rounded-xl ring-1 ring-blue-500/40 pointer-events-none" />
+              )}
+            </button>
+
+            {/* PRO 增强卡片 */}
+            <button
+              type="button"
+              onClick={() => setQualityMode("PRO")}
+              className={`relative flex flex-col gap-2 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                qualityMode === "PRO"
+                  ? "border-amber-500/50 bg-amber-950/20 shadow-lg shadow-amber-500/10"
+                  : "border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20"
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`p-1.5 rounded-lg transition-colors ${qualityMode === "PRO" ? "bg-amber-500/20" : "bg-white/10"}`}>
+                    <Crown className={`w-4 h-4 transition-colors ${qualityMode === "PRO" ? "text-amber-400" : "text-slate-400"}`} />
+                  </div>
+                  <span className={`text-sm font-bold transition-colors ${qualityMode === "PRO" ? "text-amber-300" : "text-slate-400"}`}>PRO 增强</span>
+                </div>
+                <motion.div
+                  animate={{ scale: qualityMode === "PRO" ? 1 : 0, opacity: qualityMode === "PRO" ? 1 : 0 }}
+                  transition={{ duration: 0.15 }}
+                  className="w-2 h-2 rounded-full bg-amber-400 shadow-lg shadow-amber-400/60"
+                />
+              </div>
+              <p className="text-xs text-slate-500 leading-relaxed">高画质精品，按张计费</p>
+              <div className={`text-xs font-semibold transition-colors ${qualityMode === "PRO" ? "text-amber-400" : "text-slate-600"}`}>
+                {costs.PRO_COST_PER_IMAGE} 积分 / 张
+              </div>
+              {qualityMode === "PRO" && (
+                <div className="absolute inset-0 rounded-xl ring-1 ring-amber-500/40 pointer-events-none" />
+              )}
+            </button>
+          </div>
+        </motion.div>
+
+        {/* ── 第二步：内容类型选择 ── */}
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+          className="flex items-center gap-3"
+        >
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest shrink-0">② 生成内容</p>
           <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/50 border border-white/10">
             {([
               { value: "MAIN_IMAGE" as const, label: "主图生成", icon: <Zap className="w-3.5 h-3.5" /> },
@@ -468,6 +577,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                 type="button"
                 onClick={() => {
                   setTaskType(tab.value)
+                  // PRO 模式下切换任务类型时，更新默认比例
+                  setProAspectRatio(tab.value === "DETAIL_PAGE" ? "9:16" : "1:1")
                   if (isSubmitting || generatedImages.length > 0) {
                     setIsSubmitting(false)
                     setGeneratedImages([])
@@ -475,41 +586,18 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                     setCurrentGenerationId(null)
                   }
                 }}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${taskType === tab.value
-                  ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
-                  : "text-slate-400 hover:text-white hover:bg-white/5"
-                  }`}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                  taskType === tab.value
+                    ? qualityMode === "PRO"
+                      ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md"
+                      : "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                }`}
               >
                 {tab.icon}
                 {tab.label}
               </button>
             ))}
-          </div>
-
-          {/* 右侧：全局 Quality Toggle */}
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/50 border border-white/10">
-            <button
-              type="button"
-              onClick={() => setQualityMode("STANDARD")}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${qualityMode === "STANDARD"
-                ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
-                : "text-slate-400 hover:text-white hover:bg-white/5"
-                }`}
-            >
-              <Zap className="w-3.5 h-3.5" />
-              标准极速
-            </button>
-            <button
-              type="button"
-              onClick={() => setQualityMode("PRO")}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${qualityMode === "PRO"
-                ? "bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-md shadow-amber-500/30"
-                : "text-slate-400 hover:text-white hover:bg-white/5"
-                }`}
-            >
-              <Crown className="w-3.5 h-3.5" />
-              PRO 增强
-            </button>
           </div>
         </motion.div>
 
@@ -574,6 +662,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 模式对比弹窗 */}
+      <ModeCompareModal open={isModeCompareOpen} onClose={() => setIsModeCompareOpen(false)} />
     </>
   )
 }

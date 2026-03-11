@@ -286,7 +286,7 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                                 <span className="text-amber-300 font-semibold">{item.imageCount ?? 1} 张 PRO 图片</span>，消耗{" "}
                                 <span className="text-amber-400 font-semibold">{retryCost} 积分</span>。
                                 <br />
-                                <span className="text-xs text-slate-500">（PRO 模式按张计费，每条记录限重试一次）</span>
+                                <span className="text-xs text-slate-500">（PRO 模式按张计费，不限重试次数）</span>
                             </p>
                         ) : isDiscountAvailable ? (
                             <p className="text-sm text-slate-400 mb-4">

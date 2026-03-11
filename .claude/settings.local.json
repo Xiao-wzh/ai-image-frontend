@@ -13,7 +13,18 @@
       "Bash(grep -r \"qualityMode\\\\|PRO_COST_PER_IMAGE\\\\|imageCount\\\\|aspectRatio\\\\|proFeatures\\\\|proStyle\" /E/ai-image/ai-image-frontend/components/*.tsx --include=\"*.tsx\" | head -50)",
       "Bash(grep -r \"qualityMode\\\\|imageCount\\\\|PRO\" /E/ai-image/ai-image-frontend/app/api/*.ts --include=\"*.ts\" | grep -E \"\\(POST|GET|route\\)\" | head -30)",
       "Bash(grep -r \"PARTIAL_SUCCESS\\\\|refundAmount\" /E/ai-image/ai-image-frontend/components/*.tsx --include=\"*.tsx\" | head -20)",
-      "Bash(cd E:/ai-image/ai-image-frontend && npx tsc --noEmit --skipLibCheck 2>&1)"
+      "Bash(cd E:/ai-image/ai-image-frontend && npx tsc --noEmit --skipLibCheck 2>&1)",
+      "Bash(head -100 \"D:\\\\新建文件夹 \\(3\\)\\\\Generation.txt\" 2>/dev/null || cat \"D:/新建文件夹 \\(3\\)/Generation.txt\" | head -100)",
+      "Bash(cat \"D:/新建文件夹 \\(3\\)/Generation.txt\")",
+      "Bash(cd E:/ai-image/ai-image-frontend && npx tsc --noEmit 2>&1 | head -30)",
+      "Bash(ls public/ && find E:/ai-image/ai-image-frontend/public -name \"*.js\" 2>/dev/null | head -10)",
+      "Bash(sort -k2)",
+      "Bash(find E:/ai-image/ai-image-frontend -name \"nginx.conf\" -o -name \"*.nginx\" -o -name \"Dockerfile\" -o -name \"docker-compose*.yml\" 2>/dev/null | head -10)",
+      "Bash(find E:/ai-image -name \"*.conf\" -o -name \"Dockerfile\" -o -name \"docker-compose*\" 2>/dev/null | grep -v node_modules | grep -v \".next\" | head -10)",
+      "Bash(cd E:/ai-image/ai-image-frontend && npx tsc --noEmit 2>&1 | grep -v \"cron/sweep\" | head -20)",
+      "Bash(cd E:/ai-image/ai-image-frontend && npx tsc --noEmit 2>&1 | grep -v \"cron/sweep\")",
+      "Bash(find \"E:\\\\ai-image\\\\ai-image-frontend\" -type f \\\\\\( -name \"*.png\" -o -name \"*.jpg\" -o -name \"*.webp\" \\\\\\) 2>/dev/null | head -20)",
+      "Bash(cd E:/ai-image/ai-image-frontend && npx tsc --noEmit 2>&1)"
     ]
   }
 }

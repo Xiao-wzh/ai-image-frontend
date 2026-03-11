@@ -47,10 +47,13 @@ export function StandardForm(props: CockpitFormProps) {
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             className="space-y-6"
         >
-            {/* 创意/克隆模式 — 仅详情页显示 */}
+            {/* 第三步：创意/克隆模式 — 仅详情页显示 */}
             {taskType === "DETAIL_PAGE" && (
                 <div>
-                    <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/50 border border-white/10 w-fit">
+                    <div className="flex items-center gap-3 mb-0">
+                        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest shrink-0">③ 详情页风格</p>
+                    </div>
+                    <div className="flex items-center gap-1 p-1 mt-2 rounded-xl bg-slate-800/50 border border-white/10 w-fit">
                         <button
                             type="button"
                             onClick={() => {
