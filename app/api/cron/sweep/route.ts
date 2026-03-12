@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
         // 每次最多处理 50 个，防止堆积过多导致 API 超时 (504)
         // Cron 每 15 分钟执行一次，积压订单会像蚂蚁搬家一样被分批安全消化
         const BATCH_LIMIT = 50
-        const timeoutThreshold = new Date(Date.now() - 30 * 60 * 1000);
+        const timeoutThreshold = new Date(Date.now() - 20 * 60 * 1000);
 
         const zombieTasks = await prisma.generation.findMany({
             where: {

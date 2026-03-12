@@ -76,17 +76,27 @@ function getDateInfo(isoString: string): { dateKey: string; label: string } {
 function mergeOrdersIntoDayGroups(existing: DayGroup[], newOrders: Order[]): DayGroup[] {
     const groupMap = new Map<string, DayGroup>()
     for (const g of existing) groupMap.set(g.dateKey, { ...g, orders: [...g.orders] })
+    //金额只计算已支付订单
     for (const order of newOrders) {
         const { dateKey, label } = getDateInfo(order.createdAt)
         const group = groupMap.get(dateKey)
         if (group) {
             if (!group.orders.some(o => o.id === order.id)) {
                 group.orders.push(order)
-                group.totalAmount += order.amount
-                group.orderCount += 1
+                if (order.status === 'PAID') {
+                    group.totalAmount += order.amount
+                    group.orderCount += 1
+                }
             }
         } else {
-            groupMap.set(dateKey, { dateKey, label, totalAmount: order.amount, orderCount: 1, orders: [order] })
+            // 创建新分组时也要检查订单状态
+            groupMap.set(dateKey, {
+                dateKey,
+                label,
+                totalAmount: order.status === 'PAID' ? order.amount : 0,
+                orderCount: order.status === 'PAID' ? 1 : 0,
+                orders: [order]
+            })
         }
     }
     return Array.from(groupMap.values()).sort((a, b) => b.dateKey.localeCompare(a.dateKey))
@@ -406,7 +416,7 @@ export default function AdminOrdersPage() {
                                                     </div>
                                                     <div className="flex items-center gap-4 text-sm">
                                                         <span className="text-emerald-400 font-semibold">¥{(group.totalAmount / 100).toFixed(2)}</span>
-                                                        <span className="text-slate-500">{group.orderCount} 笔订单</span>
+                                                        <span className="text-slate-500">{group.orderCount} 笔已支付订单</span>
                                                     </div>
                                                 </div>
                                             </div>
