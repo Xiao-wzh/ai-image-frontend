@@ -28,32 +28,75 @@ export async function GET(req: NextRequest) {
         }
 
         const { searchParams } = new URL(req.url);
-        const limit = parseInt(searchParams.get('limit') || '20');
-        const offset = parseInt(searchParams.get('offset') || '0');
         const status = searchParams.get('status'); // 可选状态筛选
-        const dateStr = searchParams.get('date'); // 可选日期筛选 YYYY-MM-DD
+        let startDateStr = searchParams.get('startDate'); // 时间窗起点 YYYY-MM-DD
+        let endDateStr = searchParams.get('endDate');     // 时间窗终点 YYYY-MM-DD
+
+        // 东八区偏移
+        const UTC8_MS = 8 * 60 * 60 * 1000;
+        const DAY_MS = 24 * 60 * 60 * 1000;
+        const INITIAL_WINDOW_DAYS = 7;
+
+        /** 将东八区 YYYY-MM-DD 转为该天 00:00:00 的 UTC Date */
+        function utc8DayToUTC(dateStr: string): Date {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            return new Date(Date.UTC(y, m - 1, d) - UTC8_MS);
+        }
+
+        /** 将 UTC Date 转为东八区 YYYY-MM-DD */
+        function utcToUTC8DateStr(date: Date): string {
+            const utc8 = new Date(date.getTime() + date.getTimezoneOffset() * 60000 + UTC8_MS);
+            const y = utc8.getFullYear();
+            const m = String(utc8.getMonth() + 1).padStart(2, '0');
+            const d = String(utc8.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        /** 将 YYYY-MM-DD 向前推 N 天 */
+        function subtractDaysStr(dateStr: string, days: number): string {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const ts = Date.UTC(y, m - 1, d) - days * DAY_MS;
+            const dt = new Date(ts);
+            return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+        }
+
+        // ========== 自动时间窗推算 ==========
+        // 如果前端没有传 startDate/endDate，从最新订单的日期自动推算
+        if (!startDateStr && !endDateStr) {
+            const statusWhere = status && status !== 'all' ? { status } : {};
+            const latestOrder = await prisma.order.findFirst({
+                where: statusWhere,
+                orderBy: { createdAt: 'desc' },
+                select: { createdAt: true },
+            });
+
+            if (latestOrder) {
+                endDateStr = utcToUTC8DateStr(latestOrder.createdAt);
+                startDateStr = subtractDaysStr(endDateStr, INITIAL_WINDOW_DAYS - 1);
+            }
+        }
 
         const where: any = {};
         if (status && status !== 'all') {
             where.status = status;
         }
 
-        // 日期筛选
-        if (dateStr) {
-            const date = new Date(dateStr);
-            const nextDate = new Date(dateStr);
-            nextDate.setDate(nextDate.getDate() + 1);
-            where.paidAt = {
-                gte: date,
-                lt: nextDate,
-            };
+        // 日期范围筛选（基于 createdAt，东八区）
+        if (startDateStr || endDateStr) {
+            where.createdAt = {};
+            if (startDateStr) {
+                where.createdAt.gte = utc8DayToUTC(startDateStr);
+            }
+            if (endDateStr) {
+                const nextDay = new Date(utc8DayToUTC(endDateStr).getTime() + DAY_MS);
+                where.createdAt.lt = nextDay;
+            }
         }
 
+        // 查询时间窗内的全部订单（不分页）
         const orders = await prisma.order.findMany({
             where,
             orderBy: { createdAt: 'desc' },
-            take: limit,
-            skip: offset,
             include: {
                 user: {
                     select: {
@@ -74,7 +117,17 @@ export async function GET(req: NextRequest) {
             },
         });
 
-        const total = await prisma.order.count({ where });
+        // 检查是否存在更早的订单（用于"加载更多"按钮）
+        let hasMore = false;
+        if (where.createdAt?.gte) {
+            const olderCount = await prisma.order.count({
+                where: {
+                    ...(status && status !== 'all' ? { status } : {}),
+                    createdAt: { lt: where.createdAt.gte },
+                },
+            });
+            hasMore = olderCount > 0;
+        }
 
         // 统计数据
         const stats = await prisma.order.groupBy({
@@ -91,36 +144,81 @@ export async function GET(req: NextRequest) {
             };
         }
 
-        // 计算今日和昨日收入
-        const now = new Date();
-        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-        const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-        const yesterdayStart = new Date(todayStart);
-        yesterdayStart.setDate(yesterdayStart.getDate() - 1);
-        const yesterdayEnd = new Date(todayEnd);
-        yesterdayEnd.setDate(yesterdayEnd.getDate() - 1);
+        // ========== 今日/昨日 & 趋势图 时区计算 ==========
+        /** 获取东八区当前时间对应的 Date */
+        function getUTC8Now() {
+            const now = new Date();
+            return new Date(now.getTime() + (now.getTimezoneOffset() * 60 * 1000) + UTC8_MS);
+        }
 
-        const todayRevenue = await prisma.order.aggregate({
+        /** 获取东八区某天 00:00:00 的 UTC Date */
+        function getUTC8DayStart(year: number, month: number, day: number): Date {
+            return new Date(Date.UTC(year, month, day) - UTC8_MS);
+        }
+
+        /** 格式化为 MM/DD */
+        function formatMMDD(year: number, month: number, day: number): string {
+            return `${String(month + 1).padStart(2, '0')}/${String(day).padStart(2, '0')}`;
+        }
+
+        const utc8Now = getUTC8Now();
+        const todayStart = getUTC8DayStart(utc8Now.getFullYear(), utc8Now.getMonth(), utc8Now.getDate());
+        const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+        const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000);
+
+        // 今日 & 昨日收入（并行查询）
+        const [todayRevenue, yesterdayRevenue, todayOrderCount] = await Promise.all([
+            prisma.order.aggregate({
+                where: { status: 'PAID', paidAt: { gte: todayStart, lt: tomorrowStart } },
+                _sum: { amount: true },
+            }),
+            prisma.order.aggregate({
+                where: { status: 'PAID', paidAt: { gte: yesterdayStart, lt: todayStart } },
+                _sum: { amount: true },
+            }),
+            prisma.order.count({
+                where: { status: 'PAID', paidAt: { gte: todayStart, lt: tomorrowStart } },
+            }),
+        ]);
+
+        // ========== 近7天收入趋势（单次DB查询 + JS聚合 + 零填充） ==========
+        const CHART_DAYS = 7;
+        const chartStartDate = new Date(todayStart.getTime() - (CHART_DAYS - 1) * 24 * 60 * 60 * 1000);
+
+        // 1) 单次查询：获取近7天所有已支付订单的 paidAt 和 amount
+        const recentPaidOrders = await prisma.order.findMany({
             where: {
                 status: 'PAID',
-                paidAt: {
-                    gte: todayStart,
-                    lte: todayEnd,
-                },
+                paidAt: { gte: chartStartDate, lt: tomorrowStart },
             },
-            _sum: { amount: true },
+            select: { paidAt: true, amount: true },
         });
 
-        const yesterdayRevenue = await prisma.order.aggregate({
-            where: {
-                status: 'PAID',
-                paidAt: {
-                    gte: yesterdayStart,
-                    lte: yesterdayEnd,
-                },
-            },
-            _sum: { amount: true },
-        });
+        // 2) 生成完整7天日期数组，金额默认为 0
+        const chartMap = new Map<string, number>();
+        const chartDates: { key: string; year: number; month: number; day: number }[] = [];
+        for (let i = 0; i < CHART_DAYS; i++) {
+            const dayTs = chartStartDate.getTime() + i * 24 * 60 * 60 * 1000;
+            // 将 UTC 时间转回东八区日期
+            const d = new Date(dayTs + UTC8_MS);
+            const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+            chartMap.set(key, 0);
+            chartDates.push({ key, year: d.getUTCFullYear(), month: d.getUTCMonth(), day: d.getUTCDate() });
+        }
+
+        // 3) JS 内存聚合：按东八区日期归类求和
+        for (const o of recentPaidOrders) {
+            if (!o.paidAt) continue;
+            const d = new Date(o.paidAt.getTime() + (o.paidAt.getTimezoneOffset() * 60 * 1000) + UTC8_MS);
+            const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+            chartMap.set(key, (chartMap.get(key) || 0) + o.amount);
+        }
+
+        // 4) 组装结果：date 为 MM/DD，amount 为元（分转元，保留两位小数）
+        const chartData = chartDates.map(({ key, month, day }) => ({
+            date: formatMMDD(0, month, day),
+            amount: Number(((chartMap.get(key) || 0) / 100).toFixed(2)),
+        }));
 
         return NextResponse.json({
             success: true,
@@ -144,16 +242,16 @@ export async function GET(req: NextRequest) {
                 createdAt: order.createdAt.toISOString(),
                 channel: order.channel,
             })),
-            pagination: {
-                total,
-                limit,
-                offset,
-            },
+            hasMore,
+            windowStart: startDateStr || null,
+            windowEnd: endDateStr || null,
             stats: statsMap,
             dailyRevenue: {
                 today: todayRevenue._sum.amount || 0,
                 yesterday: yesterdayRevenue._sum.amount || 0,
             },
+            chartData,
+            todayOrderCount,
         });
     } catch (error) {
         console.error('[API] 获取管理员订单列表失败:', error);
