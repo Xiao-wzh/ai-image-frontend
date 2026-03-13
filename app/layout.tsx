@@ -9,6 +9,7 @@ import { LoginModalRoot } from "@/components/login-modal-root"
 import { AnnouncementModalProvider } from "@/hooks/use-announcement-modal"
 import { AnnouncementModalRoot } from "@/components/announcement-modal-root"
 import { FloatingCustomerService } from "@/components/floating-customer-service"
+import { ActivityFAB } from "@/components/activity-fab"
 import prisma from "@/lib/prisma"
 import { getCurrentAgentProfile } from "@/lib/agent-helper"
 import "./globals.css"
@@ -77,6 +78,7 @@ export default async function RootLayout({
                   customerServiceQr={customerServiceQr}
                   afterSaleGroupQr={afterSaleGroupQr}
                 />
+                <ActivityFAB />
                 <Toaster richColors closeButton position="top-center" />
                 <Analytics />
                 {/* ICP 备案号 */}

@@ -56,6 +56,11 @@ model User {
   copywritings              Copywriting[]
   orders                    Order[]             /// 用户的支付订单
 
+  // 活动系统
+  activityInviterRecords    ActivityReferral[]  @relation("ActivityInviterRecords") /// 作为邀请人的活动充值记录
+  activityInviteeRecords    ActivityReferral[]  @relation("ActivityInviteeRecords") /// 作为被邀请人的活动充值记录
+  activityRewardLogs        ActivityRewardLog[]                                     /// 活动奖励发放记录
+
   // VIP会员
   isVIP           Boolean   @default(false)    /// 是否VIP会员
   vipLevel        Int       @default(0)        // 0=无, 1=月卡Pro, 2=年卡Ultra (预留)
@@ -429,6 +434,103 @@ model Copywriting {
 
   @@index([userId])
   @@index([createdAt])
+}
+
+// ============================================
+// 活动系统（JSON 驱动规则引擎）
+// ============================================
+
+/// 活动主表
+model Activity {
+  id        String         @id @default(cuid())
+  name      String                              /// 活动名称
+  startTime DateTime                            /// 活动开始时间
+  endTime   DateTime                            /// 活动结束时间
+  isActive  Boolean        @default(true)       /// 是否启用
+
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  tiers               ActivityTier[]
+  activityReferrals   ActivityReferral[]
+  virtualLeaderboard  VirtualLeaderboard[]
+  rewardLogs          ActivityRewardLog[]
+
+  @@index([isActive, startTime, endTime])
+}
+
+/// 活动阶梯规则表（JSON 驱动，可扩展）
+model ActivityTier {
+  id         String   @id @default(cuid())
+  activityId String                             /// 关联活动 ID
+  tierLevel  Int                                /// 阶梯排序（1=最低，递增）
+  /// 达标条件 JSON，例如：{ "minAmount": 1000, "minInvites": 0 }
+  conditions Json
+  /// 奖励内容 JSON，例如：{ "credits": 500, "vipDays": 0 }
+  rewards    Json
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  activity   Activity          @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  rewardLogs ActivityRewardLog[]
+
+  @@index([activityId, tierLevel])
+}
+
+/// 活动拉新充值记录（记录活动期间邀请人产生的充值明细）
+model ActivityReferral {
+  id             String   @id @default(cuid())
+  activityId     String                         /// 关联活动 ID
+  inviterId      String                         /// 邀请人用户 ID
+  inviteeId      String                         /// 被邀请人用户 ID
+  rechargeAmount Int                            /// 本次充值金额（分）
+  orderId        String?                        /// 关联订单 ID（幂等控制）
+  createdAt      DateTime @default(now())
+
+  activity       Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  inviter        User     @relation("ActivityInviterRecords", fields: [inviterId], references: [id])
+  invitee        User     @relation("ActivityInviteeRecords", fields: [inviteeId], references: [id])
+
+  @@unique([activityId, orderId])
+  @@index([activityId, inviterId])
+  @@index([inviteeId])
+}
+
+/// 虚拟排行榜（管理员创建的气氛组数据）
+model VirtualLeaderboard {
+  id          String   @id @default(cuid())
+  activityId  String                         /// 关联活动 ID
+  fakeName    String                         /// 虚拟昵称
+  fakeAvatar  String?                        /// 虚拟头像 URL
+  fakeAmount  Int                            /// 虚拟充值金额（分）
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  activity    Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+
+  @@index([activityId, fakeAmount])
+}
+
+/// 活动阶梯奖励发放记录（物理防重发：同一用户同一活动同一阶梯只能领一次）
+model ActivityRewardLog {
+  id             String   @id @default(cuid())
+  userId         String                         /// 获奖用户（邀请人）ID
+  activityId     String                         /// 关联活动 ID
+  tierId         String                         /// 关联阶梯 ID
+  rewardCredits  Int                            /// 实际发放的积分数量
+
+  createdAt      DateTime @default(now())
+
+  user           User         @relation(fields: [userId], references: [id])
+  activity       Activity     @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  tier           ActivityTier @relation(fields: [tierId], references: [id], onDelete: Cascade)
+
+  /// 联合唯一索引：同一用户、同一活动、同一阶梯只允许发放一次
+  @@unique([userId, activityId, tierId])
+  @@index([activityId])
+  @@index([userId])
 }
 
 /// 支付订单表（微信/支付宝等）

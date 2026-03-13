@@ -145,6 +145,49 @@ export async function settleOrder(
                 }
             }
 
+            // ============= Step 6: 活动拉新记录（同一事务） =============
+            // 仅在充值用户有邀请人、且当前有进行中活动时写入
+            if (order.userId) {
+                const buyer = await tx.user.findUnique({
+                    where: { id: order.userId },
+                    select: { invitedById: true },
+                });
+
+                if (buyer?.invitedById) {
+                    const now = new Date();
+                    const activeActivity = await tx.activity.findFirst({
+                        where: {
+                            isActive: true,
+                            startTime: { lte: now },
+                            endTime: { gte: now },
+                        },
+                        select: { id: true },
+                        orderBy: { createdAt: 'desc' },
+                    });
+
+                    if (activeActivity) {
+                        // upsert 保证幂等（@@unique([activityId, orderId])）
+                        await tx.activityReferral.upsert({
+                            where: {
+                                activityId_orderId: {
+                                    activityId: activeActivity.id,
+                                    orderId: order.id,
+                                },
+                            },
+                            create: {
+                                activityId: activeActivity.id,
+                                inviterId: buyer.invitedById,
+                                inviteeId: order.userId,
+                                rechargeAmount: order.amount,  // 单位：分
+                                orderId: order.id,
+                            },
+                            update: {},  // 已存在则不更新（幂等跳过）
+                        });
+                        console.log(`${logPrefix} 活动拉新记录已写入: 邀请人 ${buyer.invitedById}, 被邀请人 ${order.userId}, 金额 ${order.amount}分`);
+                    }
+                }
+            }
+
             console.log(`${logPrefix} 订单结算成功: ${orderId}`);
 
             return {

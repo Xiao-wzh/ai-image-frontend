@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser, BarChart3, FileText, Users, Receipt, Video } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser, BarChart3, FileText, Users, Receipt, Video, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -46,6 +46,7 @@ const adminItems: NavItem[] = [
   { icon: Settings, label: "提示词管理", href: "/admin/prompts" },
   { icon: Megaphone, label: "公告管理", href: "/admin/announcements" },
   { icon: Crown, label: "价格设置", href: "/admin/settings" },
+  { icon: Zap, label: "拉新活动", href: "/admin/activity" },
 ]
 
 

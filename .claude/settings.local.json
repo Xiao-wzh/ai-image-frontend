@@ -24,7 +24,21 @@
       "Bash(cd E:/ai-image/ai-image-frontend && npx tsc --noEmit 2>&1 | grep -v \"cron/sweep\" | head -20)",
       "Bash(cd E:/ai-image/ai-image-frontend && npx tsc --noEmit 2>&1 | grep -v \"cron/sweep\")",
       "Bash(find \"E:\\\\ai-image\\\\ai-image-frontend\" -type f \\\\\\( -name \"*.png\" -o -name \"*.jpg\" -o -name \"*.webp\" \\\\\\) 2>/dev/null | head -20)",
-      "Bash(cd E:/ai-image/ai-image-frontend && npx tsc --noEmit 2>&1)"
+      "Bash(cd E:/ai-image/ai-image-frontend && npx tsc --noEmit 2>&1)",
+      "Bash(cd \"E:/ai-image/ai-image-frontend\" && npx prisma migrate dev --name \"add_activity_system\" 2>&1)",
+      "Bash(cd \"E:/ai-image/ai-image-frontend\" && python skills/ui-ux-pro-max/scripts/search.py \"dark glassmorphism neon glow referral campaign leaderboard saas\" --design-system -p \"ReferralCampaign\" -f markdown 2>&1)",
+      "Bash(cd \"E:/ai-image/ai-image-frontend\" && python3 .claude/skills/ui-ux-pro-max/scripts/search.py \"dark glassmorphism neon glow referral campaign leaderboard saas\" --design-system -p \"ReferralCampaign\" -f markdown 2>&1)",
+      "Bash(cd \"E:/ai-image/ai-image-frontend\" && python .claude/skills/ui-ux-pro-max/scripts/search.py \"dark glassmorphism neon glow referral campaign leaderboard saas\" --design-system -p \"ReferralCampaign\" -f markdown 2>&1 || echo \"Exit code: $?\")",
+      "Bash(where python:*)",
+      "Bash(cd \"E:/ai-image/ai-image-frontend\" && /c/Users/Administrator/AppData/Local/Microsoft/WindowsApps/python3.exe .claude/skills/ui-ux-pro-max/scripts/search.py \"dark glassmorphism neon glow referral campaign leaderboard\" --design-system -p \"ReferralCampaign\" -f markdown 2>&1 | head -100)",
+      "Bash(cd \"E:/ai-image/ai-image-frontend\" && /c/Users/Administrator/AppData/Local/Microsoft/WindowsApps/python3.exe .claude/skills/ui-ux-pro-max/scripts/search.py \"dark glassmorphism neon glow\" --domain style -n 3 2>&1)",
+      "Bash(cd \"E:/ai-image/ai-image-frontend/.claude/skills/ui-ux-pro-max\" && /c/Users/Administrator/AppData/Local/Microsoft/WindowsApps/python3.exe scripts/search.py \"dark glassmorphism neon glow\" --domain style -n 2 2>&1)",
+      "Bash(cd \"E:/ai-image/ai-image-frontend/.claude/skills/ui-ux-pro-max\" && /c/Users/Administrator/AppData/Local/Microsoft/WindowsApps/python3.exe -c \"import sys; print\\(sys.version\\)\" 2>&1)",
+      "Bash(cmd /c \"python --version\" 2>&1 || cmd /c \"py --version\" 2>&1)",
+      "Bash(cmd /c \"py -3 --version && py -3 E:\\\\ai-image\\\\ai-image-frontend\\\\.claude\\\\skills\\\\ui-ux-pro-max\\\\scripts\\\\search.py \\\\\"dark glassmorphism neon\\\\\" --domain style -n 2\" 2>&1)",
+      "Bash(find \"E:\\\\ai-image\\\\ai-image-frontend\" -name \"tailwind.config.*\" 2>/dev/null | head -20)",
+      "Bash(python3 .claude/skills/ui-ux-pro-max/scripts/search.py \"admin dashboard SaaS dark mode management panel\" --design-system -p \"ActivityAdminConsole\" 2>/dev/null || python .claude/skills/ui-ux-pro-max/scripts/search.py \"admin dashboard SaaS dark mode management panel\" --design-system -p \"ActivityAdminConsole\" 2>/dev/null)",
+      "Bash(cd E:/ai-image/ai-image-frontend && npx prisma migrate dev --name add_activity_reward_log 2>&1)"
     ]
   }
 }
