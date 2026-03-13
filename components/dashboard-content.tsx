@@ -9,9 +9,10 @@ import { UploadZone } from "@/components/upload-zone"
 import { RegisterModal } from "@/components/register-modal"
 import { UserAccountNav } from "@/components/user-account-nav"
 import { TopBanner } from "@/components/top-banner"
+import { ReferralCampaignModal } from "@/components/referral-campaign-modal"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { LogIn, Megaphone } from "lucide-react"
+import { LogIn, Megaphone, Zap } from "lucide-react"
 import { useAnnouncementModal } from "@/hooks/use-announcement-modal"
 
 export interface DashboardContentProps {
@@ -24,6 +25,7 @@ export function DashboardContent({ siteName = "AI Species", welcomeMsg = "专业
     const { data: session, status } = useSession()
     const searchParams = useSearchParams()
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+    const [isActivityOpen, setIsActivityOpen] = useState(false)
     const announcementModal = useAnnouncementModal()
 
     // 从 URL 参数读取邀请码、类型和签名
@@ -45,6 +47,36 @@ export function DashboardContent({ siteName = "AI Species", welcomeMsg = "专业
                 <TopBanner />
                 {/* Header with Auth */}
                 <header className="absolute top-0 right-0 p-6 z-50 flex items-center gap-3">
+                    {/* 拉新活动入口横幅 */}
+                    <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: 0.05 }}
+                    >
+                        <button
+                            onClick={() => setIsActivityOpen(true)}
+                            className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+                                bg-gradient-to-r from-purple-600/80 to-pink-600/80
+                                border border-purple-500/40
+                                text-white text-xs font-semibold
+                                hover:from-purple-500/90 hover:to-pink-500/90
+                                transition-all duration-200 cursor-pointer
+                                shadow-[0_0_16px_rgba(168,85,247,0.3)] hover:shadow-[0_0_24px_rgba(168,85,247,0.5)]
+                                overflow-hidden"
+                        >
+                            {/* 流光扫过效果 */}
+                            <motion.div
+                                className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-12 pointer-events-none"
+                                animate={{ x: ["-150%", "200%"] }}
+                                transition={{ duration: 3, repeat: Infinity, repeatDelay: 2 }}
+                            />
+                            <Zap className="w-3.5 h-3.5 text-yellow-300 shrink-0" />
+                            <span className="relative">邀友返利活动</span>
+                            {/* 小红点提示 */}
+                            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                        </button>
+                    </motion.div>
+
                     {/* Announcement Button */}
                     <motion.div
                         initial={{ opacity: 0, x: 20 }}
@@ -142,6 +174,11 @@ export function DashboardContent({ siteName = "AI Species", welcomeMsg = "专业
                 initialInviteCode={urlInviteCode}
                 inviteType={urlInviteType}
                 inviteSig={urlInviteSig}
+            />
+
+            <ReferralCampaignModal
+                isOpen={isActivityOpen}
+                onClose={() => setIsActivityOpen(false)}
             />
         </div>
     )

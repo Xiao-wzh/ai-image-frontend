@@ -83,7 +83,7 @@ const RANK_STYLES = [
 ]
 
 // ============================================================
-// 子组件：阶梯进度节点
+// 子组件：阶梯进度节点（含左右连接线）
 // ============================================================
 
 function TierNode({
@@ -93,6 +93,7 @@ function TierNode({
   userProgress,
   isActive,
   isCompleted,
+  prevCompleted,
 }: {
   tier: ActivityTier
   index: number
@@ -100,59 +101,90 @@ function TierNode({
   userProgress: UserProgress | null
   isActive: boolean
   isCompleted: boolean
+  prevCompleted: boolean
 }) {
   const minAmount = tier.conditions?.minAmount ?? 0
   const credits = tier.rewards?.credits ?? 0
   const gapAmount = isActive ? (userProgress?.gapToNext?.amountGap ?? 0) : 0
 
+  // 左侧线段：i=0 时由"自身是否完成"决定（起点→第一档），其余由前一档决定
+  const leftLineCompleted = index === 0 ? isCompleted : prevCompleted
+  // 右侧线段（连接当前节点到下一个节点）：当前节点已完成则紫色
+  const rightLineCompleted = isCompleted
+
   return (
-    <div className="flex flex-col items-center flex-1 min-w-0">
-      {/* 奖励标签 */}
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: index * 0.1 }}
-        className={`mb-2 px-2 py-0.5 rounded-full text-xs font-bold whitespace-nowrap
-          ${isCompleted
-            ? "bg-purple-500/30 text-purple-300 border border-purple-500/40"
-            : isActive
-            ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse"
-            : "bg-slate-800/60 text-slate-500 border border-slate-700/40"
-          }`}
-      >
-        +{credits.toLocaleString()} 积分
-      </motion.div>
+    <div className="flex-1 min-w-0 flex flex-col items-center">
+      {/* 奖励标签 - 固定高度区域，保证圆圈行对齐 */}
+      <div className="h-7 flex items-center mb-1.5">
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: index * 0.1 }}
+          className={`px-2 py-0.5 rounded-full text-xs font-bold whitespace-nowrap
+            ${isCompleted
+              ? "bg-purple-500/30 text-purple-300 border border-purple-500/40"
+              : isActive
+              ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 animate-pulse"
+              : "bg-slate-800/60 text-slate-500 border border-slate-700/40"
+            }`}
+        >
+          +{credits.toLocaleString()} 积分
+        </motion.div>
+      </div>
 
-      {/* 节点圆圈 */}
-      <motion.div
-        initial={{ scale: 0.5, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ delay: index * 0.1, type: "spring", stiffness: 200 }}
-        className={`relative w-10 h-10 rounded-full border-2 flex items-center justify-center shrink-0
-          ${isCompleted
-            ? "bg-purple-600 border-purple-400 shadow-[0_0_16px_rgba(168,85,247,0.6)]"
-            : isActive
-            ? "bg-slate-800 border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.5)]"
-            : "bg-slate-800/50 border-slate-600"
-          }`}
-      >
-        {isCompleted ? (
-          <Check className="w-5 h-5 text-white" strokeWidth={2.5} />
-        ) : isActive ? (
-          <Zap className="w-5 h-5 text-amber-300" />
-        ) : (
-          <span className="text-xs font-bold text-slate-500">{index + 1}</span>
-        )}
-
-        {/* 当前目标：闪烁光晕 */}
-        {isActive && (
+      {/* 连接线 + 圆圈 - 三段横向 flex 保证圆圈与线在同一水平线 */}
+      <div className="w-full flex items-center">
+        {/* 左侧连接线（首节点左半线正常显示，由起点圆圈引入） */}
+        <div className={`flex-1 h-0.5 overflow-hidden rounded-full bg-slate-700/60`}>
           <motion.div
-            className="absolute inset-0 rounded-full border-2 border-amber-400/50"
-            animate={{ scale: [1, 1.5, 1], opacity: [0.6, 0, 0.6] }}
-            transition={{ duration: 2, repeat: Infinity }}
+            className="h-full bg-gradient-to-r from-purple-500/80 to-purple-400"
+            initial={{ width: "0%" }}
+            animate={{ width: leftLineCompleted ? "100%" : "0%" }}
+            transition={{ duration: 0.5, ease: "easeOut", delay: index * 0.08 }}
           />
-        )}
-      </motion.div>
+        </div>
+
+        {/* 节点圆圈 */}
+        <motion.div
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: index * 0.1, type: "spring", stiffness: 200 }}
+          className={`relative w-10 h-10 rounded-full border-2 flex items-center justify-center shrink-0 mx-1
+            ${isCompleted
+              ? "bg-purple-600 border-purple-400 shadow-[0_0_16px_rgba(168,85,247,0.6)]"
+              : isActive
+              ? "bg-slate-800 border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.5)]"
+              : "bg-slate-800/50 border-slate-600"
+            }`}
+        >
+          {isCompleted ? (
+            <Check className="w-5 h-5 text-white" strokeWidth={2.5} />
+          ) : isActive ? (
+            <Zap className="w-5 h-5 text-amber-300" />
+          ) : (
+            <span className="text-xs font-bold text-slate-500">{index + 1}</span>
+          )}
+
+          {/* 当前目标：闪烁光晕 */}
+          {isActive && (
+            <motion.div
+              className="absolute inset-0 rounded-full border-2 border-amber-400/50"
+              animate={{ scale: [1, 1.5, 1], opacity: [0.6, 0, 0.6] }}
+              transition={{ duration: 2, repeat: Infinity }}
+            />
+          )}
+        </motion.div>
+
+        {/* 右侧连接线（末节点隐藏） */}
+        <div className={`flex-1 h-0.5 overflow-hidden rounded-full ${index === totalTiers - 1 ? "invisible" : ""} bg-slate-700/60`}>
+          <motion.div
+            className="h-full bg-gradient-to-r from-purple-400 to-purple-500/80"
+            initial={{ width: "0%" }}
+            animate={{ width: rightLineCompleted ? "100%" : "0%" }}
+            transition={{ duration: 0.5, ease: "easeOut", delay: index * 0.08 + 0.1 }}
+          />
+        </div>
+      </div>
 
       {/* 金额标签 */}
       <div className={`mt-2 text-xs font-semibold whitespace-nowrap
@@ -171,23 +203,6 @@ function TierNode({
           还差 {formatAmount(gapAmount)}
         </motion.div>
       )}
-    </div>
-  )
-}
-
-// ============================================================
-// 子组件：进度连接线
-// ============================================================
-
-function ProgressLine({ isCompleted }: { isCompleted: boolean }) {
-  return (
-    <div className="flex-1 h-0.5 mx-1 relative overflow-hidden rounded-full bg-slate-700/60 mt-[-24px]">
-      <motion.div
-        className="absolute inset-y-0 left-0 bg-gradient-to-r from-purple-500 to-purple-400"
-        initial={{ width: "0%" }}
-        animate={{ width: isCompleted ? "100%" : "0%" }}
-        transition={{ duration: 0.6, ease: "easeOut" }}
-      />
     </div>
   )
 }
@@ -369,27 +384,59 @@ export function ReferralCampaignModal({ isOpen, onClose }: Props) {
                     {/* 响应式：PC 横向，手机支持横向滚动 */}
                     <div className="overflow-x-auto pb-2">
                       <div
-                        className="flex items-start gap-0"
-                        style={{ minWidth: `${tiers.length * 100}px` }}
+                        className="flex items-start"
+                        style={{ minWidth: `${tiers.length * 100 + 48}px` }}
                       >
+                        {/* 起点圆圈 */}
+                        {(() => {
+                          const firstTierCompleted = (userProgress?.currentTierLevel ?? 0) >= (tiers[0]?.tierLevel ?? 1)
+                          return (
+                            <div className="flex flex-col items-center shrink-0">
+                              <div className="h-7 mb-1.5" />
+                              {/* 高度与 TierNode 圆圈行一致（h-10 = 40px），保证连线对齐 */}
+                              <div className="h-10 flex items-center">
+                                <motion.div
+                                  initial={{ scale: 0.5, opacity: 0 }}
+                                  animate={{ scale: 1, opacity: 1 }}
+                                  transition={{ type: "spring", stiffness: 200 }}
+                                  className={`w-4 h-4 rounded-full border-2 shrink-0 transition-colors duration-500
+                                    ${firstTierCompleted
+                                      ? "bg-purple-600 border-purple-400 shadow-[0_0_10px_rgba(168,85,247,0.5)]"
+                                      : "bg-slate-600 border-slate-500"
+                                    }`}
+                                />
+                                {/* 起点到第一档的连接线（带动画） */}
+                                <div className="w-6 h-0.5 overflow-hidden rounded-full bg-slate-700/60">
+                                  <motion.div
+                                    className="h-full bg-gradient-to-r from-purple-500/80 to-purple-400"
+                                    initial={{ width: "0%" }}
+                                    animate={{ width: firstTierCompleted ? "100%" : "0%" }}
+                                    transition={{ duration: 0.5, ease: "easeOut" }}
+                                  />
+                                </div>
+                              </div>
+                              <div className="mt-2 text-[10px] text-slate-600 whitespace-nowrap">起点</div>
+                            </div>
+                          )
+                        })()}
+
                         {tiers.map((tier, i) => {
-                          const isCompleted = (userProgress?.currentTierLevel ?? 0) >= tier.tierLevel
+                          const currentLevel = userProgress?.currentTierLevel ?? 0
+                          const isCompleted = currentLevel >= tier.tierLevel
                           const isActive = !isCompleted && tier.tierLevel === (userProgress?.nextTierLevel ?? null)
+                          const prevCompleted = i > 0 ? currentLevel >= tiers[i - 1].tierLevel : false
 
                           return (
-                            <div key={tier.id} className="flex items-start flex-1">
-                              <TierNode
-                                tier={tier}
-                                index={i}
-                                totalTiers={tiers.length}
-                                userProgress={userProgress}
-                                isActive={isActive}
-                                isCompleted={isCompleted}
-                              />
-                              {i < tiers.length - 1 && (
-                                <ProgressLine isCompleted={isCompleted} />
-                              )}
-                            </div>
+                            <TierNode
+                              key={tier.id}
+                              tier={tier}
+                              index={i}
+                              totalTiers={tiers.length}
+                              userProgress={userProgress}
+                              isActive={isActive}
+                              isCompleted={isCompleted}
+                              prevCompleted={prevCompleted}
+                            />
                           )
                         })}
                       </div>
