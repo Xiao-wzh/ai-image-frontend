@@ -401,36 +401,40 @@ export function HistoryDetailDialog({
       const folder = zip.folder(folderName)
       if (!folder) throw new Error("创建文件夹失败")
 
+      // 第一步：从服务器获取预签名 URL（纯计算，几乎不耗时）
       const response = await fetch("/api/download-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ imageUrls: displayImages }),
       })
 
-      if (!response.ok) {
-        throw new Error(`API请求失败: ${response.status}`)
-      }
+      if (!response.ok) throw new Error(`API请求失败: ${response.status}`)
 
       const data = await response.json()
       if (!data.success || !Array.isArray(data.images)) {
         throw new Error("API返回数据格式错误")
       }
 
-      let successCount = 0
-      data.images.forEach((imageData: any, idx: number) => {
-        if (imageData.success && imageData.data) {
-          const fileExtension = imageData.contentType?.split("/")[1] || "png"
-          const fileName = `${idx + 1}.${fileExtension}`
-
-          const binaryString = atob(imageData.data)
-          const bytes = new Uint8Array(binaryString.length)
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i)
+      // 第二步：浏览器直接从 TOS 并发拉取图片（完全绕过服务器带宽）
+      const fetchResults = await Promise.all(
+        data.images.map(async (item: any, idx: number) => {
+          if (!item.success || !item.signedUrl) return null
+          try {
+            const res = await fetch(item.signedUrl)
+            if (!res.ok) throw new Error(`HTTP ${res.status}`)
+            const arrayBuffer = await res.arrayBuffer()
+            return { idx, arrayBuffer }
+          } catch {
+            return null
           }
+        })
+      )
 
-          folder.file(fileName, bytes)
-          successCount++
-        }
+      let successCount = 0
+      fetchResults.forEach((result) => {
+        if (!result) return
+        folder.file(`${result.idx + 1}.png`, result.arrayBuffer)
+        successCount++
       })
 
       if (successCount === 0) throw new Error("所有图片下载失败")

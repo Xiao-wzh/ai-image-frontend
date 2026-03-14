@@ -41,7 +41,8 @@
       "Bash(cd E:/ai-image/ai-image-frontend && npx prisma migrate dev --name add_activity_reward_log 2>&1)",
       "Bash(grep -r \"api/history\" \"E:\\\\ai-image\\\\ai-image-frontend\\\\app\" --include=\"*.ts\" --include=\"*.tsx\" 2>/dev/null | head -20)",
       "Bash(grep -r \"pending-count\\\\|tasks\" E:/ai-image/ai-image-frontend/app/api/ --include=\"*.ts\" -l 2>/dev/null | head -5)",
-      "Bash(grep -r \"\\\\/api\\\\/tasks\" E:/ai-image/ai-image-frontend/ --include=\"*.ts\" --include=\"*.tsx\" -l 2>/dev/null | head -10)"
+      "Bash(grep -r \"\\\\/api\\\\/tasks\" E:/ai-image/ai-image-frontend/ --include=\"*.ts\" --include=\"*.tsx\" -l 2>/dev/null | head -10)",
+      "Bash(cd:*)"
     ]
   }
 }
