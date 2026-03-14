@@ -38,6 +38,10 @@ module.exports = {
             script: "npx",
             args: "tsx workers/tos-upload-worker.ts",
             cwd: "/var/www/ai-image-frontend/ai-image-frontend",
+            merge_logs: true,
+            log_date_format: "YYYY-MM-DD HH:mm:ss",
+            out_file: "/var/www/ai-image-frontend/logs/app.log",
+            error_file: "/var/www/ai-image-frontend/logs/app.log",
             instances: 1,              // 单实例，并发由 BullMQ concurrency=3 控制
             autorestart: true,
             time: true,
