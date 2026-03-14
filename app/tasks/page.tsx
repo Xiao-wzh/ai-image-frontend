@@ -27,7 +27,7 @@ export default function TasksPage() {
     const [activeIndex, setActiveIndex] = useState(0)
 
     const limit = 10
-    const POLL_INTERVAL_MS = 3000
+    const POLL_INTERVAL_MS = 6000 // 降频：原来 3000ms，改为 6000ms
 
     // Debounce search query
     useEffect(() => {
@@ -86,6 +86,11 @@ export default function TasksPage() {
 
         const tick = async () => {
             if (cancelled) return
+            // tab 隐藏时跳过本次轮询，避免后台标签页持续消耗 DB 连接
+            if (document.hidden) {
+                if (!cancelled) timer = setTimeout(tick, POLL_INTERVAL_MS)
+                return
+            }
             try {
                 await fetchPage(page, debouncedQuery)
             } catch {

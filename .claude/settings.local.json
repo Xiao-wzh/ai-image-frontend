@@ -38,7 +38,10 @@
       "Bash(cmd /c \"py -3 --version && py -3 E:\\\\ai-image\\\\ai-image-frontend\\\\.claude\\\\skills\\\\ui-ux-pro-max\\\\scripts\\\\search.py \\\\\"dark glassmorphism neon\\\\\" --domain style -n 2\" 2>&1)",
       "Bash(find \"E:\\\\ai-image\\\\ai-image-frontend\" -name \"tailwind.config.*\" 2>/dev/null | head -20)",
       "Bash(python3 .claude/skills/ui-ux-pro-max/scripts/search.py \"admin dashboard SaaS dark mode management panel\" --design-system -p \"ActivityAdminConsole\" 2>/dev/null || python .claude/skills/ui-ux-pro-max/scripts/search.py \"admin dashboard SaaS dark mode management panel\" --design-system -p \"ActivityAdminConsole\" 2>/dev/null)",
-      "Bash(cd E:/ai-image/ai-image-frontend && npx prisma migrate dev --name add_activity_reward_log 2>&1)"
+      "Bash(cd E:/ai-image/ai-image-frontend && npx prisma migrate dev --name add_activity_reward_log 2>&1)",
+      "Bash(grep -r \"api/history\" \"E:\\\\ai-image\\\\ai-image-frontend\\\\app\" --include=\"*.ts\" --include=\"*.tsx\" 2>/dev/null | head -20)",
+      "Bash(grep -r \"pending-count\\\\|tasks\" E:/ai-image/ai-image-frontend/app/api/ --include=\"*.ts\" -l 2>/dev/null | head -5)",
+      "Bash(grep -r \"\\\\/api\\\\/tasks\" E:/ai-image/ai-image-frontend/ --include=\"*.ts\" --include=\"*.tsx\" -l 2>/dev/null | head -10)"
     ]
   }
 }

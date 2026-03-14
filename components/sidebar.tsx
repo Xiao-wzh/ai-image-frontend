@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
+import useSWR from "swr"
 import { usePathname, useRouter } from "next/navigation"
 import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser, BarChart3, FileText, Users, Receipt, Video, Zap } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -56,7 +57,6 @@ export function Sidebar() {
   const router = useRouter()
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false)
   const loginModal = useLoginModal()
-  const [pendingCount, setPendingCount] = useState(0)
   const [isFreePeriod, setIsFreePeriod] = useState(true)
 
   // 检查是否在活动期内
@@ -76,37 +76,18 @@ export function Sidebar() {
     return () => clearInterval(interval)
   }, [])
 
-  // Fetch pending task count
-  useEffect(() => {
-    if (!session?.user) return
-
-    let cancelled = false
-
-    const fetchPendingCount = async () => {
-      try {
-        const res = await fetch("/api/history?limit=50&offset=0")
-        if (!res.ok) return
-        const data = await res.json()
-        const items = data.items || []
-        const count = items.filter((x: any) => {
-          const s = String(x.status || "").toUpperCase()
-          return s === "PENDING" || s === "PROCESSING"
-        }).length
-        if (!cancelled) setPendingCount(count)
-      } catch {
-        // ignore
-      }
+  // 用 SWR 轮询轻量级 pending-count 接口
+  // count > 0 时每 5 秒刷新；count = 0 时停止轮询（refreshInterval 返回 0 = 不轮询）
+  const { data: pendingData } = useSWR(
+    session?.user ? "/api/tasks/pending-count" : null, // 未登录不发请求
+    (url: string) => fetch(url).then((r) => r.json()),
+    {
+      refreshInterval: (data) => ((data?.count ?? 0) > 0 ? 5000 : 0),
+      revalidateOnFocus: true,   // tab 重新激活时立即刷新
+      dedupingInterval: 4000,
     }
-
-    fetchPendingCount()
-
-    // Poll every 5 seconds if there are pending tasks
-    const interval = setInterval(fetchPendingCount, 5000)
-    return () => {
-      cancelled = true
-      clearInterval(interval)
-    }
-  }, [session?.user])
+  )
+  const pendingCount = pendingData?.count ?? 0
 
   // 获取头像 fallback 文字
   const getFallbackText = () => {

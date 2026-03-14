@@ -264,6 +264,10 @@ model Generation {
 
   user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
   appeal Appeal? /// One-to-One: A generation can only be appealed once
+
+  @@index([userId, createdAt(sort: Desc)]) // 覆盖 WHERE userId ORDER BY createdAt DESC
+  @@index([userId, status])                // 覆盖 WHERE userId AND status IN (...)
+  @@index([status])                        // 覆盖全局 status 统计
 }
 
 
