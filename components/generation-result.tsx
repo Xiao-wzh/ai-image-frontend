@@ -62,7 +62,6 @@ export function GenerationResult({
     if (generatedImages.length === 0) return
 
     setIsDownloading(true)
-    console.log("🔽 [下载] 开始下载，图片数量:", generatedImages.length)
     try {
       const zip = new JSZip()
       const folderName = productName || "generated-images"
@@ -72,7 +71,6 @@ export function GenerationResult({
         throw new Error("创建文件夹失败")
       }
 
-      console.log("🔽 [下载] 调用后端 API: /api/download-images")
       const response = await fetch("/api/download-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -84,7 +82,6 @@ export function GenerationResult({
       }
 
       const data = await response.json()
-      console.log("🔽 [下载] 后端返回数据:", data)
 
       if (!data.success || !Array.isArray(data.images)) {
         throw new Error("API返回数据格式错误")
@@ -92,25 +89,13 @@ export function GenerationResult({
 
       let successCount = 0
       data.images.forEach((imageData: any, index: number) => {
-        console.log(`🔽 [下载] 处理第 ${index + 1} 张图片:`, {
-          success: imageData.success,
-          hasData: !!imageData.data,
-          hasSignedUrl: !!imageData.signedUrl,
-          contentType: imageData.contentType,
-        })
-
         if (imageData.success && imageData.data) {
-          console.log(`✅ [下载] 第 ${index + 1} 张使用 base64 数据（服务器流量）`)
           const fileExtension = imageData.contentType?.split("/")[1] || "png"
           const fileName = `${index + 1}.${fileExtension}`
           folder.file(fileName, atob(imageData.data), { binary: true })
           successCount++
-        } else if (imageData.success && imageData.signedUrl) {
-          console.log(`⚠️ [下载] 第 ${index + 1} 张返回了 signedUrl，但前端代码不支持处理（需要修复）`)
         }
       })
-
-      console.log(`🔽 [下载] 成功处理 ${successCount}/${data.images.length} 张图片`)
 
       if (successCount === 0) {
         throw new Error("所有图片下载失败")
@@ -125,9 +110,8 @@ export function GenerationResult({
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      console.log("✅ [下载] ZIP 文件生成并下载完成")
     } catch (error) {
-      console.error("❌ [下载] 生成压缩包失败:", error)
+      console.error("生成压缩包失败:", error)
     } finally {
       setIsDownloading(false)
     }

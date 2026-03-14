@@ -5,6 +5,7 @@ import { refundCredits } from "@/lib/credit-service"; // 引入我们之前抽�
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// 由服务器定时调用
 export async function POST(req: NextRequest) {
     // 1. 安全校验：防止恶意调用
     const authHeader = req.headers.get("authorization");
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-        // 2. 找到所有状态为 PROCESSING 或 PENDING，且已经超过 30 分钟没更新的订单
+        // 2. 找到所有状态为 PROCESSING 或 PENDING，且已经超过 20 分钟没更新的订单
         // 每次最多处理 50 个，防止堆积过多导致 API 超时 (504)
         // Cron 每 15 分钟执行一次，积压订单会像蚂蚁搬家一样被分批安全消化
         const BATCH_LIMIT = 50

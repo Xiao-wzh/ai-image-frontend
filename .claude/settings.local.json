@@ -43,7 +43,13 @@
       "Bash(grep -r \"pending-count\\\\|tasks\" E:/ai-image/ai-image-frontend/app/api/ --include=\"*.ts\" -l 2>/dev/null | head -5)",
       "Bash(grep -r \"\\\\/api\\\\/tasks\" E:/ai-image/ai-image-frontend/ --include=\"*.ts\" --include=\"*.tsx\" -l 2>/dev/null | head -10)",
       "Bash(cd:*)",
-      "Bash(npm list:*)"
+      "Bash(npm list:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm install:*)",
+      "Bash(node:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker inspect:*)",
+      "Bash(find:*)"
     ]
   }
 }

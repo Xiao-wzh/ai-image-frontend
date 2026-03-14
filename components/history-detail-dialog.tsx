@@ -395,16 +395,13 @@ export function HistoryDetailDialog({
     if (!displayImages.length) return
 
     setIsDownloading(true)
-    console.log("🔽 [历史记录下载] 开始下载，图片数量:", displayImages.length)
-    console.log("🔽 [历史记录下载] 图片 URL 列表:", displayImages)
     try {
       const zip = new JSZip()
       const folderName = productName || "generated-images"
       const folder = zip.folder(folderName)
       if (!folder) throw new Error("创建文件夹失败")
 
-      // 第一步：从服务器获取预签名 URL（纯计算，几乎不耗时）
-      console.log("🔽 [历史记录下载] 调用后端 API: /api/download-images")
+      // 第一步：从服务器获取预签名 URL
       const response = await fetch("/api/download-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -414,28 +411,21 @@ export function HistoryDetailDialog({
       if (!response.ok) throw new Error(`API请求失败: ${response.status}`)
 
       const data = await response.json()
-      console.log("🔽 [历史记录下载] 后端返回数据:", data)
       if (!data.success || !Array.isArray(data.images)) {
         throw new Error("API返回数据格式错误")
       }
 
-      // 第二步：浏览器直接从 TOS 并发拉取图片（完全绕过服务器带宽）
-      console.log("🔽 [历史记录下载] 开始从 TOS 下载图片（用户流量）")
+      // 第二步：浏览器直接从 TOS 并发拉取图片
       const fetchResults = await Promise.all(
         data.images.map(async (item: any, idx: number) => {
-          if (!item.success || !item.signedUrl) {
-            console.log(`⚠️ [历史记录下载] 第 ${idx + 1} 张跳过:`, item)
-            return null
-          }
+          if (!item.success || !item.signedUrl) return null
           try {
-            console.log(`🔽 [历史记录下载] 第 ${idx + 1} 张开始下载: ${item.signedUrl.substring(0, 100)}...`)
             const res = await fetch(item.signedUrl)
             if (!res.ok) throw new Error(`HTTP ${res.status}`)
             const arrayBuffer = await res.arrayBuffer()
-            console.log(`✅ [历史记录下载] 第 ${idx + 1} 张下载成功，大小: ${(arrayBuffer.byteLength / 1024).toFixed(2)} KB`)
             return { idx, arrayBuffer }
           } catch (err) {
-            console.error(`❌ [历史记录下载] 第 ${idx + 1} 张下载失败:`, err)
+            console.error(`下载第 ${idx + 1} 张图片失败:`, err)
             return null
           }
         })
@@ -444,13 +434,9 @@ export function HistoryDetailDialog({
       let successCount = 0
       fetchResults.forEach((result) => {
         if (!result) return
-        const fileName = `${result.idx + 1}.png`
-        folder.file(fileName, result.arrayBuffer)
-        console.log(`📦 [历史记录下载] 添加到 ZIP: ${fileName}`)
+        folder.file(`${result.idx + 1}.png`, result.arrayBuffer)
         successCount++
       })
-
-      console.log(`🔽 [历史记录下载] 成功处理 ${successCount}/${displayImages.length} 张图片`)
 
       if (successCount === 0) throw new Error("所有图片下载失败")
 
@@ -463,9 +449,8 @@ export function HistoryDetailDialog({
       a.click()
       document.body.removeChild(a)
       URL.revokeObjectURL(url)
-      console.log("✅ [历史记录下载] ZIP 文件生成并下载完成")
     } catch (err) {
-      console.error("❌ [历史记录下载] 下载失败:", err)
+      console.error("下载失败:", err)
     } finally {
       setIsDownloading(false)
     }
@@ -1171,9 +1156,7 @@ export function HistoryDetailDialog({
             // Immediately update local editing state for instant UI feedback
             setEditingIndex(imgIndex)
             if (item) {
-              // Update the item's editingImageIndexes locally for immediate display
               item.editingImageIndexes = [...(item.editingImageIndexes || []), imgIndex]
-              // Notify parent to trigger re-render of the items list
               onItemsChange?.([...items])
             }
 
@@ -1195,23 +1178,18 @@ export function HistoryDetailDialog({
                 throw new Error(data.error || "编辑失败")
               }
 
-              // Update local state with new image
-              if (data.newImageUrl && item) {
-                const newImages = [...item.generatedImages]
-                newImages[imgIndex] = data.newImageUrl
-                item.generatedImages = newImages
-              }
-
-              toast.success("图片已更新")
-              onGenerateSuccess() // Refresh to get updated credits
+              // API 已改为异步，立即返回 { status: "EDITING" }
+              // 实际图片更新由后端 Worker 完成后，轮询自动刷新
+              onGenerateSuccess() // 刷新积分
+              toast.success("已提交编辑，处理完成后自动更新")
             } catch (err) {
               const message = err instanceof Error ? err.message : "编辑失败"
               toast.error(message)
-            } finally {
+              // 失败时清除本地编辑状态
               setEditingIndex(null)
-              // Remove from editingImageIndexes
               if (item) {
                 item.editingImageIndexes = (item.editingImageIndexes || []).filter(i => i !== imgIndex)
+                onItemsChange?.([...items])
               }
             }
           }}

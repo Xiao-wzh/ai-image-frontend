@@ -399,11 +399,12 @@ async function handleComboGeneration(
     results.push({ taskType: "DETAIL_PAGE", id: detailGen.id, status: "FAILED", error: "缺少详情页模板或 Webhook 配置" })
   }
 
-  // Execute remaining tasks in parallel（同步等待 N8N 结果，与单任务模式保持一致）
+  // 异步触发所有任务（fire-and-forget），与 STANDARD/PRO 保持一致
+  // 结果由 n8n 回调 /api/webhook/n8n → BullMQ Worker 写入 DB
   if (tasks.length > 0) {
     const username = (session?.user as any)?.username ?? (session?.user as any)?.name ?? null
 
-    const n8nPromises = tasks.map((task) => {
+    for (const task of tasks) {
       const filledPrompt = fillPromptTemplate(task.prompt.promptTemplate, productName, outputLanguage, task.prompt.detailBatch)
 
       const payload = {
@@ -416,36 +417,36 @@ async function handleComboGeneration(
         image_count: imageUrls.length,
         output_language: outputLanguage,
       }
-      console.log(`[COMBO] Calling N8N for ${task.taskType}: ${task.webhookUrl}`)
-      return callN8N(task.webhookUrl!, payload, task.timeoutMs)
-    })
 
-    const n8nResults = await Promise.allSettled(n8nPromises)
+      // 更新状态为 PROCESSING
+      await prisma.generation.update({
+        where: { id: task.generationId },
+        data: { status: "PROCESSING" },
+      })
 
-    for (let i = 0; i < tasks.length; i++) {
-      const task = tasks[i]
-      const result = n8nResults[i]
+      console.log(`[COMBO] 异步触发 N8N: ${task.taskType} → ${task.webhookUrl}`)
 
-      if (result.status === "fulfilled" && result.value.success) {
-        const imageKeys = result.value.images.map(url => extractObjectKey(url) as string)
-        const fullImageKey = result.value.fullImageUrl ? extractObjectKey(result.value.fullImageUrl) as string : null
-
-        await prisma.generation.update({
-          where: { id: task.generationId },
-          data: { generatedImages: imageKeys, generatedImage: fullImageKey, status: "COMPLETED" },
+      fetch(task.webhookUrl!, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            console.error(`[COMBO_ASYNC] N8N HTTP error for ${task.generationId}: ${res.status}`)
+            await prisma.generation.update({ where: { id: task.generationId }, data: { status: "FAILED" } }).catch(() => {})
+            await refundCreditsStandalone(userId, task.cost, `套餐${task.taskType === "MAIN_IMAGE" ? "主图" : "详情页"}生图失败退款 (N8N HTTP ${res.status})`)
+          } else {
+            console.log(`[COMBO_ASYNC] N8N 请求已送达 ${task.generationId}，等待 webhook 回调`)
+          }
         })
-        results.push({ taskType: task.taskType, id: task.generationId, status: "COMPLETED" })
-        console.log(`[COMBO] ${task.taskType} completed successfully`)
-      } else {
-        const errorMsg = result.status === "rejected"
-          ? result.reason?.message || "未知错误"
-          : (result.value as any).error || "未知错误"
+        .catch(async (err) => {
+          console.error(`[COMBO_ASYNC] 网络错误 ${task.generationId}:`, err)
+          await prisma.generation.update({ where: { id: task.generationId }, data: { status: "FAILED" } }).catch(() => {})
+          await refundCreditsStandalone(userId, task.cost, `套餐${task.taskType === "MAIN_IMAGE" ? "主图" : "详情页"}生图失败退款 (网络异常)`)
+        })
 
-        await prisma.generation.update({ where: { id: task.generationId }, data: { status: "FAILED" } })
-        await refundCreditsStandalone(userId, task.cost, `套餐${task.taskType === "MAIN_IMAGE" ? "主图" : "详情页"}生成失败退款`)
-        results.push({ taskType: task.taskType, id: task.generationId, status: "FAILED", error: errorMsg })
-        console.log(`[COMBO] ${task.taskType} failed: ${errorMsg}`)
-      }
+      results.push({ taskType: task.taskType, id: task.generationId, status: "COMPLETED" })
     }
   }
 
@@ -454,17 +455,14 @@ async function handleComboGeneration(
     select: { credits: true, bonusCredits: true },
   })
 
-  const allSucceeded = results.every((r) => r.status === "COMPLETED")
-  const allFailed = results.every((r) => r.status === "FAILED")
-
   return NextResponse.json({
-    success: !allFailed,
+    success: true,
     isCombo: true,
     results,
     credits: updatedUser?.credits ?? 0,
     bonusCredits: updatedUser?.bonusCredits ?? 0,
     totalCredits: (updatedUser?.credits ?? 0) + (updatedUser?.bonusCredits ?? 0),
-    message: allSucceeded ? "套餐生成完成" : allFailed ? "套餐生成失败，积分已退回" : "套餐部分生成成功，失败部分已退款",
+    message: "套餐任务已提交，正在处理中",
   })
 }
 
@@ -1028,29 +1026,44 @@ async function handleSingleGeneration(
       })
     }
 
-    // STANDARD 模式：同步等待 N8N 结果
-    const timeoutMs = taskType === "DETAIL_PAGE" ? 600_000 : 360_000
-    const n8nResult = await callN8N(webhookUrl, n8nPayload, timeoutMs)
-
-    if (!n8nResult.success) {
-      throw new Error(n8nResult.error)
-    }
-
-    // Extract keys from URLs before saving
-    const imageKeys = n8nResult.images.map(url => extractObjectKey(url) as string)
-    const fullImageKey = n8nResult.fullImageUrl ? extractObjectKey(n8nResult.fullImageUrl) as string : null
+    // STANDARD 模式：异步触发 N8N（fire-and-forget），与 PRO 模式保持一致
+    // 结果由 n8n 回调 /api/webhook/n8n → BullMQ Worker 上传 TOS 后写入 DB
+    console.log(`[GENERATE_API] STANDARD mode - 异步触发 N8N，立即返回 PROCESSING`)
 
     await prisma.generation.update({
       where: { id: pending.id },
-      data: { generatedImages: imageKeys, generatedImage: fullImageKey, status: "COMPLETED" },
+      data: { status: "PROCESSING" },
     })
 
-    const updatedUser = await prisma.user.findUnique({ where: { id: userId }, select: { credits: true, bonusCredits: true } })
+    fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(n8nPayload),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          console.error(`[STANDARD_ASYNC] N8N HTTP error for ${pending.id}: ${res.status} ${res.statusText}`)
+          await prisma.generation.update({ where: { id: pending.id }, data: { status: "FAILED" } }).catch(() => {})
+          await refundCreditsStandalone(userId, actualCost, `STANDARD模式生图失败退款 (N8N HTTP ${res.status})`)
+        } else {
+          console.log(`[STANDARD_ASYNC] N8N 请求已送达 ${pending.id}，等待 webhook 回调`)
+        }
+      })
+      .catch(async (err) => {
+        console.error(`[STANDARD_ASYNC] 网络错误 ${pending.id}:`, err)
+        await prisma.generation.update({ where: { id: pending.id }, data: { status: "FAILED" } }).catch(() => {})
+        await refundCreditsStandalone(userId, actualCost, `STANDARD模式生图失败退款 (网络异常)`)
+      })
+
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { credits: true, bonusCredits: true },
+    })
 
     return NextResponse.json({
       success: true,
       id: pending.id,
-      generatedImages: imageKeys.map(key => keyToCdnUrl(key)),
+      status: "PROCESSING",
       credits: updatedUser?.credits ?? 0,
       bonusCredits: updatedUser?.bonusCredits ?? 0,
       totalCredits: (updatedUser?.credits ?? 0) + (updatedUser?.bonusCredits ?? 0),

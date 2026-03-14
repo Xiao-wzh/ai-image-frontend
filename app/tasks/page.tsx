@@ -73,13 +73,14 @@ export default function TasksPage() {
         }
     }, [page, debouncedQuery, fetchPage])
 
-    // Auto-refresh when PENDING or PROCESSING items exist
+    // Auto-refresh when PENDING/PROCESSING items exist OR any item has editingImageIndexes
     useEffect(() => {
         const hasPendingOrProcessing = items.some((x) => {
             const s = String(x.status || "").toUpperCase()
             return s === "PENDING" || s === "PROCESSING"
         })
-        if (!hasPendingOrProcessing) return
+        const hasEditing = items.some((x) => (x.editingImageIndexes?.length || 0) > 0)
+        if (!hasPendingOrProcessing && !hasEditing) return
 
         let cancelled = false
         let timer: any

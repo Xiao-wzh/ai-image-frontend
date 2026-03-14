@@ -28,6 +28,24 @@ module.exports = {
                 PORT: 3000
             }
         },
+        // TOS 上传 Worker 进程（并发=3，防止带宽爆炸）
+        {
+            name: "tos-upload-worker",
+            script: "npx",
+            args: "tsx workers/tos-upload-worker.ts",
+            cwd: "/var/www/ai-image-frontend/ai-image-frontend",
+            instances: 1,              // 单实例，并发由 BullMQ concurrency=3 控制
+            autorestart: true,
+            time: true,
+            max_memory_restart: "500M",
+            restart_delay: 3000,
+            max_restarts: 10,
+            min_uptime: 5000,
+            env: {
+                ...envConfig,
+                NODE_ENV: "production"
+            }
+        },
         // 去水印 Worker 进程
         {
             name: "watermark-worker",
