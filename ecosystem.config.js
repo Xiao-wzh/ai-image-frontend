@@ -38,11 +38,7 @@ module.exports = {
             script: "npx",
             args: "tsx workers/tos-upload-worker.ts",
             cwd: "/var/www/ai-image-frontend/ai-image-frontend",
-            merge_logs: true,
-            log_date_format: "YYYY-MM-DD HH:mm:ss",
-            out_file: "/var/www/ai-image-frontend/logs/app.log",
-            error_file: "/var/www/ai-image-frontend/logs/app.log",
-            instances: 1,              // 单实例，并发由 BullMQ concurrency=3 控制
+            instances: 1,
             autorestart: true,
             time: true,
             max_memory_restart: "500M",
@@ -53,6 +49,7 @@ module.exports = {
                 ...envConfig,
                 NODE_ENV: "production"
             }
+            // 删除 out_file 和 error_file，让日志输出到 PM2 的默认位置
         },
         // 去水印 Worker 进程
         {
