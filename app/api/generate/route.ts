@@ -326,17 +326,77 @@ async function handleComboGeneration(
   console.log(`[COMBO] Created generations: Main=${mainGen.id}, Detail=${detailGen.id}`)
 
   // Fetch prompt templates for both
+  // 先查询平台 ID
+  const platform = await prisma.platform.findFirst({
+    where: { key: platformKey },
+    select: { id: true },
+  })
+  const platformId = platform?.id
+
   const [mainPrompt, detailPrompt] = await Promise.all([
     // 主图：仅使用创意模式提示词（不允许落到克隆模式）
     prisma.productTypePrompt.findFirst({
-      where: { isActive: true, productType, taskType: "MAIN_IMAGE", mode: "CREATIVE", userId: null },
+      where: { isActive: true, platformId, productType, taskType: "MAIN_IMAGE", mode: "CREATIVE", qualityMode: "STANDARD", userId: null },
       orderBy: { updatedAt: "desc" },
     }),
-    // 详情页（套餐勾选）：仅使用创意模式提示词（不允许落到克隆模式）
-    prisma.productTypePrompt.findFirst({
-      where: { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", userId: null },
-      orderBy: { updatedAt: "desc" },
-    }),
+    // 详情页（套餐勾选）：多步骤 fallback
+    // Step 1: 同平台 + 同商品类型 + STANDARD 模式
+    (async () => {
+      let prompt = await prisma.productTypePrompt.findFirst({
+        where: { isActive: true, platformId, productType, taskType: "DETAIL_PAGE", mode: "CREATIVE", qualityMode: "STANDARD", userId: null },
+        orderBy: { updatedAt: "desc" },
+      })
+      if (prompt) return prompt
+
+      // Step 2: 同平台 + 同商品类型 + PRO 模式
+      prompt = await prisma.productTypePrompt.findFirst({
+        where: { isActive: true, platformId, productType, taskType: "DETAIL_PAGE", mode: "CREATIVE", qualityMode: "PRO", userId: null },
+        orderBy: { updatedAt: "desc" },
+      })
+      if (prompt) return prompt
+
+      // Step 3: 同平台 + 任意商品类型 + STANDARD 模式
+      prompt = await prisma.productTypePrompt.findFirst({
+        where: { isActive: true, platformId, taskType: "DETAIL_PAGE", mode: "CREATIVE", qualityMode: "STANDARD", userId: null },
+        orderBy: { updatedAt: "desc" },
+      })
+      if (prompt) return prompt
+
+      // Step 4: 同平台 + 任意商品类型 + PRO 模式
+      prompt = await prisma.productTypePrompt.findFirst({
+        where: { isActive: true, platformId, taskType: "DETAIL_PAGE", mode: "CREATIVE", qualityMode: "PRO", userId: null },
+        orderBy: { updatedAt: "desc" },
+      })
+      if (prompt) return prompt
+
+      // Step 5: 任意平台 + 同商品类型 + STANDARD 模式
+      prompt = await prisma.productTypePrompt.findFirst({
+        where: { isActive: true, productType, taskType: "DETAIL_PAGE", mode: "CREATIVE", qualityMode: "STANDARD", userId: null },
+        orderBy: { updatedAt: "desc" },
+      })
+      if (prompt) return prompt
+
+      // Step 6: 任意平台 + 同商品类型 + PRO 模式
+      prompt = await prisma.productTypePrompt.findFirst({
+        where: { isActive: true, productType, taskType: "DETAIL_PAGE", mode: "CREATIVE", qualityMode: "PRO", userId: null },
+        orderBy: { updatedAt: "desc" },
+      })
+      if (prompt) return prompt
+
+      // Step 7: 任意平台 + 任意商品类型 + STANDARD 模式
+      prompt = await prisma.productTypePrompt.findFirst({
+        where: { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", qualityMode: "STANDARD", userId: null },
+        orderBy: { updatedAt: "desc" },
+      })
+      if (prompt) return prompt
+
+      // Step 8: 任意平台 + 任意商品类型 + PRO 模式
+      prompt = await prisma.productTypePrompt.findFirst({
+        where: { isActive: true, taskType: "DETAIL_PAGE", mode: "CREATIVE", qualityMode: "PRO", userId: null },
+        orderBy: { updatedAt: "desc" },
+      })
+      return prompt
+    })(),
   ])
 
   // If prompt is missing, fail the corresponding task and refund
