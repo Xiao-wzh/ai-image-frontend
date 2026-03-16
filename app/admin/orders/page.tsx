@@ -131,6 +131,16 @@ export default function AdminOrdersPage() {
     const [dailyRevenue, setDailyRevenue] = useState<{ today: number; yesterday: number }>({ today: 0, yesterday: 0 })
     const [chartData, setChartData] = useState<ChartDataPoint[]>([])
     const [todayOrderCount, setTodayOrderCount] = useState(0)
+    const [monthlyRevenue, setMonthlyRevenue] = useState(0)
+    const [monthlyPlanBreakdown, setMonthlyPlanBreakdown] = useState<Array<{ planName: string; count: number; amount: number }>>([])
+    const [todayPlanBreakdown, setTodayPlanBreakdown] = useState<Array<{ planName: string; count: number; amount: number }>>([])
+
+    // 查询特定日期/月份的收入
+    const [queryDate, setQueryDate] = useState('')
+    const [queryMonth, setQueryMonth] = useState('')
+    const [queryDateRevenue, setQueryDateRevenue] = useState<{ amount: number; planBreakdown: Array<{ planName: string; count: number; amount: number }> } | null>(null)
+    const [queryMonthRevenue, setQueryMonthRevenue] = useState<{ amount: number; planBreakdown: Array<{ planName: string; count: number; amount: number }> } | null>(null)
+    const [queryLoading, setQueryLoading] = useState(false)
 
     // --- 加载状态 ---
     const [loading, setLoading] = useState(true)
@@ -187,6 +197,9 @@ export default function AdminOrdersPage() {
                     setDayGroups(mergeOrdersIntoDayGroups([], newOrders))
                     if (data.stats) setStats(data.stats)
                     if (data.dailyRevenue) setDailyRevenue(data.dailyRevenue)
+                    if (data.monthlyRevenue !== undefined) setMonthlyRevenue(data.monthlyRevenue)
+                    if (data.monthlyPlanBreakdown) setMonthlyPlanBreakdown(data.monthlyPlanBreakdown)
+                    if (data.todayPlanBreakdown) setTodayPlanBreakdown(data.todayPlanBreakdown)
                     if (data.chartData) setChartData(data.chartData)
                     if (data.todayOrderCount !== undefined) setTodayOrderCount(data.todayOrderCount)
                 }
@@ -242,6 +255,40 @@ export default function AdminOrdersPage() {
         fetchOrders(null, null, false)
     }, [fetchOrders])
 
+    // ========== 查询特定日期收入 ==========
+    const handleQueryDate = useCallback(async () => {
+        if (!queryDate) return
+        setQueryLoading(true)
+        try {
+            const res = await fetch(`/api/admin/orders/revenue?date=${queryDate}`)
+            const data = await res.json()
+            if (data.success) {
+                setQueryDateRevenue(data.data)
+            }
+        } catch (e) {
+            console.error("查询日期收入失败", e)
+        } finally {
+            setQueryLoading(false)
+        }
+    }, [queryDate])
+
+    // ========== 查询特定月份收入 ==========
+    const handleQueryMonth = useCallback(async () => {
+        if (!queryMonth) return
+        setQueryLoading(true)
+        try {
+            const res = await fetch(`/api/admin/orders/revenue?month=${queryMonth}`)
+            const data = await res.json()
+            if (data.success) {
+                setQueryMonthRevenue(data.data)
+            }
+        } catch (e) {
+            console.error("查询月份收入失败", e)
+        } finally {
+            setQueryLoading(false)
+        }
+    }, [queryMonth])
+
     // --- 统计 ---
     const paidStats = stats['PAID'] || { count: 0, amount: 0 }
     const pendingStats = stats['PAYING'] || { count: 0, amount: 0 }
@@ -293,13 +340,32 @@ export default function AdminOrdersPage() {
                                     <div className="text-yellow-400 text-sm">¥{(pendingStats.amount / 100).toFixed(2)}</div>
                                 </div>
                                 <div className="p-4 rounded-2xl border border-white/10 bg-slate-900/40">
-                                    <div className="text-slate-400 text-sm">已加载订单</div>
-                                    <div className="text-2xl font-bold text-white mt-1">{totalOrders}</div>
+                                    <div className="text-slate-400 text-sm">当月收入</div>
+                                    <div className="text-2xl font-bold text-emerald-400 mt-1">¥{(monthlyRevenue / 100).toFixed(2)}</div>
+                                    <div className="text-xs text-slate-500 mt-1">
+                                        {monthlyPlanBreakdown.length > 0 && (
+                                            <div className="space-y-0.5">
+                                                {monthlyPlanBreakdown.slice(0, 2).map((plan, idx) => (
+                                                    <div key={idx} className="text-slate-400">{plan.planName}: {plan.count}笔</div>
+                                                ))}
+                                                {monthlyPlanBreakdown.length > 2 && <div className="text-slate-500">+{monthlyPlanBreakdown.length - 2}个套餐</div>}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="p-4 rounded-2xl border border-white/10 bg-slate-900/40">
                                     <div className="text-slate-400 text-sm">今日收入</div>
                                     <div className="text-2xl font-bold text-emerald-400 mt-1">¥{(dailyRevenue.today / 100).toFixed(2)}</div>
-                                    <div className="text-xs text-slate-500 mt-0.5">昨日: ¥{(dailyRevenue.yesterday / 100).toFixed(2)}</div>
+                                    <div className="text-xs text-slate-500 mt-1">
+                                        昨日: ¥{(dailyRevenue.yesterday / 100).toFixed(2)}
+                                    </div>
+                                    {todayPlanBreakdown.length > 0 && (
+                                        <div className="text-xs text-slate-400 mt-2 space-y-0.5 border-t border-white/10 pt-2">
+                                            {todayPlanBreakdown.map((plan, idx) => (
+                                                <div key={idx}>{plan.planName}: {plan.count}笔</div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="p-4 rounded-2xl border border-white/10 bg-slate-900/40">
                                     <div className="flex items-center gap-1.5 text-slate-400 text-sm">
@@ -339,6 +405,65 @@ export default function AdminOrdersPage() {
                                             <Area type="monotone" dataKey="amount" stroke="#a855f7" strokeWidth={2.5} fill="url(#revenueGradient)" dot={{ r: 3, fill: '#a855f7', stroke: '#1e293b', strokeWidth: 2 }} activeDot={{ r: 5, fill: '#a855f7', stroke: '#fff', strokeWidth: 2 }} />
                                         </AreaChart>
                                     </ResponsiveContainer>
+                                </div>
+                            </div>
+
+                            {/* 收入查询面板 */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                                {/* 查询特定日期 */}
+                                <div className="p-6 rounded-2xl border border-white/10 bg-slate-900/40">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <Calendar className="w-4 h-4 text-blue-400" />
+                                        <span className="text-white font-medium text-sm">查询特定日期收入</span>
+                                    </div>
+                                    <div className="flex gap-2 mb-4">
+                                        <input type="date" value={queryDate} onChange={(e) => setQueryDate(e.target.value)}
+                                            className="flex-1 h-9 px-3 rounded-xl border border-white/10 bg-slate-900/60 text-sm text-white focus:outline-none focus:border-blue-500 transition-colors" />
+                                        <Button onClick={handleQueryDate} disabled={queryLoading || !queryDate}
+                                            className="h-9 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm cursor-pointer">
+                                            {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : '查询'}
+                                        </Button>
+                                    </div>
+                                    {queryDateRevenue && (
+                                        <div className="space-y-3 p-4 rounded-xl bg-blue-500/10 border border-blue-500/20">
+                                            <div className="text-2xl font-bold text-blue-400">¥{(queryDateRevenue.amount / 100).toFixed(2)}</div>
+                                            {queryDateRevenue.planBreakdown.length > 0 && (
+                                                <div className="text-xs text-slate-400 space-y-1">
+                                                    {queryDateRevenue.planBreakdown.map((plan, idx) => (
+                                                        <div key={idx}>{plan.planName}: {plan.count}笔 · ¥{(plan.amount / 100).toFixed(2)}</div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 查询特定月份 */}
+                                <div className="p-6 rounded-2xl border border-white/10 bg-slate-900/40">
+                                    <div className="flex items-center gap-2 mb-4">
+                                        <Calendar className="w-4 h-4 text-green-400" />
+                                        <span className="text-white font-medium text-sm">查询特定月份收入</span>
+                                    </div>
+                                    <div className="flex gap-2 mb-4">
+                                        <input type="month" value={queryMonth} onChange={(e) => setQueryMonth(e.target.value)}
+                                            className="flex-1 h-9 px-3 rounded-xl border border-white/10 bg-slate-900/60 text-sm text-white focus:outline-none focus:border-green-500 transition-colors" />
+                                        <Button onClick={handleQueryMonth} disabled={queryLoading || !queryMonth}
+                                            className="h-9 px-4 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm cursor-pointer">
+                                            {queryLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : '查询'}
+                                        </Button>
+                                    </div>
+                                    {queryMonthRevenue && (
+                                        <div className="space-y-3 p-4 rounded-xl bg-green-500/10 border border-green-500/20">
+                                            <div className="text-2xl font-bold text-green-400">¥{(queryMonthRevenue.amount / 100).toFixed(2)}</div>
+                                            {queryMonthRevenue.planBreakdown.length > 0 && (
+                                                <div className="text-xs text-slate-400 space-y-1 max-h-32 overflow-y-auto">
+                                                    {queryMonthRevenue.planBreakdown.map((plan, idx) => (
+                                                        <div key={idx}>{plan.planName}: {plan.count}笔 · ¥{(plan.amount / 100).toFixed(2)}</div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

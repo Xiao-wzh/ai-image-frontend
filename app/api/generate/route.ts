@@ -301,11 +301,17 @@ async function handleComboGeneration(
         userId,
         productName,
         productType,
+        platformKey,
         taskType: "MAIN_IMAGE",
+        mode: "CREATIVE",
+        qualityMode: "STANDARD",
         originalImage: imageUrls,
         status: "PENDING",
         isWatermarkUnlocked: true, // Combo bonus: auto-unlock watermark
         outputLanguage,
+        costPerImage: 0, // 套餐按次计费，不按张计费
+        totalCost: mainImageCost,
+        imageCount: 9, // 套餐固定生成9张，用于申诉退款计算
       },
     }),
     prisma.generation.create({
@@ -313,12 +319,18 @@ async function handleComboGeneration(
         userId,
         productName,
         productType,
+        platformKey,
         taskType: "DETAIL_PAGE",
+        mode: "CREATIVE",
+        qualityMode: "STANDARD",
         originalImage: imageUrls,
         status: "PENDING",
         isWatermarkUnlocked: true, // Bonus: auto-unlock watermark for combo
         outputLanguage,
         requestId: comboRequestId ? `${comboRequestId}_detail` : null, // 加后缀区分，因为 requestId 字段有唯一约束
+        costPerImage: 0, // 套餐按次计费，不按张计费
+        totalCost: detailPageCost,
+        imageCount: 9, // 套餐固定生成9张，用于申诉退款计算
       },
     }),
   ])

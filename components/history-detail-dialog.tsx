@@ -768,44 +768,81 @@ export function HistoryDetailDialog({
                 ) : item?.taskType === "DETAIL_PAGE" && detailViewMode === "SLICES" ? (
                   /* Detail Page: SLICES Mode (Grid) - with edit functionality */
                   <div className={`grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/40 ${previewImage || selectedImage ? "pointer-events-none" : ""}`}>
-                    {displayImages.map((img, i) => (
-                      <motion.button
-                        key={i}
-                        type="button"
-                        className="relative aspect-[2/3] group overflow-hidden rounded-xl border border-white/10 bg-black/20 cursor-pointer"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.2, delay: i * 0.03 }}
-                        whileHover={item?.editingImageIndexes?.includes(i) ? undefined : { scale: 1.02 }}
-                        onClick={() => {
-                          if (item?.editingImageIndexes?.length) return
-                          setSelectedImage(img)
-                          setSelectedImageIndex(i)
-                        }}
-                        disabled={!!item?.editingImageIndexes?.length}
-                        title={item?.editingImageIndexes?.includes(i) ? "重绘中..." : "点击查看/编辑"}
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={img} alt={`Slice ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                    {displayImages.map((img, i) => {
+                      const isSelected = isAppealMode && selectedAppealImages.includes(img)
+                      return (
+                        <motion.button
+                          key={i}
+                          type="button"
+                          className={cn(
+                            "relative aspect-[2/3] group overflow-hidden rounded-xl border border-white/10 bg-black/20 cursor-pointer",
+                            isAppealMode && "hover:scale-105 transition-transform",
+                            isSelected && "ring-4 ring-orange-500 border-orange-500"
+                          )}
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ duration: 0.2, delay: i * 0.03 }}
+                          whileHover={item?.editingImageIndexes?.includes(i) ? undefined : { scale: 1.02 }}
+                          onClick={() => {
+                            if (item?.editingImageIndexes?.length) return
+                            if (isAppealMode) {
+                              // 申诉选择模式：切换选中状态
+                              setSelectedAppealImages(prev =>
+                                prev.includes(img)
+                                  ? prev.filter(url => url !== img)
+                                  : [...prev, img]
+                              )
+                            } else {
+                              // 正常模式：打开编辑
+                              setSelectedImage(img)
+                              setSelectedImageIndex(i)
+                            }
+                          }}
+                          disabled={!!item?.editingImageIndexes?.length}
+                          title={
+                            item?.editingImageIndexes?.includes(i)
+                              ? "重绘中..."
+                              : isAppealMode
+                              ? isSelected ? "点击取消选择" : "点击选择"
+                              : "点击查看/编辑"
+                          }
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={img} alt={`Slice ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
 
-                        {/* Editing overlay */}
-                        {item?.editingImageIndexes?.includes(i) ? (
-                          <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
-                            <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
-                            <span className="text-xs text-white/80">重绘中...</span>
-                          </div>
-                        ) : (
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                            <Pencil className="w-6 h-6 text-white mb-1" />
-                            <span className="text-xs text-white/80">点击编辑</span>
-                          </div>
-                        )}
+                          {/* 申诉选择模式：选中标记 */}
+                          {isAppealMode && isSelected && (
+                            <div className="absolute top-2 right-2 w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center shadow-lg">
+                              <Check className="w-5 h-5 text-white" />
+                            </div>
+                          )}
 
-                        <div className="absolute bottom-2 right-2 text-[10px] text-white/60 bg-black/40 px-2 py-0.5 rounded">
-                          {i + 1}/{displayImages.length}
-                        </div>
-                      </motion.button>
-                    ))}
+                          {/* 申诉选择模式：未选中提示 */}
+                          {isAppealMode && !isSelected && (
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                              <span className="text-sm text-white font-medium">点击选择</span>
+                            </div>
+                          )}
+
+                          {/* Editing overlay */}
+                          {!isAppealMode && item?.editingImageIndexes?.includes(i) ? (
+                            <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
+                              <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                              <span className="text-xs text-white/80">重绘中...</span>
+                            </div>
+                          ) : !isAppealMode ? (
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
+                              <Pencil className="w-6 h-6 text-white mb-1" />
+                              <span className="text-xs text-white/80">点击编辑</span>
+                            </div>
+                          ) : null}
+
+                          <div className="absolute bottom-2 right-2 text-[10px] text-white/60 bg-black/40 px-2 py-0.5 rounded">
+                            {i + 1}/{displayImages.length}
+                          </div>
+                        </motion.button>
+                      )
+                    })}
                   </div>
 
                 ) : viewMode === "grid" ? (
@@ -976,6 +1013,10 @@ export function HistoryDetailDialog({
                     onClick={() => {
                       setIsAppealMode(true)
                       setSelectedAppealImages([])
+                      // 详情页自动切换到切片模式，方便用户选择图片
+                      if (item?.taskType === "DETAIL_PAGE") {
+                        setDetailViewMode("SLICES")
+                      }
                     }}
                     variant="outline"
                     className="h-11 rounded-xl border-orange-400/50 bg-orange-400/10 hover:bg-orange-400/20 text-orange-300"

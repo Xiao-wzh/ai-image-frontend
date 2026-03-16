@@ -51,28 +51,41 @@ export async function POST(req: NextRequest) {
         if (action === "APPROVE") {
             // 按张计算退款
             let refundAmount: number
+            let useAppealRefundAmount = false
 
             if (appeal.appealedImages && appeal.appealedImages.length > 0) {
-                // 新申诉：按选中图片数量计算
-                const totalImages = generation.qualityMode === "STANDARD"
-                    ? Math.max(generation.generatedImages.length, 9)
-                    : (generation.imageCount || 9)
+                // 新申诉：按实际生成的图片数计算（不管是STANDARD还是PRO）
+                // 关键：使用 generatedImages.length（实际生成的图片数）
+                // 而不是 imageCount（用户选择的数量）
+                const totalImages = generation.generatedImages.length
 
                 const perImageRefund = Math.floor(generation.totalCost / totalImages)
                 refundAmount = perImageRefund * appeal.appealedImages.length
 
-                console.log(`[Appeal] 按张退款计算: 总图片=${totalImages}, 单张=${perImageRefund}, 申诉${appeal.appealedImages.length}张, 退款=${refundAmount}`)
+                console.log(`[Appeal] 按张退款计算: 实际生成=${totalImages}张, 单张=${perImageRefund}, 申诉${appeal.appealedImages.length}张, 退款=${refundAmount}`)
+
+                // 特殊处理：如果计算出的退款为0，则使用 appeal.refundAmount 按申诉图片数分摊
+                if (refundAmount === 0 && appeal.refundAmount > 0) {
+                    const totalImages = generation.generatedImages.length
+                    // 先除以实际生成的图片数，再乘以申诉图片数
+                    const perImageRefund = Math.floor(appeal.refundAmount / totalImages)
+                    refundAmount = perImageRefund * appeal.appealedImages.length
+                    useAppealRefundAmount = true
+                    console.log(`[Appeal] 退款为0，使用申诉记录中的 refundAmount 分摊: 总预估=${appeal.refundAmount}, 实际生成=${totalImages}张, 单张=${perImageRefund}, 申诉${appeal.appealedImages.length}张, 实际退款=${refundAmount}`)
+                }
             } else {
                 // 旧申诉兼容：按原逻辑退还剩余扣费
                 refundAmount = generation.totalCost - (generation.refundAmount || 0)
                 console.log(`[Appeal] 旧数据兼容: 总扣费=${generation.totalCost}, 已退=${generation.refundAmount}, 本次退=${refundAmount}`)
             }
 
-            // 边界检查：退款不能超过剩余可退金额
-            const maxRefund = generation.totalCost - (generation.refundAmount || 0)
-            if (refundAmount > maxRefund) {
-                refundAmount = maxRefund
-                console.warn(`[Appeal] 退款金额超限，调整为剩余可退金额: ${refundAmount}`)
+            // 边界检查：退款不能超过剩余可退金额（使用 appeal.refundAmount 时跳过此检查）
+            if (!useAppealRefundAmount) {
+                const maxRefund = generation.totalCost - (generation.refundAmount || 0)
+                if (refundAmount > maxRefund) {
+                    refundAmount = maxRefund
+                    console.warn(`[Appeal] 退款金额超限，调整为剩余可退金额: ${refundAmount}`)
+                }
             }
 
             if (refundAmount <= 0) {

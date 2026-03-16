@@ -181,6 +181,52 @@ export async function GET(req: NextRequest) {
             }),
         ]);
 
+        // ========== 当月收入 & 套餐出售情况 ==========
+        const monthStart = getUTC8DayStart(utc8Now.getFullYear(), utc8Now.getMonth(), 1);
+        const nextMonthStart = new Date(monthStart.getTime() + 32 * 24 * 60 * 60 * 1000);
+        const nextMonthStart2 = getUTC8DayStart(nextMonthStart.getFullYear(), nextMonthStart.getMonth(), 1);
+
+        const monthlyRevenue = await prisma.order.aggregate({
+            where: { status: 'PAID', paidAt: { gte: monthStart, lt: nextMonthStart2 } },
+            _sum: { amount: true },
+        });
+
+        // 当月套餐出售情况
+        const monthlyPlanSales = await prisma.order.groupBy({
+            by: ['planId'],
+            where: { status: 'PAID', paidAt: { gte: monthStart, lt: nextMonthStart2 } },
+            _count: { id: true },
+            _sum: { amount: true },
+        });
+
+        // 获取套餐名称
+        const planIds = monthlyPlanSales.map(s => s.planId).filter(Boolean);
+        const plans = planIds.length > 0 ? await prisma.plan.findMany({
+            where: { id: { in: planIds } },
+            select: { id: true, name: true },
+        }) : [];
+        const planMap = new Map(plans.map(p => [p.id, p.name]));
+
+        const monthlyPlanBreakdown = monthlyPlanSales.map(s => ({
+            planName: s.planId ? planMap.get(s.planId) || '未知套餐' : '未知套餐',
+            count: s._count.id,
+            amount: s._sum.amount || 0,
+        }));
+
+        // ========== 今日套餐出售情况 ==========
+        const todayPlanSales = await prisma.order.groupBy({
+            by: ['planId'],
+            where: { status: 'PAID', paidAt: { gte: todayStart, lt: tomorrowStart } },
+            _count: { id: true },
+            _sum: { amount: true },
+        });
+
+        const todayPlanBreakdown = todayPlanSales.map(s => ({
+            planName: s.planId ? planMap.get(s.planId) || '未知套餐' : '未知套餐',
+            count: s._count.id,
+            amount: s._sum.amount || 0,
+        }));
+
         // ========== 近7天收入趋势（单次DB查询 + JS聚合 + 零填充） ==========
         const CHART_DAYS = 7;
         const chartStartDate = new Date(todayStart.getTime() - (CHART_DAYS - 1) * 24 * 60 * 60 * 1000);
@@ -250,6 +296,9 @@ export async function GET(req: NextRequest) {
                 today: todayRevenue._sum.amount || 0,
                 yesterday: yesterdayRevenue._sum.amount || 0,
             },
+            monthlyRevenue: monthlyRevenue._sum.amount || 0,
+            monthlyPlanBreakdown,
+            todayPlanBreakdown,
             chartData,
             todayOrderCount,
         });

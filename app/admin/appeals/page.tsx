@@ -139,7 +139,7 @@ export default function AdminAppealsPage() {
             const data = await res.json()
             if (!res.ok) throw new Error(data.error || "操作失败")
 
-            toast.success(`申诉已通过，已退还 ${approvingAppeal.refundAmount} 积分`)
+            toast.success(`申诉已通过，已退还 ${data.refundAmount} 积分`)
             setApproveOpen(false)
             setApprovingAppeal(null)
             setApproveNote("")
