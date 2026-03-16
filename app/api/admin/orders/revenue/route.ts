@@ -6,28 +6,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/auth';
+import { requireFinanceOrAdmin } from '@/lib/check-admin';
 import prisma from '@/lib/prisma';
 
 export const runtime = 'nodejs';
 
 export async function GET(req: NextRequest) {
+    const guard = await requireFinanceOrAdmin()
+    if (!guard.ok) {
+        return NextResponse.json({ error: guard.error }, { status: guard.status })
+    }
+
     try {
-        const session = await auth();
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: '请先登录' }, { status: 401 });
-        }
-
-        // 检查是否为管理员
-        const user = await prisma.user.findUnique({
-            where: { id: session.user.id },
-            select: { role: true },
-        });
-
-        if (user?.role !== 'ADMIN') {
-            return NextResponse.json({ error: '无权限访问' }, { status: 403 });
-        }
-
         const { searchParams } = new URL(req.url);
         const dateStr = searchParams.get('date'); // YYYY-MM-DD
         const monthStr = searchParams.get('month'); // YYYY-MM

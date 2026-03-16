@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/check-admin"
+import { requireReviewerOrAdmin } from "@/lib/check-admin"
 import prisma from "@/lib/prisma"
 import { transformGenerationUrls } from "@/lib/cdnUrl"
 
@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic"
  * Get all appeals for admin review
  */
 export async function GET(req: NextRequest) {
-    const guard = await requireAdmin()
+    const guard = await requireReviewerOrAdmin()
     if (!guard.ok) {
         return NextResponse.json({ error: guard.error }, { status: guard.status })
     }

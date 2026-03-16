@@ -50,6 +50,16 @@ const adminItems: NavItem[] = [
   { icon: Zap, label: "拉新活动", href: "/admin/activity" },
 ]
 
+// 财务员专属导航（仅订单管理）
+const financeItems: NavItem[] = [
+  { icon: Receipt, label: "订单管理", href: "/admin/orders" },
+]
+
+// 审核员专属导航（仅售后审核）
+const reviewerItems: NavItem[] = [
+  { icon: ShieldCheck, label: "售后审核", href: "/admin/appeals" },
+]
+
 
 export function Sidebar() {
   const { data: session, status } = useSession()
@@ -190,6 +200,58 @@ export function Sidebar() {
                       isActive
                         ? "bg-gradient-to-r from-orange-600 to-red-600 text-white shadow-lg"
                         : "text-orange-400/70 hover:text-orange-300 hover:bg-white/5",
+                    )}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </button>
+                )
+              })}
+            </>
+          )}
+
+          {/* 财务员菜单 */}
+          {session?.user?.role === "FINANCE" && (
+            <>
+              <div className="my-3 border-t border-white/10" />
+              <div className="text-xs text-slate-500 px-4 py-1 font-medium">财务</div>
+              {financeItems.map((item) => {
+                const isActive = pathname?.startsWith(item.href)
+                return (
+                  <button
+                    key={item.label}
+                    onClick={() => router.push(item.href)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium",
+                      isActive
+                        ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg"
+                        : "text-blue-400/70 hover:text-blue-300 hover:bg-white/5",
+                    )}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    <span>{item.label}</span>
+                  </button>
+                )
+              })}
+            </>
+          )}
+
+          {/* 审核员菜单 */}
+          {session?.user?.role === "REVIEWER" && (
+            <>
+              <div className="my-3 border-t border-white/10" />
+              <div className="text-xs text-slate-500 px-4 py-1 font-medium">审核</div>
+              {reviewerItems.map((item) => {
+                const isActive = pathname?.startsWith(item.href)
+                return (
+                  <button
+                    key={item.label}
+                    onClick={() => router.push(item.href)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium",
+                      isActive
+                        ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg"
+                        : "text-emerald-400/70 hover:text-emerald-300 hover:bg-white/5",
                     )}
                   >
                     <item.icon className="w-4 h-4" />

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { requireAdmin } from "@/lib/check-admin"
+import { requireReviewerOrAdmin } from "@/lib/check-admin"
 import prisma from "@/lib/prisma"
 
 export const runtime = "nodejs"
@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic"
  * action: "APPROVE" or "REJECT"
  */
 export async function POST(req: NextRequest) {
-    const guard = await requireAdmin()
+    const guard = await requireReviewerOrAdmin()
     if (!guard.ok) {
         return NextResponse.json({ error: guard.error }, { status: guard.status })
     }
