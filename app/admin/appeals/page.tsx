@@ -13,6 +13,7 @@ import {
     X,
     Loader2,
     Crown,
+    Eye,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -26,6 +27,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog"
+import { AppealComparisonModal } from "@/components/admin/appeal-comparison-modal"
 
 type Appeal = {
     id: string
@@ -35,6 +37,7 @@ type Appeal = {
     status: "PENDING" | "APPROVED" | "REJECTED"
     refundAmount: number
     adminNote: string | null
+    appealedImages: string[]  // 新增：申诉的具体图片
     createdAt: string
     user: {
         id: string
@@ -52,6 +55,7 @@ type Appeal = {
         imageCount?: number | null       // PRO: 期望张数
         costPerImage?: number | null     // PRO: 单张成本快照
         totalCost?: number | null        // 总费用
+        refundAmount?: number | null     // 已退款金额
         generatedImages: string[]
         generatedImage: string | null
         originalImage: string[]
@@ -74,6 +78,10 @@ export default function AdminAppealsPage() {
     const [stats, setStats] = useState<Stats | null>(null)
     const [loading, setLoading] = useState(true)
     const [statusFilter, setStatusFilter] = useState<string>("all")
+
+    // Comparison modal
+    const [comparisonOpen, setComparisonOpen] = useState(false)
+    const [selectedAppeal, setSelectedAppeal] = useState<Appeal | null>(null)
 
     // Preview dialog
     const [previewOpen, setPreviewOpen] = useState(false)
@@ -140,6 +148,23 @@ export default function AdminAppealsPage() {
             toast.error(err.message || "操作失败")
         } finally {
             setProcessing(null)
+        }
+    }
+
+    // 计算预估退款金额
+    const calculateEstimatedRefund = (appeal: Appeal) => {
+        const generation = appeal.generation
+
+        if (appeal.appealedImages && appeal.appealedImages.length > 0) {
+            // 按张计算
+            const totalImages = generation.qualityMode === "STANDARD"
+                ? Math.max(generation.generatedImages.length, 9)
+                : (generation.imageCount || 9)
+            const perImageRefund = Math.floor((generation.totalCost || 0) / totalImages)
+            return perImageRefund * appeal.appealedImages.length
+        } else {
+            // 旧数据：退还剩余扣费
+            return (generation.totalCost || 0) - (generation.refundAmount || 0)
         }
     }
 
@@ -459,8 +484,38 @@ export default function AdminAppealsPage() {
 
                                                 {/* Reason */}
                                                 <td className="p-4">
-                                                    <div className="text-sm text-slate-300 max-w-[200px] line-clamp-2" title={appeal.reason}>
-                                                        {appeal.reason}
+                                                    <div className="space-y-2">
+                                                        <div className="text-sm text-slate-300 max-w-[200px] line-clamp-2" title={appeal.reason}>
+                                                            {appeal.reason}
+                                                        </div>
+                                                        {/* 申诉的具体图片 */}
+                                                        {appeal.appealedImages && appeal.appealedImages.length > 0 && (
+                                                            <div className="space-y-1">
+                                                                <div className="text-xs font-medium text-slate-400">
+                                                                    申诉图片 ({appeal.appealedImages.length} 张)
+                                                                </div>
+                                                                <div className="flex gap-1 flex-wrap">
+                                                                    {appeal.appealedImages.slice(0, 4).map((url, idx) => (
+                                                                        <div
+                                                                            key={idx}
+                                                                            className="w-10 h-10 rounded overflow-hidden border border-white/10 bg-slate-900/40 cursor-pointer hover:scale-110 transition-transform"
+                                                                            onClick={() => window.open(url, '_blank')}
+                                                                        >
+                                                                            <img
+                                                                                src={url}
+                                                                                alt={`申诉图片 ${idx + 1}`}
+                                                                                className="w-full h-full object-cover"
+                                                                            />
+                                                                        </div>
+                                                                    ))}
+                                                                    {appeal.appealedImages.length > 4 && (
+                                                                        <div className="w-10 h-10 rounded bg-slate-800 flex items-center justify-center text-xs text-slate-400">
+                                                                            +{appeal.appealedImages.length - 4}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </td>
 
@@ -498,37 +553,51 @@ export default function AdminAppealsPage() {
 
                                                 {/* Actions */}
                                                 <td className="p-4">
-                                                    {appeal.status === "PENDING" ? (
-                                                        <div className="flex gap-2">
-                                                            <Button
-                                                                onClick={() => openApproveDialog(appeal)}
-                                                                disabled={processing === appeal.id}
-                                                                size="sm"
-                                                                className="bg-green-600 hover:bg-green-700 text-white text-xs"
-                                                            >
-                                                                {processing === appeal.id ? (
-                                                                    <Loader2 className="w-3 h-3 animate-spin" />
-                                                                ) : (
-                                                                    <>
-                                                                        <CheckCircle className="w-3 h-3 mr-1" />
-                                                                        通过
-                                                                    </>
-                                                                )}
-                                                            </Button>
-                                                            <Button
-                                                                onClick={() => openRejectDialog(appeal)}
-                                                                disabled={processing === appeal.id}
-                                                                size="sm"
-                                                                variant="outline"
-                                                                className="border-red-500/50 text-red-400 hover:bg-red-500/10 text-xs"
-                                                            >
-                                                                <XCircle className="w-3 h-3 mr-1" />
-                                                                拒绝
-                                                            </Button>
-                                                        </div>
-                                                    ) : (
-                                                        <span className="text-xs text-slate-500">已处理</span>
-                                                    )}
+                                                    <div className="flex gap-2 flex-wrap">
+                                                        <Button
+                                                            onClick={() => {
+                                                                setSelectedAppeal(appeal)
+                                                                setComparisonOpen(true)
+                                                            }}
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10 text-xs"
+                                                        >
+                                                            <Eye className="w-3 h-3 mr-1" />
+                                                            对比
+                                                        </Button>
+                                                        {appeal.status === "PENDING" ? (
+                                                            <>
+                                                                <Button
+                                                                    onClick={() => openApproveDialog(appeal)}
+                                                                    disabled={processing === appeal.id}
+                                                                    size="sm"
+                                                                    className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                                                                >
+                                                                    {processing === appeal.id ? (
+                                                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                                                    ) : (
+                                                                        <>
+                                                                            <CheckCircle className="w-3 h-3 mr-1" />
+                                                                            通过
+                                                                        </>
+                                                                    )}
+                                                                </Button>
+                                                                <Button
+                                                                    onClick={() => openRejectDialog(appeal)}
+                                                                    disabled={processing === appeal.id}
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="border-red-500/50 text-red-400 hover:bg-red-500/10 text-xs"
+                                                                >
+                                                                    <XCircle className="w-3 h-3 mr-1" />
+                                                                    拒绝
+                                                                </Button>
+                                                            </>
+                                                        ) : (
+                                                            <span className="text-xs text-slate-500">已处理</span>
+                                                        )}
+                                                    </div>
                                                 </td>
                                             </motion.tr>
                                         ))}
@@ -601,9 +670,25 @@ export default function AdminAppealsPage() {
                             <DialogTitle className="text-white">通过申诉</DialogTitle>
                         </DialogHeader>
                         <div className="mt-4 space-y-4">
-                            <div className="text-sm text-slate-300">
-                                确认通过申诉？将退还 <span className="text-green-400 font-medium">{approvingAppeal?.refundAmount}</span> 积分给用户 <span className="text-purple-400">{approvingAppeal?.user.email}</span>
-                            </div>
+                            {approvingAppeal && (
+                                <div className="bg-green-500/10 border border-green-500/30 rounded-xl p-4">
+                                    <div className="flex items-center gap-2 text-green-400 mb-2">
+                                        <CheckCircle className="w-5 h-5" />
+                                        <span className="font-semibold">预估退款</span>
+                                    </div>
+                                    <div className="text-2xl font-bold text-green-400">
+                                        {calculateEstimatedRefund(approvingAppeal)} 积分
+                                    </div>
+                                    {approvingAppeal.appealedImages?.length > 0 && (
+                                        <div className="text-sm text-slate-400 mt-1">
+                                            申诉 {approvingAppeal.appealedImages.length} 张图片
+                                        </div>
+                                    )}
+                                    <div className="text-xs text-slate-500 mt-2">
+                                        退款给用户: {approvingAppeal.user.email}
+                                    </div>
+                                </div>
+                            )}
                             <div>
                                 <label className="text-sm text-slate-400 block mb-2">备注（可选）</label>
                                 <textarea
@@ -635,6 +720,13 @@ export default function AdminAppealsPage() {
                         </div>
                     </DialogContent>
                 </Dialog>
+
+                {/* Appeal Comparison Modal */}
+                <AppealComparisonModal
+                    open={comparisonOpen}
+                    onOpenChange={setComparisonOpen}
+                    appeal={selectedAppeal}
+                />
             </main>
         </div>
     )

@@ -648,11 +648,15 @@ async function handleSingleGeneration(
 
       // PRO 模式重试：按原始 costPerImage 计费
       if (qualityMode === "PRO") {
+        // 重试时保持原始计费参数
         costPerImage = (originalGeneration as any).costPerImage || costs.PRO_COST_PER_IMAGE
         imageCount = (originalGeneration as any).imageCount || 9
         aspectRatio = (originalGeneration as any).aspectRatio || "1:1"
-        totalCost = costPerImage * imageCount
+
+        // 关键修复：保持原始 totalCost，不重新计算（避免 55×9=495 的问题）
+        totalCost = (originalGeneration as any).totalCost || (costPerImage * imageCount)
         actualCost = totalCost
+        console.log(`[GENERATE_API] PRO retry: ${imageCount} images, costPerImage=${costPerImage}, totalCost=${totalCost}`)
       } else {
         actualCost = getRetryCost(taskType, costs)
         totalCost = actualCost
@@ -687,10 +691,17 @@ async function handleSingleGeneration(
       if (qualityMode === "PRO") {
         imageCount = Math.min(Math.max(Number(body?.imageCount) || 1, 1), 20)
         aspectRatio = String(body?.aspectRatio ?? "1:1").trim()
-        costPerImage = costs.PRO_COST_PER_IMAGE
-        totalCost = costPerImage * imageCount
+
+        // 9 张特惠套餐: 500 积分固定价，costPerImage=55 用于退款计算
+        if (imageCount === 9) {
+          costPerImage = 55  // Math.floor(500/9)，用于部分失败退款
+          totalCost = 500    // 实际支付特惠价
+        } else {
+          costPerImage = costs.PRO_COST_PER_IMAGE  // 100
+          totalCost = costPerImage * imageCount
+        }
         actualCost = totalCost
-        console.log(`[GENERATE_API] PRO mode: ${imageCount} images × ${costPerImage} = ${totalCost} credits`)
+        console.log(`[GENERATE_API] PRO mode: ${imageCount} images, costPerImage=${costPerImage}, totalCost=${totalCost}`)
       } else {
         totalCost = getStandardCost(taskType, costs)
         actualCost = totalCost

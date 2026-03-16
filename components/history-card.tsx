@@ -29,6 +29,7 @@ export type HistoryItem = {
   outputLanguage?: string // Output language for regeneration
   imageCount?: number // PRO: 用户指定生成张数
   costPerImage?: number // PRO: 单张成本快照（用于重试费用计算）
+  totalCost?: number // 总费用（用于申诉退款计算）
   refundAmount?: number // 已退款金额
   editingImageIndexes?: number[] // Images currently being edited
   appeal?: {

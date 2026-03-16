@@ -305,15 +305,16 @@ model ProductTypePrompt {
 
 /// 申诉记录（用户对生成结果不满意可发起申诉）
 model Appeal {
-  id           String   @id @default(uuid()) @db.Uuid
-  userId       String
-  generationId String   @unique @db.Uuid /// One-to-One: each generation can only have one appeal
-  reason       String?  @db.Text         /// 用户申诉原因说明（可选）
-  status       String   @default("PENDING") /// PENDING / APPROVED / REJECTED
-  refundAmount Int                        /// 退款积分数（创建时快照）
-  adminNote    String?  @db.Text         /// 管理员备注（拒绝原因等）
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String
+  generationId   String   @unique @db.Uuid /// One-to-One: each generation can only have one appeal
+  reason         String?  @db.Text         /// 用户申诉原因说明（可选）
+  status         String   @default("PENDING") /// PENDING / APPROVED / REJECTED
+  refundAmount   Int                        /// 退款积分数（创建时快照）
+  adminNote      String?  @db.Text         /// 管理员备注（拒绝原因等）
+  appealedImages String[] @default([])     /// 用户申诉的具体图片URL列表（按张申诉）
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   generation Generation @relation(fields: [generationId], references: [id], onDelete: Cascade)

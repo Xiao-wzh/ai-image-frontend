@@ -103,7 +103,7 @@ const worker = new Worker<TosUploadJobData, TosUploadJobResult>(
       if (!generation) throw new Error(`Generation 不存在: ${generationId}`)
 
       const updatedImages = [...generation.generatedImages]
-      updatedImages[imageIndex] = objectKey
+      updatedImages[imageIndex] = keyToCdnUrl(objectKey)
 
       const cleanedIndexes = (generation.editingImageIndexes || []).filter(
         (idx: number) => idx !== imageIndex
@@ -170,7 +170,8 @@ const worker = new Worker<TosUploadJobData, TosUploadJobResult>(
       finalImageKeys = []
       for (const result of uploadResults) {
         if (result.status === "fulfilled") {
-          finalImageKeys.push(result.value)
+          // 转换为 CDN URL
+          finalImageKeys.push(keyToCdnUrl(result.value) as string)
         }
       }
 
@@ -199,14 +200,20 @@ const worker = new Worker<TosUploadJobData, TosUploadJobResult>(
       // PRO 模式：N 张独立图片，可能部分失败
       const failedCount = Math.max(imageCount - successCount, 0)
       finalStatus = successCount === 0 ? "FAILED" : failedCount > 0 ? "PARTIAL_SUCCESS" : "COMPLETED"
-      refundAmount = failedCount * costPerImage
+
+      // 关键修复：全部失败退还 totalCost，部分失败按 costPerImage 退款
+      refundAmount = successCount === 0 ? totalCost : (failedCount * costPerImage)
     }
 
     // ── CAS 乐观锁更新 DB ──
+    // 将 objectKey 转换为 CDN URL 后再存入数据库
+    const cdnImageKeys = finalImageKeys.map(key => keyToCdnUrl(key))
+    const cdnFullImageKey = fullImageKey ? keyToCdnUrl(fullImageKey) : null
+
     await prisma.$transaction(async (tx: any) => {
       const updated = await tx.generation.updateMany({
         where: { id: generationId, status: { in: ["PENDING", "PROCESSING"] } },
-        data: { status: finalStatus, generatedImages: finalImageKeys, generatedImage: fullImageKey ?? null, refundAmount },
+        data: { status: finalStatus, generatedImages: cdnImageKeys, generatedImage: cdnFullImageKey, refundAmount },
       })
       if (updated.count === 0) {
         console.log(`[TOS-Worker] ⏭  ${shortId}... 已被处理，跳过`)

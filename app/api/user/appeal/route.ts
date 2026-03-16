@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
-import { transformGenerationUrls } from "@/lib/cdnUrl"
+import { transformGenerationUrls, extractObjectKey, keyToCdnUrl } from "@/lib/cdnUrl"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
@@ -21,10 +21,18 @@ export async function POST(req: NextRequest) {
 
     try {
         const body = await req.json()
-        const { generationId, reason } = body
+        const { generationId, reason, appealedImages } = body
 
         if (!generationId || typeof generationId !== "string") {
             return NextResponse.json({ error: "缺少 generationId" }, { status: 400 })
+        }
+
+        // 验证 appealedImages
+        if (!Array.isArray(appealedImages) || appealedImages.length === 0) {
+            return NextResponse.json(
+                { error: "请至少选择一张要申诉的图片" },
+                { status: 400 }
+            )
         }
 
         // Reason is now optional
@@ -54,6 +62,40 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "该记录已发起过申诉，无法重复申诉" }, { status: 400 })
         }
 
+        // 验证图片 URL 是否属于该生成记录
+        // 兼容多种格式：CDN URL、源站 URL、纯 key
+        // 统一转换为 CDN 格式后对比
+        const normalizeUrl = (url: string): string => {
+            // 如果是源站 URL，提取 key 后转为 CDN URL
+            if (url.includes('sexyspecies-ai-image.tos-cn-beijing.volces.com')) {
+                const key = extractObjectKey(url)
+                return keyToCdnUrl(key) as string
+            }
+            // 如果是 CDN URL，直接返回
+            if (url.includes('img.wzhdjy.xin')) {
+                return url
+            }
+            // 如果是纯 key，转为 CDN URL
+            if (!url.startsWith('http')) {
+                return keyToCdnUrl(url) as string
+            }
+            // 其他情况直接返回
+            return url
+        }
+
+        const normalizedAppealedImages = appealedImages.map(normalizeUrl)
+        const normalizedDbImages = generation.generatedImages.map(normalizeUrl)
+
+        const validImages = normalizedDbImages.filter(img =>
+            normalizedAppealedImages.includes(img)
+        )
+        if (validImages.length !== normalizedAppealedImages.length) {
+            return NextResponse.json(
+                { error: "选择的图片不属于该生成记录" },
+                { status: 400 }
+            )
+        }
+
         // Determine refund amount based on whether discounted retry was used
         const refundAmount = generation.hasUsedDiscountedRetry ? 99 : 199
 
@@ -65,6 +107,7 @@ export async function POST(req: NextRequest) {
                 reason: reasonText,
                 refundAmount,
                 status: "PENDING",
+                appealedImages: validImages,  // 存储验证后的图片 URL
             },
         })
 

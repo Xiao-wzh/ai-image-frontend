@@ -92,6 +92,10 @@ export function HistoryDetailDialog({
   const [isSubmittingAppeal, setIsSubmittingAppeal] = useState(false)
   const [appealReason, setAppealReason] = useState("")
 
+  // 申诉选择模式状态
+  const [isAppealMode, setIsAppealMode] = useState(false)
+  const [selectedAppealImages, setSelectedAppealImages] = useState<string[]>([])
+
   // Watermark states
   const [isWatermarkUnlocked, setIsWatermarkUnlocked] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
@@ -141,6 +145,11 @@ export function HistoryDetailDialog({
     setEditingIndex(null)
     setSelectedImage(null)
     setSelectedImageIndex(null)
+    // 清理申诉相关状态
+    setIsAppealMode(false)
+    setSelectedAppealImages([])
+    setAppealReason("")
+    setShowAppealModal(false)
   }, [index])
 
   // Sync watermark unlock state from item
@@ -356,6 +365,7 @@ export function HistoryDetailDialog({
         body: JSON.stringify({
           generationId: item.id,
           reason: appealReason.trim() || null,
+          appealedImages: selectedAppealImages,  // 传递选中的图片
         }),
       })
       const data = await res.json()
@@ -365,6 +375,8 @@ export function HistoryDetailDialog({
       toast.success("申诉已提交", { description: "请等待管理员审核" })
       setShowAppealModal(false)
       setAppealReason("") // 重置输入
+      setSelectedAppealImages([]) // 重置选中图片
+      setIsAppealMode(false) // 退出选择模式
       onGenerateSuccess()
     } catch (e: any) {
       toast.error(e?.message || "申诉提交失败")
@@ -376,7 +388,7 @@ export function HistoryDetailDialog({
   const canAppeal = useMemo(() => {
     if (!item) return false
     if (item.status !== "COMPLETED") return false
-    if (item.qualityMode === "PRO") return false  // PRO 模式暂不支持申诉
+    // 移除 PRO 模式限制，现在 PRO 也可以申诉
     if (!item.appeal) return true
     return item.appeal.status === "REJECTED"
   }, [item])
@@ -390,6 +402,31 @@ export function HistoryDetailDialog({
       default: return null
     }
   }, [item])
+
+  // 计算预估退款金额
+  const estimatedRefund = useMemo(() => {
+    if (!item || selectedAppealImages.length === 0) return 0
+
+    // 如果有 totalCost，使用实际成本计算
+    if (item.totalCost) {
+      const totalImages = item.qualityMode === "STANDARD"
+        ? Math.max(item.generatedImages.length, 9)
+        : (item.imageCount || 9)
+      const perImageRefund = Math.floor(item.totalCost / totalImages)
+      return perImageRefund * selectedAppealImages.length
+    }
+
+    // 兜底：使用旧逻辑估算（按固定价格）
+    const totalCost = item.qualityMode === "PRO"
+      ? (item.costPerImage || costs.PRO_COST_PER_IMAGE) * (item.imageCount || 9)
+      : (item.taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST)
+
+    const totalImages = item.qualityMode === "STANDARD"
+      ? Math.max(item.generatedImages.length, 9)
+      : (item.imageCount || 9)
+    const perImageRefund = Math.floor(totalCost / totalImages)
+    return perImageRefund * selectedAppealImages.length
+  }, [item, selectedAppealImages, costs])
 
   const handleDownloadAll = async () => {
     if (!displayImages.length) return
@@ -464,8 +501,8 @@ export function HistoryDetailDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className={cn(
-          "max-w-6xl w-[95vw] h-[90vh] p-0 flex flex-col gap-0 bg-slate-950/95 border-white/10 overflow-hidden",
-          (showRegenerateConfirm || showDiscountConfirm || showUnlockConfirm) && "pointer-events-none"
+          "max-w-4xl w-[90vw] h-[80vh] p-0 flex flex-col gap-0 bg-slate-950/95 border-white/10 overflow-hidden",
+          (showRegenerateConfirm || showDiscountConfirm || showUnlockConfirm || showAppealModal) && "pointer-events-none"
         )}>
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-white/10 pr-12 shrink-0">
@@ -777,48 +814,85 @@ export function HistoryDetailDialog({
                     const isPro = item?.qualityMode === "PRO"
                     const count = displayImages.length
                     const gridCols = isPro
-                      ? count === 1 ? "grid-cols-1" : count === 2 ? "grid-cols-2" : "grid-cols-2"
-                      : "grid-cols-3"
+                      ? count === 1 ? "grid-cols-1" : count === 2 ? "grid-cols-2" : "grid-cols-3"
+                      : "grid-cols-3 sm:grid-cols-4 lg:grid-cols-5"
                     return (
                       <div className={`grid ${gridCols} gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2 ${previewImage || selectedImage ? "pointer-events-none" : ""}`}>
-                        {displayImages.map((img, i) => (
-                          <motion.button
-                            key={i}
-                            type="button"
-                            className="relative aspect-square group overflow-hidden rounded-lg cursor-pointer"
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            transition={{ duration: 0.2, delay: i * 0.03 }}
-                            whileHover={item?.editingImageIndexes?.includes(i) ? undefined : { scale: 1.03 }}
-                            onClick={() => {
-                              if (item?.editingImageIndexes?.length) return
-                              setSelectedImage(img)
-                              setSelectedImageIndex(i)
-                            }}
-                            disabled={!!item?.editingImageIndexes?.length}
-                            title={item?.editingImageIndexes?.includes(i) ? "重绘中..." : "点击查看/编辑"}
-                          >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                              src={img}
-                              alt={`Generated ${i + 1}`}
-                              className={`w-full h-full ${isPro ? "object-contain" : "object-cover"}`}
-                            />
+                        {displayImages.map((img, i) => {
+                          const isSelected = isAppealMode && selectedAppealImages.includes(img)
+                          return (
+                            <motion.button
+                              key={i}
+                              type="button"
+                              className={cn(
+                                "relative aspect-square group overflow-hidden rounded-lg cursor-pointer",
+                                isAppealMode && "hover:scale-105 transition-transform",
+                                isSelected && "ring-4 ring-orange-500 border-orange-500"
+                              )}
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              transition={{ duration: 0.2, delay: i * 0.03 }}
+                              whileHover={item?.editingImageIndexes?.includes(i) ? undefined : { scale: 1.03 }}
+                              onClick={() => {
+                                if (item?.editingImageIndexes?.length) return
+                                if (isAppealMode) {
+                                  // 申诉选择模式：切换选中状态
+                                  setSelectedAppealImages(prev =>
+                                    prev.includes(img)
+                                      ? prev.filter(url => url !== img)
+                                      : [...prev, img]
+                                  )
+                                } else {
+                                  // 正常模式：打开编辑
+                                  setSelectedImage(img)
+                                  setSelectedImageIndex(i)
+                                }
+                              }}
+                              disabled={!!item?.editingImageIndexes?.length}
+                              title={
+                                item?.editingImageIndexes?.includes(i)
+                                  ? "重绘中..."
+                                  : isAppealMode
+                                  ? isSelected ? "点击取消选择" : "点击选择"
+                                  : "点击查看/编辑"
+                              }
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={img}
+                                alt={`Generated ${i + 1}`}
+                                className={`w-full h-full ${isPro ? "object-contain" : "object-cover"}`}
+                              />
 
-                            {/* Editing overlay */}
-                            {item?.editingImageIndexes?.includes(i) ? (
-                              <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
-                                <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
-                                <span className="text-xs text-white/80">重绘中...</span>
-                              </div>
-                            ) : (
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
-                                <Pencil className="w-6 h-6 text-white drop-shadow-md" />
-                                <span className="text-xs text-white/80">点击编辑</span>
-                              </div>
-                            )}
-                          </motion.button>
-                        ))}
+                              {/* 申诉选择模式：选中标记 */}
+                              {isAppealMode && isSelected && (
+                                <div className="absolute top-2 right-2 w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center shadow-lg">
+                                  <Check className="w-5 h-5 text-white" />
+                                </div>
+                              )}
+
+                              {/* 申诉选择模式：未选中提示 */}
+                              {isAppealMode && !isSelected && (
+                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <span className="text-sm text-white font-medium">点击选择</span>
+                                </div>
+                              )}
+
+                              {/* Editing overlay */}
+                              {!isAppealMode && item?.editingImageIndexes?.includes(i) ? (
+                                <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
+                                  <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                                  <span className="text-xs text-white/80">重绘中...</span>
+                                </div>
+                              ) : !isAppealMode ? (
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                                  <Pencil className="w-6 h-6 text-white drop-shadow-md" />
+                                  <span className="text-xs text-white/80">点击编辑</span>
+                                </div>
+                              ) : null}
+                            </motion.button>
+                          )
+                        })}
                       </div>
                     )
                   })()
@@ -899,7 +973,10 @@ export function HistoryDetailDialog({
               {item?.status === "COMPLETED" && (
                 canAppeal ? (
                   <Button
-                    onClick={() => setShowAppealModal(true)}
+                    onClick={() => {
+                      setIsAppealMode(true)
+                      setSelectedAppealImages([])
+                    }}
                     variant="outline"
                     className="h-11 rounded-xl border-orange-400/50 bg-orange-400/10 hover:bg-orange-400/20 text-orange-300"
                   >
@@ -935,6 +1012,48 @@ export function HistoryDetailDialog({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* 申诉选择模式浮动操作栏 */}
+      {isAppealMode && typeof document !== 'undefined' && createPortal(
+        <motion.div
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 100, opacity: 0 }}
+          className="fixed bottom-0 left-0 right-0 z-[99999] bg-gradient-to-t from-slate-900 via-slate-900/95 to-transparent p-6 border-t border-white/10 pointer-events-auto"
+        >
+          <div className="max-w-4xl mx-auto flex items-center justify-between gap-4">
+            <div className="text-white">
+              <div className="text-sm text-slate-400">请选择要申诉的图片</div>
+              <div className="text-lg font-semibold">
+                已选 <span className="text-orange-400">{selectedAppealImages.length}</span> 张
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsAppealMode(false)
+                  setSelectedAppealImages([])
+                }}
+                className="border-white/10 bg-white/5 hover:bg-white/10 text-white pointer-events-auto"
+              >
+                取消
+              </Button>
+              <Button
+                onClick={() => {
+                  setIsAppealMode(false)
+                  setShowAppealModal(true)
+                }}
+                disabled={selectedAppealImages.length === 0}
+                className="bg-gradient-to-r from-orange-600 to-red-600 text-white hover:opacity-90 disabled:opacity-50 pointer-events-auto"
+              >
+                下一步 (已选 {selectedAppealImages.length} 张)
+              </Button>
+            </div>
+          </div>
+        </motion.div>,
+        document.body
+      )}
 
       {/* Unlock Watermark Confirmation Modal */}
       {typeof document !== 'undefined' && showUnlockConfirm && createPortal(
@@ -1074,12 +1193,14 @@ export function HistoryDetailDialog({
       {/* Appeal Modal */}
       {typeof document !== 'undefined' && showAppealModal && createPortal(
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto"
+          className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setShowAppealModal(false)
             }
           }}
+          onMouseDownCapture={(e) => e.stopPropagation()}
+          onPointerDownCapture={(e) => e.stopPropagation()}
         >
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
@@ -1095,7 +1216,9 @@ export function HistoryDetailDialog({
             <p className="text-sm text-slate-400 mb-3">
               如果生成出来的图片货不对版，可以提交申诉申请退还积分。
               <br />
-              <span className="text-orange-400 font-medium">预计退还 {item?.hasUsedDiscountedRetry ? 99 : 199} 积分</span>
+              <span className="text-orange-400 font-medium">
+                预计退还 {estimatedRefund} 积分（{selectedAppealImages.length} 张图片）
+              </span>
             </p>
             <textarea
               value={appealReason}
@@ -1107,15 +1230,21 @@ export function HistoryDetailDialog({
             <div className="flex gap-3">
               <Button
                 variant="outline"
-                onClick={() => setShowAppealModal(false)}
-                className="flex-1 border-white/10 bg-white/5 hover:bg-white/10 text-white"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowAppealModal(false)
+                }}
+                className="flex-1 border-white/10 bg-white/5 hover:bg-white/10 text-white pointer-events-auto"
               >
                 取消
               </Button>
               <Button
-                onClick={handleAppealSubmit}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleAppealSubmit()
+                }}
                 disabled={isSubmittingAppeal}
-                className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 text-white hover:opacity-90 disabled:opacity-50"
+                className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 text-white hover:opacity-90 disabled:opacity-50 pointer-events-auto"
               >
                 {isSubmittingAppeal ? (
                   <Loader2 className="w-4 h-4 animate-spin mr-2" />

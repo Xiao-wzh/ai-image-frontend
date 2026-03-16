@@ -136,7 +136,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   /* ──────────────── 费用计算 ──────────────── */
   const baseCost = taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
   const comboAddOnCost = costs.DETAIL_PAGE_RETRY_COST
-  const proCost = costs.PRO_COST_PER_IMAGE * proImageCount
+  // PRO 模式: 9 张特惠 500 积分，其他按原价
+  const proCost = proImageCount === 9 ? 500 : (costs.PRO_COST_PER_IMAGE * proImageCount)
   const totalCost = qualityMode === "PRO"
     ? proCost
     : (isComboMode && taskType === "MAIN_IMAGE" ? baseCost + comboAddOnCost : baseCost)

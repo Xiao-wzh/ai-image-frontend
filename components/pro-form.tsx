@@ -79,51 +79,127 @@ export function ProForm(props: CockpitFormProps) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* 生成张数 */}
                         <div>
-                            <label className="block text-xs font-medium text-amber-300 mb-2">生成张数</label>
-                            <div className="flex gap-2 flex-wrap">
-                                {(taskType === "DETAIL_PAGE" ? [3, 5, 9, 14] : [1, 3, 5, 7, 9]).map((count) => (
-                                    <button
-                                        key={count}
-                                        type="button"
-                                        onClick={() => setProImageCount(count)}
-                                        className={`flex-1 min-w-[60px] h-10 rounded-lg text-sm font-medium transition-all cursor-pointer border ${proImageCount === count
-                                            ? "bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-sm shadow-amber-500/20"
-                                            : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
-                                            }`}
-                                    >
-                                        {count} 张
-                                        <span className="ml-1 text-[10px] opacity-60">({costs.PRO_COST_PER_IMAGE * count}积分)</span>
-                                    </button>
-                                ))}
+                            <label className="block text-xs font-semibold text-amber-300 mb-3 tracking-wide">生成张数</label>
+                            <div className="flex gap-3 flex-wrap">
+                                {(taskType === "DETAIL_PAGE" ? [3, 5, 9, 14] : [1, 3, 5, 9]).map((count) => {
+                                    const isNineCount = count === 9
+                                    const originalPrice = costs.PRO_COST_PER_IMAGE * count  // 900
+                                    const specialPrice = 500
+                                    const displayPrice = isNineCount ? specialPrice : originalPrice
+                                    const isSelected = proImageCount === count
+                                    const savings = isNineCount ? originalPrice - specialPrice : 0  // 400
+
+                                    return (
+                                        <motion.button
+                                            key={count}
+                                            type="button"
+                                            onClick={() => setProImageCount(count)}
+                                            className={`relative flex-1 min-w-[75px] h-15 rounded-xl text-sm font-bold transition-all cursor-pointer border-2 overflow-hidden ${isSelected
+                                                ? isNineCount
+                                                    ? "bg-gradient-to-br from-orange-500/35 via-amber-500/30 to-yellow-500/25 border-orange-400/80 text-orange-100 shadow-2xl shadow-orange-500/50"
+                                                    : "bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-lg shadow-amber-500/20"
+                                                : isNineCount
+                                                    ? "border-orange-500/50 bg-gradient-to-br from-orange-950/60 via-amber-950/50 to-yellow-950/40 text-orange-300 hover:border-orange-400/70 hover:shadow-xl hover:shadow-orange-500/30"
+                                                    : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white hover:border-white/20"
+                                                }`}
+                                            whileHover={isNineCount ? { scale: 1.08 } : { scale: 1.03 }}
+                                            whileTap={{ scale: 0.96 }}
+                                        >
+                                            {/* 9 张特惠角标 - 小巧丝带 */}
+                                            {isNineCount && (
+                                                <div className="absolute -top-0 -right-0 z-20 overflow-hidden w-12 h-12 pointer-events-none">
+                                                    <motion.div
+                                                        className="absolute top-2 -right-6 w-16 py-0.5 bg-gradient-to-r from-red-600 via-orange-600 to-red-600 text-white text-[9px] font-black text-center shadow-md transform rotate-45"
+                                                        animate={{
+                                                            backgroundPosition: ['0% 50%', '100% 50%', '0% 50%']
+                                                        }}
+                                                        transition={{
+                                                            backgroundPosition: { duration: 3, repeat: Infinity, ease: "linear" }
+                                                        }}
+                                                        style={{ backgroundSize: '200% 200%' }}
+                                                    >
+                                                        特惠
+                                                    </motion.div>
+                                                </div>
+                                            )}
+
+                                            {/* 发光呼吸动画（仅 9 张） */}
+                                            {isNineCount && (
+                                                <motion.div
+                                                    className="absolute inset-0 rounded-xl pointer-events-none"
+                                                    animate={{
+                                                        boxShadow: [
+                                                            "0 0 20px 2px rgba(251,146,60,0.2), inset 0 0 20px 0px rgba(251,146,60,0.1)",
+                                                            "0 0 40px 6px rgba(251,146,60,0.4), inset 0 0 30px 2px rgba(251,146,60,0.2)",
+                                                            "0 0 20px 2px rgba(251,146,60,0.2), inset 0 0 20px 0px rgba(251,146,60,0.1)",
+                                                        ],
+                                                    }}
+                                                    transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+                                                />
+                                            )}
+
+                                            {/* 背景光效（仅 9 张选中时） */}
+                                            {isNineCount && isSelected && (
+                                                <div className="absolute inset-0 bg-gradient-to-br from-orange-400/10 via-transparent to-yellow-400/10 animate-pulse" />
+                                            )}
+
+                                            {/* 按钮内容 */}
+                                            <div className="relative z-10 flex flex-col items-center justify-center gap-1 px-2">
+                                                <span className="text-base leading-none">{count} 张</span>
+                                                {isNineCount ? (
+                                                    <div className="flex flex-col items-center gap-0.5">
+                                                        <span className="text-[11px] line-through opacity-60 text-slate-400">{originalPrice}积分</span>
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-sm font-black text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.6)]">{specialPrice}积分</span>
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-[11px] opacity-75">{displayPrice}积分</span>
+                                                )}
+                                            </div>
+
+                                            {/* 角标装饰（仅 9 张） */}
+                                            {isNineCount && (
+                                                <>
+                                                    <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-ping opacity-75" />
+                                                    <div className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                                                </>
+                                            )}
+                                        </motion.button>
+                                    )
+                                })}
                             </div>
                         </div>
 
                         {/* 画幅比例 */}
                         <div>
-                            <label className="block text-xs font-medium text-amber-300 mb-2">画幅比例</label>
-                            <div className="flex gap-2">
+                            <label className="block text-xs font-semibold text-amber-300 mb-3 tracking-wide">画幅比例</label>
+                            <div className="flex gap-2.5">
                                 {["1:1", "3:4", "4:3", "16:9", "9:16"].map((ratio) => {
                                     const [w, h] = ratio.split(":").map(Number)
-                                    const maxSize = 18
+                                    const maxSize = 20
                                     const scale = maxSize / Math.max(w, h)
                                     const thumbW = Math.round(w * scale)
                                     const thumbH = Math.round(h * scale)
+                                    const isSelected = proAspectRatio === ratio
                                     return (
-                                        <button
+                                        <motion.button
                                             key={ratio}
                                             type="button"
                                             onClick={() => setProAspectRatio(ratio)}
-                                            className={`flex-1 h-10 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-1.5 cursor-pointer border ${proAspectRatio === ratio
-                                                ? "bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-sm shadow-amber-500/20"
-                                                : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
+                                            className={`flex-1 h-14 rounded-xl text-xs font-semibold transition-all flex flex-col items-center justify-center gap-2 cursor-pointer border-2 ${isSelected
+                                                ? "bg-amber-500/25 border-amber-500/60 text-amber-200 shadow-lg shadow-amber-500/25"
+                                                : "border-white/10 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white hover:border-white/20 hover:shadow-md"
                                                 }`}
+                                            whileHover={{ scale: 1.05 }}
+                                            whileTap={{ scale: 0.97 }}
                                         >
                                             <div
-                                                className={`border rounded-[2px] ${proAspectRatio === ratio ? "border-amber-400" : "border-slate-500"}`}
+                                                className={`border-2 rounded-sm transition-colors ${isSelected ? "border-amber-400 bg-amber-400/10" : "border-slate-500 bg-slate-700/30"}`}
                                                 style={{ width: thumbW, height: thumbH }}
                                             />
-                                            {ratio}
-                                        </button>
+                                            <span className="tracking-wider">{ratio}</span>
+                                        </motion.button>
                                     )
                                 })}
                             </div>
@@ -131,30 +207,42 @@ export function ProForm(props: CockpitFormProps) {
                     </div>
 
                     {/* ── 产品功能 & 画面风格 (PRO 专属) ── */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
-                            <label className="block text-xs font-medium text-amber-300 mb-2">
-                                产品功能 <span className="text-amber-500/40 font-normal">(可选)</span>
+                            <label className="block text-xs font-semibold text-amber-300 mb-2.5 tracking-wide">
+                                产品功能 <span className="text-amber-500/50 font-normal text-[10px]">(可选)</span>
                             </label>
-                            <input
-                                type="text"
+                            <textarea
                                 value={proFeatures || ""}
                                 onChange={(e) => setProFeatures(e.target.value)}
-                                placeholder="例如：防水防汗、轻薄透气。不填则AI自动生成"
-                                className="w-full h-10 rounded-lg border border-amber-500/15 bg-white/5 px-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-amber-500 focus:bg-white/10 focus:ring-2 focus:ring-amber-500/20 transition-all"
+                                placeholder="例如：防水防汗、轻薄透气"
+                                rows={1}
+                                className="w-full min-h-[44px] max-h-32 rounded-xl border-2 border-amber-500/20 bg-slate-800/60 px-4 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none focus:border-amber-500/60 focus:bg-slate-800/80 focus:ring-2 focus:ring-amber-500/25 transition-all shadow-inner resize-none overflow-hidden"
+                                onInput={(e) => {
+                                    const target = e.target as HTMLTextAreaElement
+                                    target.style.height = 'auto'
+                                    target.style.height = target.scrollHeight + 'px'
+                                }}
                             />
+                            <p className="text-[10px] text-slate-500 mt-1.5 ml-1">不填则 AI 自动生成</p>
                         </div>
                         <div>
-                            <label className="block text-xs font-medium text-amber-300 mb-2">
-                                画面风格 <span className="text-amber-500/40 font-normal">(可选)</span>
+                            <label className="block text-xs font-semibold text-amber-300 mb-2.5 tracking-wide">
+                                画面风格 <span className="text-amber-500/50 font-normal text-[10px]">(可选)</span>
                             </label>
-                            <input
-                                type="text"
+                            <textarea
                                 value={proStyle || ""}
                                 onChange={(e) => setProStyle(e.target.value)}
-                                placeholder="例如：赛博朋克、极简高级灰。不填则AI自动生成"
-                                className="w-full h-10 rounded-lg border border-amber-500/15 bg-white/5 px-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-amber-500 focus:bg-white/10 focus:ring-2 focus:ring-amber-500/20 transition-all"
+                                placeholder="例如：赛博朋克、极简高级灰"
+                                rows={1}
+                                className="w-full min-h-[44px] max-h-32 rounded-xl border-2 border-amber-500/20 bg-slate-800/60 px-4 py-2.5 text-sm text-white placeholder:text-slate-500 outline-none focus:border-amber-500/60 focus:bg-slate-800/80 focus:ring-2 focus:ring-amber-500/25 transition-all shadow-inner resize-none overflow-hidden"
+                                onInput={(e) => {
+                                    const target = e.target as HTMLTextAreaElement
+                                    target.style.height = 'auto'
+                                    target.style.height = target.scrollHeight + 'px'
+                                }}
                             />
+                            <p className="text-[10px] text-slate-500 mt-1.5 ml-1">不填则 AI 自动生成</p>
                         </div>
                     </div>
                 </div>
