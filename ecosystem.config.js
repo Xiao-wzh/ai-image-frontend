@@ -54,8 +54,8 @@ module.exports = {
         // 去水印 Worker 进程
         {
             name: "watermark-worker",
-            script: "npx",
-            args: "tsx workers/watermark-worker.ts",
+            script: "node",
+            args: "node_modules/.bin/tsx workers/watermark-worker.ts",
             cwd: "/var/www/ai-image-frontend/ai-image-frontend",
             instances: 1,              // 单实例，通过 concurrency 控制并发
             autorestart: true,

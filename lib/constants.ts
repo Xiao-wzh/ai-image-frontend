@@ -125,6 +125,9 @@ export const GENERATION_LANGUAGES = [
   { label: "印尼", value: "Indonesia" },
   { label: "巴西", value: "Brazil" },
   { label: "葡萄牙", value: "Portugal" },
+  { label: "西班牙", value: "Spanish" },
+  { label: "法文", value: "French" },
+  { label: "德文", value: "German" },
 ] as const
 
 // 传递给N8N的是label（中文名称）
