@@ -44,6 +44,13 @@ export async function PUT(req: NextRequest) {
   // 构建更新数据
   const updateData: Record<string, any> = { promptTemplate }
 
+  // 处理参考图片数组
+  if (Array.isArray(body?.referenceImages)) {
+    updateData.referenceImages = body.referenceImages.filter(
+      (url: any) => typeof url === "string" && url.trim()
+    )
+  }
+
   // 如果前端传了 qualityMode，校验 + 冲突检查
   if (qualityModeRaw !== undefined && qualityModeRaw !== null) {
     const qualityMode = String(qualityModeRaw).trim().toUpperCase()

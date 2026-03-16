@@ -22,6 +22,11 @@ export async function POST(req: NextRequest) {
   const userIdRaw = body?.userId
   const userId = userIdRaw === null || userIdRaw === undefined || String(userIdRaw).trim() === "" ? null : String(userIdRaw).trim()
 
+  // 处理参考图片数组
+  const referenceImages = Array.isArray(body?.referenceImages)
+    ? body.referenceImages.filter((url: any) => typeof url === "string" && url.trim())
+    : []
+
   if (!platformId) return NextResponse.json({ error: "缺少 platformId" }, { status: 400 })
   if (!productType) return NextResponse.json({ error: "缺少 productType" }, { status: 400 })
   if (!promptTemplate) return NextResponse.json({ error: "promptTemplate 不能为空" }, { status: 400 })
@@ -66,6 +71,7 @@ export async function POST(req: NextRequest) {
       qualityMode,
       description: description || null,
       promptTemplate,
+      referenceImages,
       isActive: true,
     },
     select: {

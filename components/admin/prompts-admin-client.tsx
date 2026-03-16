@@ -44,6 +44,7 @@ interface Prompt {
   qualityMode: string
   description: string | null
   promptTemplate: string
+  referenceImages?: string[]
   isActive: boolean
   userId: string | null
   user?: {
@@ -131,6 +132,9 @@ export function PromptsAdminClient() {
   const [editQualityMode, setEditQualityMode] = useState<"STANDARD" | "PRO">("STANDARD")
   const [editIsActive, setEditIsActive] = useState(true)
   const [editUserId, setEditUserId] = useState<string | null>(null)
+  const [editReferenceImages, setEditReferenceImages] = useState<string[]>([])
+  const [uploadingImage, setUploadingImage] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
@@ -203,6 +207,7 @@ export function PromptsAdminClient() {
       setEditIsActive(selectedPrompt.isActive)
       setEditUserId(selectedPrompt.userId)
       setEditQualityMode((selectedPrompt.qualityMode as "STANDARD" | "PRO") || "STANDARD")
+      setEditReferenceImages(selectedPrompt.referenceImages || [])
     }
   }, [selectedPrompt, isCreating])
 
@@ -215,8 +220,17 @@ export function PromptsAdminClient() {
   const isDirty = useMemo(() => {
     if (isCreating) return editDraft.trim().length > 0
     if (!selectedPrompt) return false
-    return editDraft !== selectedPrompt.promptTemplate
-  }, [isCreating, selectedPrompt, editDraft])
+
+    // 检查提示词内容变化
+    const promptChanged = editDraft !== selectedPrompt.promptTemplate
+
+    // 检查图片列表变化（使用 slice() 避免修改原数组）
+    const currentImages = [...editReferenceImages].sort().join(",")
+    const originalImages = [...(selectedPrompt.referenceImages || [])].sort().join(",")
+    const imagesChanged = currentImages !== originalImages
+
+    return promptChanged || imagesChanged
+  }, [isCreating, selectedPrompt, editDraft, editReferenceImages])
 
   // Action handlers
   const handleSave = useCallback(async () => {
@@ -231,7 +245,12 @@ export function PromptsAdminClient() {
       const res = await fetch("/api/admin/prompts/update", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: selectedPrompt.id, promptTemplate: editDraft, qualityMode: editQualityMode }),
+        body: JSON.stringify({
+          id: selectedPrompt.id,
+          promptTemplate: editDraft,
+          qualityMode: editQualityMode,
+          referenceImages: editReferenceImages,
+        }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || "保存失败")
@@ -242,7 +261,7 @@ export function PromptsAdminClient() {
     } finally {
       setSaving(false)
     }
-  }, [selectedPrompt, isCreating, editDraft, mutate])
+  }, [selectedPrompt, isCreating, editDraft, editQualityMode, editReferenceImages, mutate])
 
   const handleCreate = useCallback(async () => {
     if (!activePlatformId || !editProductType.trim() || !editDraft.trim()) {
@@ -264,6 +283,7 @@ export function PromptsAdminClient() {
           description: editDescription.trim() || null,
           promptTemplate: editDraft.trim(),
           userId: editUserId,
+          referenceImages: editReferenceImages,
         }),
       })
       const data = await res.json()
@@ -277,7 +297,7 @@ export function PromptsAdminClient() {
     } finally {
       setSaving(false)
     }
-  }, [activePlatformId, editProductType, taskType, editMode, editQualityMode, editDescription, editDraft, editUserId, mutate])
+  }, [activePlatformId, editProductType, taskType, editMode, editQualityMode, editDescription, editDraft, editUserId, editReferenceImages, mutate])
 
   const handleDelete = useCallback(async () => {
     if (!selectedPrompt) return
@@ -330,12 +350,119 @@ export function PromptsAdminClient() {
     setEditQualityMode(qualityModeFilter)
     setEditIsActive(true)
     setEditUserId(null)
+    setEditReferenceImages([])
   }, [promptMode, qualityModeFilter])
 
   const cancelCreate = useCallback(() => {
     setIsCreating(false)
     setEditDraft("")
   }, [])
+
+  // 图片上传处理
+  const handleImageUpload = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+
+    // 验证文件类型和大小
+    const validFiles = Array.from(files).filter((file) => {
+      const isImage = file.type.startsWith("image/")
+      const isUnder10MB = file.size <= 10 * 1024 * 1024
+
+      if (!isImage) {
+        toast.error(`${file.name} 不是图片文件`)
+        return false
+      }
+      if (!isUnder10MB) {
+        toast.error(`${file.name} 超过 10MB 限制`)
+        return false
+      }
+      return true
+    })
+
+    if (validFiles.length === 0) return
+
+    setUploadingImage(true)
+    const successUrls: string[] = []
+    const failedFiles: string[] = []
+
+    try {
+      for (const file of validFiles) {
+        try {
+          // 1. 获取签名
+          const signRes = await fetch("/api/tos/sign", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filename: file.name,
+              contentType: file.type || "image/jpeg",
+            }),
+          })
+
+          if (!signRes.ok) throw new Error("获取上传签名失败")
+          const { uploadUrl, publicUrl } = await signRes.json()
+
+          // 2. 直传到 TOS
+          const uploadRes = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": file.type || "image/jpeg" },
+            body: file,
+          })
+
+          if (!uploadRes.ok) throw new Error(`上传失败: ${uploadRes.status}`)
+          successUrls.push(publicUrl)
+        } catch (err) {
+          failedFiles.push(file.name)
+          console.error(`上传 ${file.name} 失败:`, err)
+        }
+      }
+
+      if (successUrls.length > 0) {
+        setEditReferenceImages((prev) => [...prev, ...successUrls])
+        toast.success(`成功上传 ${successUrls.length} 张图片`)
+      }
+
+      if (failedFiles.length > 0) {
+        toast.error(`${failedFiles.length} 张图片上传失败`)
+      }
+    } finally {
+      setUploadingImage(false)
+    }
+  }, [])
+
+  const handleRemoveImage = useCallback((index: number) => {
+    setEditReferenceImages((prev) => prev.filter((_, i) => i !== index))
+    toast.success("已删除图片")
+  }, [])
+
+  // 拖拽上传处理
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!uploadingImage) {
+      setIsDragging(true)
+    }
+  }, [uploadingImage])
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+  }, [])
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setIsDragging(false)
+
+      if (uploadingImage) return
+
+      const files = e.dataTransfer.files
+      if (files && files.length > 0) {
+        handleImageUpload(files)
+      }
+    },
+    [uploadingImage, handleImageUpload]
+  )
 
   if (error) {
     return (
@@ -640,6 +767,12 @@ export function PromptsAdminClient() {
                               标准
                             </span>
                           )}
+                          {prompt.referenceImages && prompt.referenceImages.length > 0 && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-500/15 text-indigo-400 flex items-center gap-0.5">
+                              <Image className="w-2.5 h-2.5" />
+                              {prompt.referenceImages.length}张
+                            </span>
+                          )}
                         </div>
                         <div className="text-[10px] text-slate-600 mt-1">
                           {formatRelativeTime(prompt.updatedAt)}
@@ -926,6 +1059,176 @@ export function PromptsAdminClient() {
                       </motion.div>
                     )}
                   </div>
+                </div>
+
+                {/* Reference Images Upload */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-slate-300">
+                      参考排版图片
+                    </label>
+                    {editReferenceImages.length > 0 && (
+                      <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border border-indigo-500/20 rounded-lg">
+                        <Image className="w-3.5 h-3.5 text-indigo-400" />
+                        <span className="text-xs font-semibold text-indigo-300">
+                          {editReferenceImages.length} 张
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Upload Area with Drag & Drop */}
+                  <div className="relative">
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/png,image/jpeg,image/jpg,image/webp"
+                      onChange={(e) => handleImageUpload(e.target.files)}
+                      className="hidden"
+                      id="image-upload-input"
+                      disabled={uploadingImage}
+                    />
+                    <label
+                      htmlFor="image-upload-input"
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      className={cn(
+                        "group relative flex flex-col items-center justify-center gap-3 px-6 py-10 border-2 border-dashed rounded-xl transition-all duration-200",
+                        uploadingImage
+                          ? "border-blue-500/50 bg-blue-500/5 cursor-not-allowed"
+                          : isDragging
+                            ? "border-blue-500 bg-blue-500/10 scale-[1.01] shadow-lg shadow-blue-500/20"
+                            : "border-slate-700/80 hover:border-indigo-500/50 hover:bg-slate-800/40 cursor-pointer"
+                      )}
+                    >
+                      {/* Background Gradient Effect */}
+                      {!uploadingImage && !isDragging && (
+                        <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-purple-500/5 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                      )}
+
+                      {uploadingImage ? (
+                        <>
+                          <div className="relative">
+                            <Loader2 className="w-10 h-10 animate-spin text-blue-400" />
+                            <div className="absolute inset-0 blur-xl bg-blue-400/30 animate-pulse" />
+                          </div>
+                          <div className="text-center relative z-10">
+                            <p className="text-sm font-semibold text-blue-400">正在上传图片...</p>
+                            <p className="text-xs text-slate-500 mt-1.5">请稍候，不要关闭页面</p>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className={cn(
+                            "relative p-4 rounded-2xl transition-all duration-200",
+                            isDragging
+                              ? "bg-blue-500/20 scale-110"
+                              : "bg-slate-800/60 group-hover:bg-indigo-500/10 group-hover:scale-105"
+                          )}>
+                            <Image className={cn(
+                              "w-8 h-8 transition-colors duration-200",
+                              isDragging ? "text-blue-400" : "text-slate-400 group-hover:text-indigo-400"
+                            )} />
+                            {isDragging && (
+                              <div className="absolute inset-0 blur-xl bg-blue-400/40 rounded-2xl" />
+                            )}
+                          </div>
+                          <div className="text-center relative z-10">
+                            <p className={cn(
+                              "text-sm font-medium transition-colors duration-200",
+                              isDragging ? "text-blue-400" : "text-slate-300 group-hover:text-indigo-300"
+                            )}>
+                              {isDragging ? "松开鼠标上传图片" : "点击选择或拖拽图片到此处"}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-2 flex items-center justify-center gap-2">
+                              <span className="inline-flex items-center gap-1">
+                                <span className="w-1 h-1 rounded-full bg-slate-600" />
+                                支持 PNG、JPG、WebP
+                              </span>
+                              <span className="text-slate-700">|</span>
+                              <span className="inline-flex items-center gap-1">
+                                <span className="w-1 h-1 rounded-full bg-slate-600" />
+                                单个文件 ≤ 10MB
+                              </span>
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </label>
+                  </div>
+
+                  {/* Helper Text */}
+                  {editReferenceImages.length === 0 && !uploadingImage && (
+                    <p className="text-xs text-slate-500 flex items-start gap-2">
+                      <span className="text-slate-600 mt-0.5">💡</span>
+                      <span>上传参考图片可以帮助 AI 更好地理解期望的排版风格和视觉效果</span>
+                    </p>
+                  )}
+
+                  {/* Image Grid Preview */}
+                  {editReferenceImages.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="space-y-3"
+                    >
+                      <div className="flex items-center justify-between px-1">
+                        <p className="text-xs text-slate-400">
+                          已上传的参考图片
+                        </p>
+                        <button
+                          onClick={() => {
+                            if (confirm(`确定要删除全部 ${editReferenceImages.length} 张图片吗？`)) {
+                              setEditReferenceImages([])
+                              toast.success("已清空所有图片")
+                            }
+                          }}
+                          className="text-xs text-red-400 hover:text-red-300 transition-colors flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          清空全部
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                        {editReferenceImages.map((url, index) => (
+                          <motion.div
+                            key={url}
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8 }}
+                            transition={{ duration: 0.2, delay: index * 0.05 }}
+                            className="relative group aspect-square rounded-xl overflow-hidden bg-slate-800/50 border border-slate-700/80 hover:border-indigo-500/50 transition-all duration-200 hover:shadow-lg hover:shadow-indigo-500/10"
+                          >
+                            <img
+                              src={url}
+                              alt={`参考图 ${index + 1}`}
+                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
+                              loading="lazy"
+                            />
+                            {/* Gradient Overlay on Hover */}
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+
+                            {/* Delete Button */}
+                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                              <button
+                                onClick={() => handleRemoveImage(index)}
+                                className="p-2.5 bg-red-500 hover:bg-red-600 rounded-lg transition-all duration-200 cursor-pointer shadow-lg hover:scale-110 active:scale-95"
+                                aria-label="删除图片"
+                              >
+                                <X className="w-4 h-4 text-white" />
+                              </button>
+                            </div>
+
+                            {/* Image Number Badge */}
+                            <div className="absolute top-2 left-2 px-2 py-1 bg-black/80 backdrop-blur-sm rounded-md text-[10px] text-white font-semibold border border-white/10">
+                              #{index + 1}
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
                 </div>
               </div>
             </>

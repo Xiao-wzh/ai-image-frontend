@@ -476,6 +476,7 @@ async function handleComboGeneration(
         images: imageUrls,
         image_count: imageUrls.length,
         output_language: outputLanguage,
+        reference_layout_images: task.prompt.referenceImages ?? [],  // 管理员配置的参考排版图片
       }
 
       // 更新状态为 PROCESSING
@@ -1018,6 +1019,7 @@ async function handleSingleGeneration(
       output_language: outputLanguage,
       mode,
       quality_mode: qualityMode,
+      reference_layout_images: promptRecord.referenceImages ?? [],  // 管理员配置的参考排版图片
     }
 
     // Add Clone Mode specific fields

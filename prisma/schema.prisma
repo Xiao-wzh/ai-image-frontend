@@ -292,6 +292,7 @@ model ProductTypePrompt {
   // 内容
   promptTemplate String   @db.Text
   description    String?
+  referenceImages String[] @default([])          /// 参考排版图片 URL 列表
 
   isActive       Boolean  @default(true)
   createdAt      DateTime @default(now())

@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
           qualityMode: true,
           description: true,
           promptTemplate: true,
+          referenceImages: true,
           isActive: true,
           userId: true,
           user: {
