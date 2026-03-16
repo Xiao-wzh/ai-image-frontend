@@ -12,7 +12,7 @@ type Appeal = {
     generation: {
         productName: string
         productType: string
-        qualityMode?: string
+        qualityMode?: string | null
         generatedImages: string[]
         originalImage: string[]
     }

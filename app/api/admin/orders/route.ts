@@ -190,7 +190,7 @@ export async function GET(req: NextRequest) {
         });
 
         // 获取套餐名称
-        const planIds = monthlyPlanSales.map(s => s.planId).filter(Boolean);
+        const planIds = monthlyPlanSales.map(s => s.planId).filter((id): id is string => !!id);
         const plans = planIds.length > 0 ? await prisma.plan.findMany({
             where: { id: { in: planIds } },
             select: { id: true, name: true },
