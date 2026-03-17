@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
+import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { Sparkles, Crown, Zap } from "lucide-react"
 import { ModeCompareModal } from "./mode-compare-modal"
@@ -29,6 +30,7 @@ interface UploadZoneProps {
 }
 
 export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
+  const router = useRouter()
   const { data: session, update } = useSession()
   const { costs } = useCosts()
   const loginModal = useLoginModal()
@@ -262,6 +264,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
             toast.error("套餐生成失败，积分已退回")
           } else {
             toast.success("套餐生成完成！请前往历史记录查看主图和详情页")
+            // 跳转到任务队列页面
+            router.push("/tasks")
           }
           setGeneratedImages([])
           setFullImageUrl(null)
@@ -280,6 +284,14 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
             toast.success("PRO 任务已提交，正在生成中...")
             setCurrentGenerationId(data.id)
             setProPollingId(data.id)
+            // 跳转到任务队列页面
+            router.push("/tasks")
+          } else if (data.status === "PENDING" || data.status === "PROCESSING") {
+            // 标准模式异步生成
+            toast.success("任务已提交，正在生成中...")
+            setCurrentGenerationId(data.id)
+            // 跳转到任务队列页面
+            router.push("/tasks")
           } else {
             toast.success("生成完成")
           }
@@ -288,6 +300,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           setFullImageUrl(data.fullImageUrl || null)
           setCurrentGenerationId(data.id)
           toast.success("生成完成")
+          // 跳转到任务队列页面
+          router.push("/tasks")
         }
 
         if (typeof data.credits === "number" && typeof data.bonusCredits === "number") {
@@ -307,7 +321,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
         setIsSubmitting(false)
       }
     },
-    [session, update],
+    [session, update, router],
   )
 
   const onSubmit = useCallback(async () => {

@@ -37,6 +37,7 @@ function fillPromptTemplate(
   proStyle?: string,
   imageCount?: number,
   aspectRatio?: string,
+  originalImageCount?: number,
 ): string {
   return compilePrompt(template, {
     productName,
@@ -44,6 +45,7 @@ function fillPromptTemplate(
     detailBatch,
     features: features || "",
     numberOfReferenceImages: refImageCount || 0,
+    originalImageCount: originalImageCount || 0,
     proFeatures: proFeatures || null,
     proStyle: proStyle || null,
     imageCount: imageCount || 9,
@@ -477,7 +479,28 @@ async function handleComboGeneration(
     const username = (session?.user as any)?.username ?? (session?.user as any)?.name ?? null
 
     for (const task of tasks) {
-      const filledPrompt = fillPromptTemplate(task.prompt.promptTemplate, productName, outputLanguage, task.prompt.detailBatch)
+      const referenceLayoutImages = task.prompt.referenceImages ?? []
+      const filledPrompt = fillPromptTemplate(
+        task.prompt.promptTemplate,
+        productName,
+        outputLanguage,
+        task.prompt.detailBatch,
+        "",  // features
+        referenceLayoutImages.length,  // 传递参考图片数量
+        undefined,  // proFeatures
+        undefined,  // proStyle
+        undefined,  // imageCount
+        undefined,  // aspectRatio
+        imageUrls.length,  // 传递用户上传的原始图片数量
+      )
+
+      // 构建 images 数组：如果提示词中使用了参考图片数量变量，则拼接参考图片 URL
+      let imagesArray = imageUrls
+
+      // 检查原始提示词模板中是否包含 numberOfReferenceImages 变量，如果有且参考图片不为空，则拼接参考图片 URL
+      if (referenceLayoutImages.length > 0 && task.prompt.promptTemplate.includes("numberOfReferenceImages")) {
+        imagesArray = [...imagesArray, ...referenceLayoutImages]
+      }
 
       const payload = {
         username,
@@ -485,10 +508,9 @@ async function handleComboGeneration(
         product_name: productName,
         product_type: ProductTypePromptKey[productType] || productType,
         prompt_template: filledPrompt,
-        images: imageUrls,
-        image_count: imageUrls.length,
+        images: imagesArray,
+        image_count: imagesArray.length,
         output_language: outputLanguage,
-        reference_layout_images: task.prompt.referenceImages ?? [],  // 管理员配置的参考排版图片
       }
 
       // 更新状态为 PROCESSING
@@ -1018,18 +1040,37 @@ async function handleSingleGeneration(
     }
 
     // Fill in template variables before sending (Handlebars-powered)
+    const referenceLayoutImages = promptRecord.referenceImages ?? []
+    // 克隆模式用 refImages.length，其他模式用 referenceLayoutImages.length
+    const refImageCountForPrompt = mode === "CLONE" ? refImages.length : referenceLayoutImages.length
     const filledPrompt = fillPromptTemplate(
       promptRecord.promptTemplate,
       productName,
       outputLanguage,
       "A",
       features,
-      refImages.length,
+      refImageCountForPrompt,
       proFeatures,
       proStyle,
       imageCount,
       aspectRatio,
+      imageUrls.length,  // 传递用户上传的原始图片数量
     )
+
+    // 构建 images 数组：如果提示词中使用了参考图片数量变量，则拼接参考图片 URL
+    let imagesArray = mode === "CLONE" ? [...refImages, ...imageUrls] : imageUrls
+
+    console.log(`[N8N_PAYLOAD] referenceLayoutImages:`, referenceLayoutImages)
+    console.log(`[N8N_PAYLOAD] referenceLayoutImages.length:`, referenceLayoutImages.length)
+    console.log(`[N8N_PAYLOAD] promptTemplate includes numberOfReferenceImages:`, promptRecord.promptTemplate.includes("numberOfReferenceImages"))
+
+    // 检查原始提示词模板中是否包含 numberOfReferenceImages 变量，如果有且参考图片不为空，则拼接参考图片 URL
+    if (referenceLayoutImages.length > 0 && promptRecord.promptTemplate.includes("numberOfReferenceImages")) {
+      console.log(`[N8N_PAYLOAD] 拼接参考图片到 images 数组`)
+      imagesArray = [...imagesArray, ...referenceLayoutImages]
+    } else {
+      console.log(`[N8N_PAYLOAD] 不拼接参考图片 (length=${referenceLayoutImages.length}, hasVar=${promptRecord.promptTemplate.includes("numberOfReferenceImages")})`)
+    }
 
     const n8nPayload: Record<string, any> = {
       username: (session?.user as any)?.username ?? (session?.user as any)?.name ?? null,
@@ -1037,12 +1078,11 @@ async function handleSingleGeneration(
       product_name: productName,
       product_type: ProductTypePromptKey[productType as ProductTypeKey] || productType,
       prompt_template: filledPrompt,
-      images: mode === "CLONE" ? [...refImages, ...imageUrls] : imageUrls,  // 克隆模式：参考图在前，商品图在后
-      image_count: mode === "CLONE" ? refImages.length + imageUrls.length : imageUrls.length,
+      images: imagesArray,
+      image_count: imagesArray.length,
       output_language: outputLanguage,
       mode,
       quality_mode: qualityMode,
-      reference_layout_images: promptRecord.referenceImages ?? [],  // 管理员配置的参考排版图片
     }
 
     // Add Clone Mode specific fields

@@ -10,6 +10,7 @@ export interface PromptContext {
     detailBatch?: string
     features?: string
     numberOfReferenceImages?: number
+    originalImageCount?: number
     proFeatures?: string | null
     proStyle?: string | null
     imageCount?: number
@@ -59,6 +60,7 @@ export function compilePrompt(templateStr: string, payload: PromptContext): stri
         language: payload.language || "简体中文",
         features: payload.features || "",
         numberOfReferenceImages: payload.numberOfReferenceImages ?? 0,
+        originalImageCount: payload.originalImageCount ?? 0,
         imageCount: payload.imageCount ?? 9,
         aspectRatio: payload.aspectRatio ?? "1:1",
         detailBatch: payload.detailBatch ?? "A",
