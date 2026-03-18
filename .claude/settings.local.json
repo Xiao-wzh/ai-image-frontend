@@ -50,7 +50,10 @@
       "Bash(docker ps:*)",
       "Bash(docker inspect:*)",
       "Bash(find:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(python .claude/skills/ui-ux-pro-max/scripts/search.py \"SaaS documentation help center tutorial dark mode elegant\" --design-system -p \"AI Species Guide\")",
+      "Bash(python \".claude\\\\skills\\\\ui-ux-pro-max\\\\scripts\\\\search.py\" \"SaaS documentation help center tutorial dark mode elegant\" --design-system -p \"AI Species Guide\")",
+      "Bash(python -c \"print\\(''Python works''\\)\")"
     ]
   }
 }

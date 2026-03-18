@@ -12,7 +12,7 @@ import { TopBanner } from "@/components/top-banner"
 import { ReferralCampaignModal } from "@/components/referral-campaign-modal"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { LogIn, Megaphone, Zap } from "lucide-react"
+import { LogIn, Megaphone, Zap, BookOpen } from "lucide-react"
 import { useAnnouncementModal } from "@/hooks/use-announcement-modal"
 
 export interface DashboardContentProps {
@@ -75,6 +75,30 @@ export function DashboardContent({ siteName = "AI Species", welcomeMsg = "专业
                             {/* 小红点提示 */}
                             <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                         </button>
+                    </motion.div>
+
+                    {/* 使用教程按钮 */}
+                    <motion.div
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: 0.08 }}
+                    >
+                        <a
+                            href="/guide"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+                                bg-gradient-to-r from-blue-600/80 to-cyan-600/80
+                                border border-blue-500/40
+                                text-white text-xs font-semibold
+                                hover:from-blue-500/90 hover:to-cyan-500/90
+                                transition-all duration-200 cursor-pointer
+                                shadow-[0_0_12px_rgba(59,130,246,0.25)] hover:shadow-[0_0_20px_rgba(59,130,246,0.4)]
+                                whitespace-nowrap"
+                        >
+                            <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                            <span>使用教程</span>
+                        </a>
                     </motion.div>
 
                     {/* Announcement Button */}
