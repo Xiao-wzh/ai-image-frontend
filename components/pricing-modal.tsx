@@ -363,7 +363,7 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg glow-blue">
               <CreditCard className="w-6 h-6 text-white" />
             </div>
-            <span className="text-2xl font-bold gradient-text">Sexyspecies</span>
+            <span className="text-2xl font-bold gradient-text">AI-Species</span>
           </motion.div>
           <DialogTitle className="text-3xl font-bold text-white">充值积分</DialogTitle>
           <DialogDescription className="text-slate-400 max-w-md mx-auto">

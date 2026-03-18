@@ -240,7 +240,7 @@ export function RegisterModal({ isOpen, onClose, initialInviteCode = "", inviteT
       <DialogContent className="sm:max-w-md border-white/10 bg-slate-900/95 backdrop-blur-xl p-0 overflow-hidden">
         <DialogHeader className="p-6 pb-4">
           <DialogTitle className="text-2xl font-bold gradient-text">
-            欢迎来到 Sexyspecies
+            欢迎来到 AI-Species
           </DialogTitle>
           <DialogDescription className="text-slate-400">
             登录或注册以开始您的 AI 创作之旅

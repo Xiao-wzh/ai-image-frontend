@@ -75,7 +75,7 @@ export default function LoginPage() {
               <Sparkles className="w-6 h-6 text-white" />
             </div>
             <span className="text-2xl font-bold gradient-text">
-              Sexyspecies
+              AI-Species
             </span>
           </motion.div>
 

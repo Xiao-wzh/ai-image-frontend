@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     await transport.sendMail({
       from: process.env.EMAIL_FROM,
       to: email,
-      subject: "【Sexyspecies】您的注册验证码",
+      subject: "【AI-Species】您的注册验证码",
       text: `您的验证码是：${code}，5分钟内有效。如果这不是您的操作，请忽略此邮件。`,
       html: `
         <!DOCTYPE html>
@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
           <body>
             <div class="container">
               <div class="header">
-                <h1>✨ Sexyspecies</h1>
+                <h1>✨ AI-Species</h1>
               </div>
               <div class="content">
                 <p style="font-size: 18px; color: #333; margin-bottom: 10px;">您的验证码</p>
@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
               </div>
               <div class="footer">
                 <p>此邮件由 <strong>AI 智能绘图系统</strong> 自动发送，请勿回复。</p>
-                <p style="margin-top: 10px;">© 2025 Sexyspecies. All rights reserved.</p>
+                <p style="margin-top: 10px;">© 2025 AI-Species. All rights reserved.</p>
               </div>
             </div>
           </body>

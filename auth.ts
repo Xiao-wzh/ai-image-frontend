@@ -233,7 +233,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     </div>
                     <div class="footer">
                       <p>此邮件由 <strong>AI 智能绘图系统</strong> 自动发送，请勿回复。</p>
-                      <p style="margin-top: 10px;">© 2025 Sexyspecies. All rights reserved.</p>
+                      <p style="margin-top: 10px;">© 2025 AI-Species. All rights reserved.</p>
                     </div>
                   </div>
                 </body>

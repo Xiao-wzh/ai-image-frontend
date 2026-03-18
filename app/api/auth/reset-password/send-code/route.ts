@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
     await transport.sendMail({
       from: process.env.EMAIL_FROM,
       to: emailLower,
-      subject: "【Sexyspecies】重置密码验证码",
+      subject: "【AI-Species】重置密码验证码",
       text: `您正在重置密码。验证码：${code}，10分钟内有效。如果这不是您的操作，请忽略此邮件。`,
       html: `
         <!DOCTYPE html>
@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
           <body>
             <div class="container">
               <div class="header">
-                <h1>✨ Sexyspecies</h1>
+                <h1>✨ AI-Species</h1>
               </div>
               <div class="content">
                 <p style="font-size: 18px; color: #333; margin-bottom: 10px;">重置密码验证码</p>
@@ -172,7 +172,7 @@ export async function POST(req: NextRequest) {
               </div>
               <div class="footer">
                 <p>此邮件由系统自动发送，请勿回复。</p>
-                <p style="margin-top: 10px;">© 2025 Sexyspecies. All rights reserved.</p>
+                <p style="margin-top: 10px;">© 2025 AI-Species. All rights reserved.</p>
               </div>
             </div>
           </body>

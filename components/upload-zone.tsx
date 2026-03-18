@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { Sparkles, Crown, Zap } from "lucide-react"
+import { Sparkles, Crown, Zap, BookOpen, Plus, Wallet } from "lucide-react"
 import { ModeCompareModal } from "./mode-compare-modal"
 import { toast } from "sonner"
 import type { CascaderPlatformItem } from "@/components/cascader-panel"
@@ -15,6 +15,7 @@ import { useSession } from "next-auth/react"
 import { useLoginModal } from "@/hooks/use-login-modal"
 import { ProductTypeKey, GenerationLanguage, DEFAULT_OUTPUT_LANGUAGE } from "@/lib/constants"
 import { useCosts } from "@/hooks/use-costs"
+import { PricingModal } from "./pricing-modal"
 import type { CockpitFormProps } from "./cockpit-types"
 
 type PlatformTreeItem = CascaderPlatformItem
@@ -65,6 +66,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
 
   // 模式对比弹窗
   const [isModeCompareOpen, setIsModeCompareOpen] = useState(false)
+
+  // 充值弹窗
+  const [isPricingModalOpen, setIsPricingModalOpen] = useState(false)
 
   // PRO 模式 — qualityMode 是全局开关
   const [qualityMode, setQualityMode] = useState<"STANDARD" | "PRO">("STANDARD")
@@ -466,9 +470,29 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   }
 
   /* ══════════════════ RENDER ══════════════════ */
+  const totalCredits = (session?.user?.credits ?? 0) + (session?.user?.bonusCredits ?? 0)
+
   return (
     <>
-      <div className="space-y-6">
+      <div className="space-y-6 relative">
+        {/* 使用教程按钮 - 居中置顶 */}
+        <motion.a
+          href="/guide"
+          target="_blank"
+          rel="noopener noreferrer"
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="absolute left-1/2 -translate-x-1/2 -top-1 flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+            bg-gradient-to-r from-blue-600/20 via-purple-600/20 to-pink-600/20
+            border border-white/10 hover:border-purple-500/40
+            text-sm text-slate-300 hover:text-white
+            transition-all duration-300 cursor-pointer
+            shadow-lg hover:shadow-purple-500/10 z-10"
+        >
+          <BookOpen className="w-4 h-4 text-purple-400" />
+          <span className="font-medium">使用教程</span>
+        </motion.a>
+
         {/* ── Header ── */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -480,11 +504,31 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
             <p className="text-sm text-slate-400">上传图片并选择风格，让 AI 为您生成专业主图</p>
           </div>
           {session?.user && (
-            <motion.div whileHover={{ scale: 1.05 }} className="glass rounded-xl px-4 py-2">
-              <div className="text-xs text-slate-400 mb-1">剩余积分</div>
-              <div className="text-xl font-bold gradient-text-alt">
-                {(session.user.credits ?? 0) + (session.user.bonusCredits ?? 0)}
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              className="flex items-center gap-3 glass rounded-xl px-4 py-3 border border-white/10"
+            >
+              <div className="flex items-center gap-2">
+                <Wallet className="w-5 h-5 text-purple-400" />
+                <div>
+                  <div className="text-xs text-slate-400">剩余积分</div>
+                  <div className="text-xl font-bold gradient-text-alt">
+                    {totalCredits}
+                  </div>
+                </div>
               </div>
+              <button
+                onClick={() => setIsPricingModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg
+                  bg-gradient-to-r from-purple-600 to-pink-600
+                  hover:from-purple-500 hover:to-pink-500
+                  text-white text-xs font-semibold
+                  transition-all duration-200 cursor-pointer
+                  shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                充值
+              </button>
             </motion.div>
           )}
         </motion.div>
@@ -680,6 +724,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
 
       {/* 模式对比弹窗 */}
       <ModeCompareModal open={isModeCompareOpen} onClose={() => setIsModeCompareOpen(false)} />
+
+      {/* 充值弹窗 */}
+      <PricingModal isOpen={isPricingModalOpen} onClose={() => setIsPricingModalOpen(false)} />
     </>
   )
 }
