@@ -47,51 +47,51 @@ export function StandardForm(props: CockpitFormProps) {
             transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
             className="space-y-6"
         >
-            {/* 第三步：创意/克隆模式 — 仅详情页显示 */}
-            {taskType === "DETAIL_PAGE" && (
-                <div>
-                    <div className="flex items-center gap-3 mb-0">
-                        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest shrink-0">③ 详情页风格</p>
-                    </div>
-                    <div className="flex items-center gap-1 p-1 mt-2 rounded-xl bg-slate-800/50 border border-white/10 w-fit">
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setGenerationMode("CREATIVE")
-                                setProductType("")
-                                if (generatedImages.length > 0) { setGeneratedImages([]); setFullImageUrl(null); setCurrentGenerationId(null) }
-                            }}
-                            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${generationMode === "CREATIVE"
-                                    ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md"
-                                    : "text-slate-400 hover:text-white hover:bg-white/5"
-                                }`}
-                        >
-                            <Sparkles className="w-3.5 h-3.5" />
-                            创意模式
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                setGenerationMode("CLONE")
-                                setProductType("")
-                                if (generatedImages.length > 0) { setGeneratedImages([]); setFullImageUrl(null); setCurrentGenerationId(null) }
-                            }}
-                            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${generationMode === "CLONE"
-                                    ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-500/20"
-                                    : "text-slate-400 hover:text-white hover:bg-white/5"
-                                }`}
-                        >
-                            <Copy className="w-3.5 h-3.5" />
-                            克隆模式
-                        </button>
-                    </div>
-                    {generationMode === "CLONE" && (
-                        <p className="text-xs text-amber-400/80 mt-2">
-                            克隆模式将复制参考图的构图风格，适合快速生成相似风格的图片
-                        </p>
-                    )}
+            {/* 第三步：创意/克隆模式 */}
+            <div>
+                <div className="flex items-center gap-3 mb-0">
+                    <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest shrink-0">
+                        {taskType === "DETAIL_PAGE" ? "③ 详情页风格" : "② 生成风格"}
+                    </p>
                 </div>
-            )}
+                <div className="flex items-center gap-1 p-1 mt-2 rounded-xl bg-slate-800/50 border border-white/10 w-fit">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setGenerationMode("CREATIVE")
+                            setProductType("")
+                            if (generatedImages.length > 0) { setGeneratedImages([]); setFullImageUrl(null); setCurrentGenerationId(null) }
+                        }}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${generationMode === "CREATIVE"
+                                ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md"
+                                : "text-slate-400 hover:text-white hover:bg-white/5"
+                            }`}
+                    >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        创意模式
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setGenerationMode("CLONE")
+                            setProductType("")
+                            if (generatedImages.length > 0) { setGeneratedImages([]); setFullImageUrl(null); setCurrentGenerationId(null) }
+                        }}
+                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${generationMode === "CLONE"
+                                ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-500/20"
+                                : "text-slate-400 hover:text-white hover:bg-white/5"
+                            }`}
+                    >
+                        <Copy className="w-3.5 h-3.5" />
+                        克隆模式
+                    </button>
+                </div>
+                {generationMode === "CLONE" && (
+                    <p className="text-xs text-amber-400/80 mt-2">
+                        克隆模式将复制参考图的构图风格，适合快速生成相似风格的图片
+                    </p>
+                )}
+            </div>
 
             {/* 平台 / 风格 + 商品名称 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -156,7 +156,7 @@ export function StandardForm(props: CockpitFormProps) {
                 </motion.div>
 
                 {/* 克隆模式卖点 */}
-                {taskType === "DETAIL_PAGE" && generationMode === "CLONE" && (
+                {generationMode === "CLONE" && (
                     <motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -275,7 +275,7 @@ export function StandardForm(props: CockpitFormProps) {
             </motion.div>
 
             {/* 参考图上传 — 仅克隆模式 */}
-            {taskType === "DETAIL_PAGE" && generationMode === "CLONE" && (
+            {generationMode === "CLONE" && (
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
                     <div className="flex items-end justify-between gap-3 flex-wrap">
                         <label className="block text-sm font-medium text-amber-300">

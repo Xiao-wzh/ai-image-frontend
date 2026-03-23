@@ -132,18 +132,19 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     return () => clearInterval(timer)
   }, [proPollingId, update])
 
-  useEffect(() => {
-    if (taskType === "MAIN_IMAGE" && generationMode === "CLONE") {
-      setGenerationMode("CREATIVE")
-      setProductType("")
-    }
-  }, [taskType, generationMode])
+  // 主图也开放克隆模式，不再自动切换到创意模式
 
   /* ──────────────── 费用计算 ──────────────── */
   const baseCost = taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
   const comboAddOnCost = costs.DETAIL_PAGE_RETRY_COST
+
+  // 克隆模式 PRO: 张数由参考图数量决定（主图和详情页都支持）
+  const effectiveImageCount = (generationMode === "CLONE" && qualityMode === "PRO")
+    ? refFiles.length
+    : proImageCount
+
   // PRO 模式: 9 张特惠 500 积分，其他按原价
-  const proCost = proImageCount === 9 ? 500 : (costs.PRO_COST_PER_IMAGE * proImageCount)
+  const proCost = effectiveImageCount === 9 ? 500 : (costs.PRO_COST_PER_IMAGE * effectiveImageCount)
   const totalCost = qualityMode === "PRO"
     ? proCost
     : (isComboMode && taskType === "MAIN_IMAGE" ? baseCost + comboAddOnCost : baseCost)
@@ -153,8 +154,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     let cancelled = false
     async function load() {
       try {
-        const modeForConfig = taskType === "MAIN_IMAGE" ? "CREATIVE" : generationMode
-        const res = await fetch(`/api/config/platforms?taskType=${taskType}&mode=${modeForConfig}&qualityMode=${qualityMode}`)
+        // 主图和详情页都支持克隆模式，直接使用 generationMode
+        const res = await fetch(`/api/config/platforms?taskType=${taskType}&mode=${generationMode}&qualityMode=${qualityMode}`)
         const data = await res.json().catch(() => null)
         if (!res.ok) throw new Error("加载平台配置失败")
         if (!cancelled) {
@@ -340,7 +341,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     if (!productName.trim()) { toast.error("请填写商品名称"); return }
     if (!productType) { toast.error("请选择平台/风格"); return }
     if (files.length === 0) { toast.error("请上传商品图片"); return }
-    if (taskType === "DETAIL_PAGE" && generationMode === "CLONE" && refFiles.length === 0) {
+    if (generationMode === "CLONE" && refFiles.length === 0) {
       toast.error("克隆模式需要上传参考图"); return
     }
 
@@ -357,7 +358,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
       )
 
       let uploadedRefUrls: string[] = []
-      if (taskType === "DETAIL_PAGE" && generationMode === "CLONE" && refFiles.length > 0) {
+      if (generationMode === "CLONE" && refFiles.length > 0) {
         uploadedRefUrls = await Promise.all(
           refFiles.map(async (file) => {
             const { uploadUrl, publicUrl } = await signOne(file)
@@ -377,9 +378,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           platformKey,
           taskType,
           images: uploadedUrls,
-          mode: taskType === "MAIN_IMAGE" ? "CREATIVE" : generationMode,
-          features: taskType === "DETAIL_PAGE" && generationMode === "CLONE" ? features : undefined,
-          refImages: taskType === "DETAIL_PAGE" && generationMode === "CLONE" ? uploadedRefUrls : undefined,
+          mode: generationMode,
+          features: generationMode === "CLONE" ? features : undefined,
+          refImages: generationMode === "CLONE" ? uploadedRefUrls : undefined,
           // STANDARD: 不传 combo 如果是 PRO
           withDetailCombo: !isPro && isComboMode && taskType === "MAIN_IMAGE" && generationMode === "CREATIVE",
           outputLanguage,
@@ -389,8 +390,12 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           // PRO 专属参数：仅在 PRO 模式传递，STANDARD 时强制不传 (防止脏数据)
           ...(isPro
             ? {
-              imageCount: proImageCount,
-              aspectRatio: proAspectRatio,
+              // 克隆模式: imageCount 由参考图数量决定（主图和详情页都支持）
+              imageCount: generationMode === "CLONE"
+                ? refFiles.length
+                : proImageCount,
+              // auto 画幅传空字符串，让 N8N 自动处理
+              aspectRatio: proAspectRatio === "auto" ? "" : proAspectRatio,
               proFeatures: proFeatures || undefined,
               proStyle: proStyle || undefined,
             }
@@ -587,7 +592,11 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
             {/* PRO 增强卡片 */}
             <button
               type="button"
-              onClick={() => setQualityMode("PRO")}
+              onClick={() => {
+                setQualityMode("PRO")
+                // 切换到 PRO 模式时，设置默认张数为 9
+                setProImageCount(9)
+              }}
               className={`relative flex flex-col gap-2 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
                 qualityMode === "PRO"
                   ? "border-amber-500/50 bg-amber-950/20 shadow-lg shadow-amber-500/10"
@@ -636,8 +645,11 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
                 type="button"
                 onClick={() => {
                   setTaskType(tab.value)
-                  // PRO 模式下切换任务类型时，更新默认比例
+                  // PRO 模式下切换任务类型时，更新默认比例和张数
                   setProAspectRatio(tab.value === "DETAIL_PAGE" ? "9:16" : "1:1")
+                  if (qualityMode === "PRO") {
+                    setProImageCount(9)
+                  }
                   if (isSubmitting || generatedImages.length > 0) {
                     setIsSubmitting(false)
                     setGeneratedImages([])

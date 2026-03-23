@@ -685,12 +685,13 @@ async function handleSingleGeneration(
         // 重试时保持原始计费参数
         costPerImage = (originalGeneration as any).costPerImage || costs.PRO_COST_PER_IMAGE
         imageCount = (originalGeneration as any).imageCount || 9
-        aspectRatio = (originalGeneration as any).aspectRatio || "1:1"
+        // 使用 ?? 而不是 ||，保留空字符串（auto 模式）
+        aspectRatio = (originalGeneration as any).aspectRatio ?? "1:1"
 
         // 关键修复：保持原始 totalCost，不重新计算（避免 55×9=495 的问题）
         totalCost = (originalGeneration as any).totalCost || (costPerImage * imageCount)
         actualCost = totalCost
-        console.log(`[GENERATE_API] PRO retry: ${imageCount} images, costPerImage=${costPerImage}, totalCost=${totalCost}`)
+        console.log(`[GENERATE_API] PRO retry: ${imageCount} images, costPerImage=${costPerImage}, aspectRatio=${aspectRatio}, totalCost=${totalCost}`)
       } else {
         actualCost = getRetryCost(taskType, costs)
         totalCost = actualCost
