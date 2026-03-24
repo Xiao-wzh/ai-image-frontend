@@ -6,61 +6,68 @@
  */
 
 import "dotenv/config"
-import { PrismaClient } from "@prisma/client"
+import pg from "pg"
 
-const prisma = new PrismaClient()
-
-// 直接查询系统配置（绕过 Next.js 缓存）
-async function getEditCost(): Promise<number> {
-  const config = await prisma.systemConfig.findUnique({
-    where: { key: "IMAGE_EDIT_COST" },
-  })
-  return config ? parseInt(config.value, 10) : 10 // 默认 10 积分
+const DATABASE_URL = process.env.DATABASE_URL!
+if (!DATABASE_URL) {
+  console.error("❌ DATABASE_URL 未配置")
+  process.exit(1)
 }
 
-// 直接退款（不依赖 refundCredits 服务）
+const pool = new pg.Pool({ connectionString: DATABASE_URL })
+
+// 直接查询系统配置
+async function getEditCost(): Promise<number> {
+  const result = await pool.query(`SELECT value FROM "SystemConfig" WHERE key = 'IMAGE_EDIT_COST'`)
+  if (result.rows.length > 0) {
+    return parseInt(result.rows[0].value, 10)
+  }
+  return 10 // 默认 10 积分
+}
+
+// 直接退款
 async function refundCreditsDirect(userId: string, amount: number, reason: string) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { credits: true, bonusCredits: true },
-  })
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
 
-  if (!user) return
+    // 更新用户积分（优先退还到 bonusCredits）
+    await client.query(`
+      UPDATE "User"
+      SET "bonusCredits" = COALESCE("bonusCredits", 0) + $1
+      WHERE id = $2
+    `, [amount, userId])
 
-  // 优先退还到 bonusCredits
-  const refundBonus = Math.min(amount, amount) // 全部退到 bonusCredits
-  const refundPaid = 0
+    // 创建积分记录
+    await client.query(`
+      INSERT INTO "CreditRecord" (id, "userId", amount, type, description, "createdAt")
+      VALUES (gen_random_uuid(), $1, $2, 'REFUND', $3, NOW())
+    `, [userId, amount, reason])
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      bonusCredits: { increment: refundBonus },
-      credits: { increment: refundPaid },
-    },
-  })
-
-  await prisma.creditRecord.create({
-    data: {
-      userId,
-      amount: amount,
-      type: "REFUND",
-      description: reason,
-    },
-  })
+    await client.query('COMMIT')
+  } catch (err) {
+    await client.query('ROLLBACK')
+    throw err
+  } finally {
+    client.release()
+  }
 }
 
 async function main() {
   console.log("🔍 正在查找脏数据...")
 
   // 查找所有 editingImageIndexes 不为空的记录
-  const dirtyRecords = await prisma.$queryRaw<any[]>`
-    SELECT id, "userId", "editingImageIndexes", "productName"
+  const result = await pool.query(`
+    SELECT id, "userId", "editingImageIndexes"
     FROM "Generation"
     WHERE cardinality("editingImageIndexes") > 0
-  `
+  `)
+
+  const dirtyRecords = result.rows
 
   if (dirtyRecords.length === 0) {
     console.log("✅ 没有脏数据需要清理")
+    await pool.end()
     return
   }
 
@@ -79,7 +86,7 @@ async function main() {
 
     try {
       // 清除 editingImageIndexes
-      await prisma.$executeRaw`UPDATE "Generation" SET "editingImageIndexes" = '{}' WHERE id = ${record.id}::uuid`
+      await pool.query(`UPDATE "Generation" SET "editingImageIndexes" = '{}' WHERE id = $1`, [record.id])
 
       // 退款
       if (record.userId && refundAmount > 0) {
@@ -100,7 +107,7 @@ async function main() {
   console.log(`❌ 失败: ${failCount} 条`)
   console.log(`💰 总退款: ${totalRefund} 积分`)
 
-  await prisma.$disconnect()
+  await pool.end()
 }
 
 main().catch(console.error)
