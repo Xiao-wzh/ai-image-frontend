@@ -1078,7 +1078,6 @@ async function handleSingleGeneration(
       generation_id: generationId,
       product_name: productName,
       product_type: ProductTypePromptKey[productType as ProductTypeKey] || productType,
-      prompt_template: filledPrompt,
       images: imagesArray,
       image_count: imagesArray.length,
       output_language: outputLanguage,

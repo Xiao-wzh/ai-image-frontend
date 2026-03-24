@@ -38,6 +38,7 @@ module.exports = {
             script: "npx",
             args: "tsx workers/tos-upload-worker.ts",
             cwd: "/var/www/ai-image-frontend/ai-image-frontend",
+            exec_mode: "fork",
             instances: 1,
             autorestart: true,
             time: true,

@@ -90,29 +90,60 @@ const worker = new Worker<TosUploadJobData, TosUploadJobResult>(
       const filePath = hostFilePaths[0]
       if (!filePath) throw new Error("EDIT 模式缺少文件路径")
 
-      console.log(`[TOS-Worker] ▶  ${shortId}... | EDIT 图片#${imageIndex + 1}${retryTag}`)
-
-      const objectKey = `generations/${generationId}/edit_${imageIndex + 1}_${Date.now()}.png`
-      await uploadFileToTos(filePath, objectKey)
-
-      // 查询当前 generatedImages，替换对应索引
+      // 先查询当前状态，验证 imageIndex 是否有效
       const generation = await prisma.generation.findUnique({
         where: { id: generationId },
         select: { generatedImages: true, editingImageIndexes: true },
       })
       if (!generation) throw new Error(`Generation 不存在: ${generationId}`)
 
+      // 验证 imageIndex 是否在 editingImageIndexes 中
+      // 如果不在，使用 editingImageIndexes 中的第一个索引（修复 N8N 返回错误索引的问题）
+      let actualIndex = imageIndex
+      const editingIndexes = generation.editingImageIndexes || []
+      if (!editingIndexes.includes(imageIndex)) {
+        if (editingIndexes.length > 0) {
+          actualIndex = editingIndexes[0]
+          console.warn(`[TOS-Worker] ⚠  ${shortId}... N8N返回的imageIndex=${imageIndex}不在编辑列表${JSON.stringify(editingIndexes)}中，使用actualIndex=${actualIndex}`)
+        } else {
+          // 没有编辑中的索引，可能已被其他进程处理，直接返回成功
+          console.warn(`[TOS-Worker] ⏭  ${shortId}... 没有编辑中的图片，跳过`)
+          return { success: true, imageKeys: [] }
+        }
+      }
+
+      console.log(`[TOS-Worker] ▶  ${shortId}... | EDIT 图片#${actualIndex + 1}${retryTag}`)
+
+      const objectKey = `generations/${generationId}/edit_${actualIndex + 1}_${Date.now()}.png`
+      await uploadFileToTos(filePath, objectKey)
+
       const updatedImages = [...generation.generatedImages]
-      updatedImages[imageIndex] = keyToCdnUrl(objectKey)
+      updatedImages[actualIndex] = keyToCdnUrl(objectKey)
 
-      const cleanedIndexes = (generation.editingImageIndexes || []).filter(
-        (idx: number) => idx !== imageIndex
-      )
+      // 清除实际使用的索引
+      const cleanedIndexes = editingIndexes.filter((idx: number) => idx !== actualIndex)
 
+      console.log(`[TOS-Worker] 📝 更新数据库: actualIndex=${actualIndex}, editingIndexes=${JSON.stringify(editingIndexes)}, cleanedIndexes=${JSON.stringify(cleanedIndexes)}`)
+
+      // 分两步更新，确保 editingImageIndexes 被正确清除
+      // 第一步：更新 generatedImages
       await prisma.generation.update({
         where: { id: generationId },
-        data: { generatedImages: updatedImages, editingImageIndexes: cleanedIndexes },
+        data: { generatedImages: updatedImages },
       })
+
+      // 第二步：单独更新 editingImageIndexes（Prisma 对空数组更新有问题）
+      if (cleanedIndexes.length === 0) {
+        // 空数组使用原生 SQL 强制更新
+        await prisma.$executeRaw`UPDATE "Generation" SET "editingImageIndexes" = '{}' WHERE id = ${generationId}::uuid`
+      } else {
+        await prisma.generation.update({
+          where: { id: generationId },
+          data: { editingImageIndexes: cleanedIndexes },
+        })
+      }
+
+      console.log(`[TOS-Worker] ✅ 数据库更新完成`)
 
       await cleanupTempFiles([filePath])
 
@@ -120,7 +151,7 @@ const worker = new Worker<TosUploadJobData, TosUploadJobResult>(
       const counts = await getTosUploadQueue().getJobCounts()
       const waitingJobs = (counts.waiting ?? 0) + (counts.delayed ?? 0)
       const inProgressJobs = Math.max(0, (counts.active ?? 1) - 1)
-      console.log(`[TOS-Worker] ✅ EDIT 图片#${imageIndex + 1} | ${shortId}... 完成(${elapsedSec}s) | 队列: ${waitingJobs}个Job等待 ${inProgressJobs}个Job进行中`)
+      console.log(`[TOS-Worker] ✅ EDIT 图片#${actualIndex + 1} | ${shortId}... 完成(${elapsedSec}s) | 队列: ${waitingJobs}个Job等待 ${inProgressJobs}个Job进行中`)
 
       return { success: true, imageKeys: [objectKey] }
     }

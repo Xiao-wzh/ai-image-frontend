@@ -48,6 +48,9 @@ export async function POST(req: NextRequest) {
   // 兼容多种字段名：filePath / file_path / editFilePath
   const filePath = body.filePath || body.file_path || body.editFilePath
 
+  // 打印完整的回调参数，方便调试
+  console.log(`[编辑回调] 📥 收到回调: generationId=${generationId}, imageIndex=${imageIndex}, filePath=${filePath}`)
+
   if (!generationId || typeof imageIndex !== "number" || !filePath) {
     console.error("[编辑回调] ❌ 缺少必要字段", { generationId, imageIndex, filePath })
     return NextResponse.json({ error: "缺少必要字段: generationId, imageIndex, filePath" }, { status: 400 })
@@ -67,9 +70,17 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 4. 检查编辑状态是否有效 ──
-  if (!generation.editingImageIndexes?.includes(imageIndex)) {
-    console.error(`[编辑回调] ❌ 图片#${imageIndex + 1} 不在编辑状态`)
-    return NextResponse.json({ error: "图片不在编辑状态" }, { status: 400 })
+  // 如果 N8N 返回的 imageIndex 不在编辑列表中，但编辑列表不为空，仍然允许入队
+  // Worker 会自动使用正确的索引
+  const editingIndexes = generation.editingImageIndexes || []
+  if (editingIndexes.length === 0) {
+    console.error(`[编辑回调] ❌ 没有图片在编辑状态`)
+    return NextResponse.json({ error: "没有图片在编辑状态" }, { status: 400 })
+  }
+
+  // 记录索引不匹配的情况
+  if (!editingIndexes.includes(imageIndex)) {
+    console.warn(`[编辑回调] ⚠  N8N返回的imageIndex=${imageIndex}不在编辑列表${JSON.stringify(editingIndexes)}中，Worker将自动修正`)
   }
 
   const hostFilePath = translateToHostPath(filePath)
