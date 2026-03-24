@@ -31,6 +31,10 @@ export async function GET(req: NextRequest) {
         const status = searchParams.get("status")?.trim() || null
         const startDate = searchParams.get("startDate") || null
         const endDate = searchParams.get("endDate") || null
+        // 新增筛选参数
+        const qualityMode = searchParams.get("qualityMode")?.trim() || null
+        const taskType = searchParams.get("taskType")?.trim() || null
+        const mode = searchParams.get("mode")?.trim() || null
 
         // 构建 where 条件
         const whereConditions: any[] = []
@@ -55,6 +59,21 @@ export async function GET(req: NextRequest) {
         // 状态筛选
         if (status) {
             whereConditions.push({ status })
+        }
+
+        // 画质模式筛选
+        if (qualityMode) {
+            whereConditions.push({ qualityMode })
+        }
+
+        // 任务类型筛选
+        if (taskType) {
+            whereConditions.push({ taskType })
+        }
+
+        // 生成模式筛选
+        if (mode) {
+            whereConditions.push({ mode })
         }
 
         // 日期范围筛选
@@ -121,6 +140,39 @@ export async function GET(req: NextRequest) {
             productTypeDescription: descriptionMap.get(g.productType) || null,
         }))
 
+        // 计算统计数据
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+
+        // 并行查询统计数据
+        const [
+            todayCount,
+            totalCostSum,
+            proCount,
+            completedCount,
+            allTotal,
+        ] = await Promise.all([
+            // 今日生成数
+            prisma.generation.count({
+                where: { createdAt: { gte: today } }
+            }),
+            // 当前筛选条件下的总消耗积分
+            prisma.generation.aggregate({
+                where,
+                _sum: { totalCost: true },
+            }),
+            // 当前筛选条件下 PRO 模式数量
+            prisma.generation.count({
+                where: { ...where, qualityMode: "PRO" }
+            }),
+            // 当前筛选条件下成功数量
+            prisma.generation.count({
+                where: { ...where, status: "COMPLETED" }
+            }),
+            // 全部记录总数（用于计算全局统计）
+            prisma.generation.count(),
+        ])
+
         const totalPages = Math.ceil(total / limit)
 
         // Transform image keys to CDN URLs
@@ -132,6 +184,14 @@ export async function GET(req: NextRequest) {
             totalPages,
             page,
             limit,
+            stats: {
+                todayCount,
+                totalCost: totalCostSum._sum.totalCost || 0,
+                proCount,
+                completedCount,
+                successRate: total > 0 ? Math.round((completedCount / total) * 100) : 0,
+                proRate: total > 0 ? Math.round((proCount / total) * 100) : 0,
+            },
         })
     } catch (error) {
         console.error("获取生成列表失败:", error)
