@@ -6,9 +6,48 @@
  */
 
 import "dotenv/config"
-import prisma from "../lib/prisma"
-import { refundCredits } from "../lib/credit-service"
-import { getSystemCost } from "../lib/system-config"
+import { PrismaClient } from "@prisma/client"
+
+const prisma = new PrismaClient()
+
+// 直接查询系统配置（绕过 Next.js 缓存）
+async function getEditCost(): Promise<number> {
+  const config = await prisma.systemConfig.findUnique({
+    where: { key: "IMAGE_EDIT_COST" },
+  })
+  return config ? parseInt(config.value, 10) : 10 // 默认 10 积分
+}
+
+// 直接退款（不依赖 refundCredits 服务）
+async function refundCreditsDirect(userId: string, amount: number, reason: string) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { credits: true, bonusCredits: true },
+  })
+
+  if (!user) return
+
+  // 优先退还到 bonusCredits
+  const refundBonus = Math.min(amount, amount) // 全部退到 bonusCredits
+  const refundPaid = 0
+
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      bonusCredits: { increment: refundBonus },
+      credits: { increment: refundPaid },
+    },
+  })
+
+  await prisma.creditRecord.create({
+    data: {
+      userId,
+      amount: amount,
+      type: "REFUND",
+      description: reason,
+    },
+  })
+}
 
 async function main() {
   console.log("🔍 正在查找脏数据...")
@@ -27,7 +66,7 @@ async function main() {
 
   console.log(`📋 找到 ${dirtyRecords.length} 条脏数据`)
 
-  const EDIT_COST = await getSystemCost("IMAGE_EDIT_COST")
+  const EDIT_COST = await getEditCost()
   console.log(`💰 编辑费用: ${EDIT_COST} 积分/次`)
 
   let successCount = 0
@@ -39,15 +78,13 @@ async function main() {
     const refundAmount = indexes.length * EDIT_COST
 
     try {
-      await prisma.$transaction(async (tx: any) => {
-        // 清除 editingImageIndexes
-        await tx.$executeRaw`UPDATE "Generation" SET "editingImageIndexes" = '{}' WHERE id = ${record.id}::uuid`
+      // 清除 editingImageIndexes
+      await prisma.$executeRaw`UPDATE "Generation" SET "editingImageIndexes" = '{}' WHERE id = ${record.id}::uuid`
 
-        // 退款
-        if (record.userId && refundAmount > 0) {
-          await refundCredits(tx, record.userId, refundAmount, `图片编辑失败自动退款 (清理脏数据)`)
-        }
-      })
+      // 退款
+      if (record.userId && refundAmount > 0) {
+        await refundCreditsDirect(record.userId, refundAmount, `图片编辑失败自动退款 (清理脏数据)`)
+      }
 
       console.log(`✅ ${record.id.slice(0, 8)}... 退款 ${refundAmount} 积分 (${indexes.length} 次编辑)`)
       successCount++
