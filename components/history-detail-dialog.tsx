@@ -501,7 +501,7 @@ export function HistoryDetailDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className={cn(
-          "max-w-4xl w-[90vw] h-[80vh] p-0 flex flex-col gap-0 bg-slate-950/95 border-white/10 overflow-hidden",
+          "max-w-4xl w-[90vw] max-h-[85vh] p-0 flex flex-col gap-0 bg-slate-950/95 border-white/10 overflow-hidden",
           (showRegenerateConfirm || showDiscountConfirm || showUnlockConfirm || showAppealModal) && "pointer-events-none"
         )}>
           {/* Header */}
@@ -548,7 +548,7 @@ export function HistoryDetailDialog({
           </div>
 
           {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 min-h-0 overflow-y-auto p-6">
             {/* Watermark Bar */}
             <div className="mb-4 p-3 rounded-xl bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20">
               <div className="flex items-center justify-between gap-3 flex-wrap">
