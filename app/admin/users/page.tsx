@@ -17,6 +17,7 @@ import {
     Loader2,
     ChevronLeft,
     ChevronRight,
+    UserPlus,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -59,6 +60,7 @@ type User = {
     bonusCredits: number
     totalCredits: number
     totalConsumed: number
+    totalRecharged: number
     createdAt: string
     lastActiveAt: string | null
     isActive: boolean
@@ -68,6 +70,7 @@ type Stats = {
     total: number
     active: number
     inactive: number
+    todayNew: number
 }
 
 type Pagination = {
@@ -77,7 +80,7 @@ type Pagination = {
     totalPages: number
 }
 
-type SortField = "createdAt" | "credits" | "totalConsumed"
+type SortField = "createdAt" | "credits" | "totalConsumed" | "totalRecharged"
 type SortOrder = "asc" | "desc"
 
 function formatTimeAgo(dateString: string | null): string {
@@ -270,7 +273,7 @@ export default function AdminUsersPage() {
 
                     {/* Stats Cards */}
                     {stats && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
@@ -294,6 +297,23 @@ export default function AdminUsersPage() {
                                 className="bg-slate-900/50 border border-white/10 rounded-xl p-5"
                             >
                                 <div className="flex items-center gap-3">
+                                    <div className="p-3 bg-emerald-500/10 rounded-lg">
+                                        <UserPlus className="w-6 h-6 text-emerald-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm text-slate-400">今日新增</p>
+                                        <p className="text-2xl font-bold text-emerald-400">{stats.todayNew}</p>
+                                    </div>
+                                </div>
+                            </motion.div>
+
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.2 }}
+                                className="bg-slate-900/50 border border-white/10 rounded-xl p-5"
+                            >
+                                <div className="flex items-center gap-3">
                                     <div className="p-3 bg-green-500/10 rounded-lg">
                                         <Activity className="w-6 h-6 text-green-400" />
                                     </div>
@@ -307,7 +327,7 @@ export default function AdminUsersPage() {
                             <motion.div
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.2 }}
+                                transition={{ delay: 0.3 }}
                                 className="bg-slate-900/50 border border-white/10 rounded-xl p-5"
                             >
                                 <div className="flex items-center gap-3">
@@ -391,6 +411,15 @@ export default function AdminUsersPage() {
                                             <SortIcon field="totalConsumed" />
                                         </div>
                                     </TableHead>
+                                    <TableHead
+                                        className="text-slate-300 cursor-pointer hover:text-white transition-colors"
+                                        onClick={() => handleSort("totalRecharged")}
+                                    >
+                                        <div className="flex items-center">
+                                            累计充值
+                                            <SortIcon field="totalRecharged" />
+                                        </div>
+                                    </TableHead>
                                     <TableHead className="text-slate-300">角色</TableHead>
                                     <TableHead className="text-slate-300">活跃状态</TableHead>
                                     <TableHead
@@ -414,13 +443,14 @@ export default function AdminUsersPage() {
                                             <TableCell><Skeleton className="h-4 w-16 bg-slate-700" /></TableCell>
                                             <TableCell><Skeleton className="h-4 w-16 bg-slate-700" /></TableCell>
                                             <TableCell><Skeleton className="h-4 w-16 bg-slate-700" /></TableCell>
+                                            <TableCell><Skeleton className="h-4 w-16 bg-slate-700" /></TableCell>
                                             <TableCell><Skeleton className="h-4 w-24 bg-slate-700" /></TableCell>
                                             <TableCell><Skeleton className="h-4 w-24 bg-slate-700" /></TableCell>
                                         </TableRow>
                                     ))
                                 ) : displayUsers.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-8 text-slate-400">
+                                        <TableCell colSpan={8} className="text-center py-8 text-slate-400">
                                             暂无数据
                                         </TableCell>
                                     </TableRow>
@@ -447,6 +477,11 @@ export default function AdminUsersPage() {
                                             <TableCell>
                                                 <span className="text-orange-400 font-medium">
                                                     {user.totalConsumed.toLocaleString()}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="text-amber-400 font-medium">
+                                                    ¥{(user.totalRecharged / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </span>
                                             </TableCell>
                                             <TableCell>

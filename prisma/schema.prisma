@@ -322,6 +322,7 @@ model Appeal {
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([status, createdAt(sort: Desc)]) // 优化申诉列表查询
 }
 
 /// 水印模板（用户预设）

@@ -5,7 +5,7 @@ import { requireAdmin } from "@/lib/check-admin"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-type SortField = "createdAt" | "credits" | "totalConsumed"
+type SortField = "createdAt" | "credits" | "totalConsumed" | "totalRecharged"
 type SortOrder = "asc" | "desc"
 
 const DEFAULT_PAGE_SIZE = 20
@@ -66,20 +66,26 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
         select: { createdAt: true, amount: true },
       },
+      orders: {
+        where: { status: "PAID" },
+        select: { amount: true },
+      },
     },
   })
 
-  // Transform to include lastActiveAt and totalConsumed
+  // Transform to include lastActiveAt, totalConsumed and totalRecharged
   const usersWithActivity = allUsers.map(user => {
     const lastCreditRecord = user.creditRecords[0]
     const lastActiveAt = lastCreditRecord?.createdAt || null
     const totalConsumed = user.creditRecords.reduce((sum, r) => sum + Math.abs(r.amount), 0)
-    const { creditRecords, ...rest } = user
+    const totalRecharged = user.orders.reduce((sum, o) => sum + (o.amount || 0), 0)
+    const { creditRecords, orders, ...rest } = user
     return {
       ...rest,
       lastActiveAt,
       isActive: lastActiveAt ? new Date(lastActiveAt) >= activeThreshold : false,
       totalConsumed,
+      totalRecharged,
       totalCredits: user.credits + user.bonusCredits,
     }
   })
@@ -105,6 +111,11 @@ export async function GET(req: NextRequest) {
       const diff = a.totalConsumed - b.totalConsumed
       return sortOrder === "desc" ? -diff : diff
     })
+  } else if (sortBy === "totalRecharged") {
+    filteredUsers.sort((a, b) => {
+      const diff = a.totalRecharged - b.totalRecharged
+      return sortOrder === "desc" ? -diff : diff
+    })
   }
 
   // Calculate total for pagination (after filtering)
@@ -117,6 +128,11 @@ export async function GET(req: NextRequest) {
   // Get counts for stats
   const activeCount = usersWithActivity.filter(u => u.isActive).length
   const inactiveCount = usersWithActivity.filter(u => !u.isActive).length
+
+  // 今日新增用户数
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const todayNewCount = usersWithActivity.filter(u => new Date(u.createdAt) >= today).length
 
   const totalPages = Math.ceil(totalCount / limit)
 
@@ -133,6 +149,7 @@ export async function GET(req: NextRequest) {
       total: allUsers.length,
       active: activeCount,
       inactive: inactiveCount,
+      todayNew: todayNewCount,
     },
   })
 }
