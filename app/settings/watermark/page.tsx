@@ -37,7 +37,7 @@ import { cn } from "@/lib/utils"
 import { getWatermarkedUrl } from "@/lib/tos-watermark"
 
 // Sample image for preview (replace with actual TOS hosted image)
-const SAMPLE_IMAGE_URL = "https://sexyspecies-ai-image.tos-cn-beijing.volces.com/BEDDING/2026/01/06/wzh/image-224026-courq5.png?x-tos-process=image/crop,x_0,y_0,w_682,h_682"
+const SAMPLE_IMAGE_URL = "https://img.wzhdjy.xin/4f75065c-75b5-41a8-a674-f2b327d77a28.png"
 
 type WatermarkTemplate = {
     id: string
