@@ -41,7 +41,7 @@ export const SelectContent = React.forwardRef<
       ref={ref}
       position={position}
       className={cn(
-        "relative z-50 overflow-hidden rounded-2xl border border-white/10 bg-slate-900/90 backdrop-blur-xl text-white shadow-2xl shadow-black/40",
+        "relative z-[200] overflow-hidden rounded-2xl border border-white/10 bg-slate-900/90 backdrop-blur-xl text-white shadow-2xl shadow-black/40",
         "origin-[var(--radix-select-content-transform-origin)]",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -56,7 +56,7 @@ export const SelectContent = React.forwardRef<
         className={cn(
           "relative p-1.5",
           position === "popper" &&
-            "h-[var(--radix-select-trigger-height)] w-full min-w-[var(--radix-select-trigger-width)]"
+            "w-full min-w-[var(--radix-select-trigger-width)]"
         )}
       >
         {children}
