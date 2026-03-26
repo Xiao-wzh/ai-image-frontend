@@ -4,6 +4,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Card } from "@/components/ui/card"
 import { Download, Heart } from "lucide-react"
 import { formatTimeToNow } from "@/lib/utils"
+import { getThumbnailUrl } from "@/lib/cdnUrl"
 
 // 模拟从API获取的数据
 const mockGenerations = [
@@ -53,9 +54,10 @@ export function ImageGrid() {
             ) : (
               <div className="aspect-square relative">
                 <img
-                  src={item.imageUrl}
+                  src={getThumbnailUrl(item.imageUrl, 400) ?? undefined}
                   alt={`生成图片 ${item.id}`}
                   className="w-full h-full object-cover"
+                  loading="lazy"
                 />
                 {/* 时间显示 */}
                 <div className="absolute top-2 right-2 px-2 py-1 bg-black/50 rounded-md text-xs text-white backdrop-blur-sm">

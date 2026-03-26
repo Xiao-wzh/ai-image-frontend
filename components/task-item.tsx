@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils"
 import { ProductTypeLabel } from "@/lib/constants"
 import { useCosts } from "@/hooks/use-costs"
 import type { HistoryItem } from "@/components/history-card"
+import { getThumbnailUrl } from "@/lib/cdnUrl"
 
 interface TaskItemProps {
     item: HistoryItem
@@ -55,8 +56,10 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
         return isDetailPage ? costs.DETAIL_PAGE_STANDARD_COST : costs.MAIN_IMAGE_STANDARD_COST
     })()
 
+    // 使用缩略图减少 CDN 流量
+    // 优先使用生成图片的第一张，没有时才用原图
     const cover = isCompleted
-        ? (item.generatedImages?.[0] || item.originalImage?.[0] || null)
+        ? getThumbnailUrl(item.generatedImages?.[0] || item.originalImage?.[0], 200)
         : null
 
     const handleRegenerate = async () => {

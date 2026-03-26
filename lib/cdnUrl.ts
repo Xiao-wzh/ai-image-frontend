@@ -178,6 +178,45 @@ export function transformGenerationUrlsList<T>(records: T[]): T[] {
 
 
 
+/**
+ * 生成缩略图 URL（使用火山引擎 TOS 边缘图像处理）
+ * @param url 原始 URL 或 key
+ * @param width 缩略图宽度，默认 400
+ * @returns 带图片处理参数的 CDN URL
+ */
+export function getThumbnailUrl(url: string | null | undefined, width: number = 400): string | null | undefined {
+    if (!url) return url
+
+    // 先转换为 CDN URL
+    const cdnUrl = keyToCdnUrl(url)
+    if (!cdnUrl) return cdnUrl
+
+    try {
+        const urlObj = new URL(cdnUrl)
+        const existingProcess = urlObj.searchParams.get('x-tos-process')
+
+        // 缩略图处理参数
+        const thumbnailParams = `/resize,w_${width}/format,webp/quality,q_80`
+
+        if (existingProcess) {
+            // 已有处理参数，在后面追加（火山引擎支持链式处理）
+            // 检查是否已经有 resize 参数，避免重复
+            if (!existingProcess.includes('/resize,')) {
+                urlObj.searchParams.set('x-tos-process', existingProcess + thumbnailParams)
+            }
+            // 如果已经有 resize 参数，保持原样（避免重复处理）
+        } else {
+            // 没有现有参数，直接设置
+            urlObj.searchParams.set('x-tos-process', `image${thumbnailParams}`)
+        }
+        return urlObj.toString()
+    } catch {
+        // URL 解析失败，返回原值
+        return cdnUrl
+    }
+}
+
+
 // ============ 运行时测试 ============
 if (process.env.NODE_ENV === "development") {
     const testUrl = "https://sexyspecies-ai-image.tos-cn-beijing.volces.com/SEXY_SPECIES/test.png?x-tos-process=image/crop,w_100"

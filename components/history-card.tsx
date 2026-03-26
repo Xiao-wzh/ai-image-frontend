@@ -8,6 +8,7 @@ import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 import { ProductTypeLabel } from "@/lib/constants"
 import { AlertCircle, Loader2, Pencil, Crown, AlertTriangle } from "lucide-react"
+import { getThumbnailUrl } from "@/lib/cdnUrl"
 
 export type HistoryItem = {
   id: string
@@ -48,7 +49,8 @@ export function HistoryCard({
   onClick?: () => void
   className?: string
 }) {
-  const cover = item.generatedImages?.[0]
+  // 使用缩略图减少 CDN 流量
+  const cover = getThumbnailUrl(item.generatedImages?.[0], 400)
 
   const typeLabel = item.productTypeDescription
     || (item.productType ? (ProductTypeLabel as any)[item.productType] : null)

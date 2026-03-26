@@ -732,7 +732,7 @@ export function HistoryDetailDialog({
 
             <AnimatePresence mode="wait">
               <motion.div
-                key={(item?.taskType === "DETAIL_PAGE" ? detailViewMode : viewMode) + (selectedTemplateId || 'none')}
+                key={selectedTemplateId || 'none'}
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
@@ -845,109 +845,108 @@ export function HistoryDetailDialog({
                     })}
                   </div>
 
-                ) : viewMode === "grid" ? (
-                  /* Main Image: Grid Mode — PRO 根据张数自适应列数 */
-                  (() => {
-                    const isPro = item?.qualityMode === "PRO"
-                    const count = displayImages.length
-                    const gridCols = isPro
-                      ? count === 1 ? "grid-cols-1" : count === 2 ? "grid-cols-2" : "grid-cols-3"
-                      : "grid-cols-3 sm:grid-cols-4 lg:grid-cols-5"
-                    return (
-                      <div className={`grid ${gridCols} gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2 ${previewImage || selectedImage ? "pointer-events-none" : ""}`}>
-                        {displayImages.map((img, i) => {
-                          const isSelected = isAppealMode && selectedAppealImages.includes(img)
-                          return (
-                            <motion.button
-                              key={i}
-                              type="button"
-                              className={cn(
-                                "relative aspect-square group overflow-hidden rounded-lg cursor-pointer",
-                                isAppealMode && "hover:scale-105 transition-transform",
-                                isSelected && "ring-4 ring-orange-500 border-orange-500"
-                              )}
-                              initial={{ opacity: 0, scale: 0.95 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              transition={{ duration: 0.2, delay: i * 0.03 }}
-                              whileHover={item?.editingImageIndexes?.includes(i) ? undefined : { scale: 1.03 }}
-                              onClick={() => {
-                                if (item?.editingImageIndexes?.length) return
-                                if (isAppealMode) {
-                                  // 申诉选择模式：切换选中状态
-                                  setSelectedAppealImages(prev =>
-                                    prev.includes(img)
-                                      ? prev.filter(url => url !== img)
-                                      : [...prev, img]
-                                  )
-                                } else {
-                                  // 正常模式：打开编辑
-                                  setSelectedImage(img)
-                                  setSelectedImageIndex(i)
-                                }
-                              }}
-                              disabled={!!item?.editingImageIndexes?.length}
-                              title={
-                                item?.editingImageIndexes?.includes(i)
-                                  ? "重绘中..."
-                                  : isAppealMode
-                                  ? isSelected ? "点击取消选择" : "点击选择"
-                                  : "点击查看/编辑"
-                              }
-                            >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={img}
-                                alt={`Generated ${i + 1}`}
-                                className={`w-full h-full ${isPro ? "object-contain" : "object-cover"}`}
-                              />
-
-                              {/* 申诉选择模式：选中标记 */}
-                              {isAppealMode && isSelected && (
-                                <div className="absolute top-2 right-2 w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center shadow-lg">
-                                  <Check className="w-5 h-5 text-white" />
-                                </div>
-                              )}
-
-                              {/* 申诉选择模式：未选中提示 */}
-                              {isAppealMode && !isSelected && (
-                                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                  <span className="text-sm text-white font-medium">点击选择</span>
-                                </div>
-                              )}
-
-                              {/* Editing overlay */}
-                              {!isAppealMode && item?.editingImageIndexes?.includes(i) ? (
-                                <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
-                                  <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
-                                  <span className="text-xs text-white/80">重绘中...</span>
-                                </div>
-                              ) : !isAppealMode ? (
-                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
-                                  <Pencil className="w-6 h-6 text-white drop-shadow-md" />
-                                  <span className="text-xs text-white/80">点击编辑</span>
-                                </div>
-                              ) : null}
-                            </motion.button>
-                          )
-                        })}
-                      </div>
-                    )
-                  })()
                 ) : (
-                  /* Main Image: Full Mode */
-                  <motion.div
-                    className="relative rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 flex items-center justify-center p-4"
-                    initial={{ opacity: 0, scale: 0.98 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={fullImageUrl || ""}
-                      alt="Generated Full"
-                      className="max-w-full max-h-[70vh] object-contain"
-                    />
-                  </motion.div>
+                  /* Main Image: 同时渲染 Grid 和 Full 视图，用 CSS 控制显示，实现图片缓存 */
+                  <>
+                    {/* Grid Mode */}
+                    <div className={cn(
+                      (() => {
+                        const isPro = item?.qualityMode === "PRO"
+                        const count = displayImages.length
+                        return isPro
+                          ? count === 1 ? "grid-cols-1" : count === 2 ? "grid-cols-2" : "grid-cols-3"
+                          : "grid-cols-3 sm:grid-cols-4 lg:grid-cols-5"
+                      })(),
+                      "grid gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2",
+                      previewImage || selectedImage ? "pointer-events-none" : "",
+                      viewMode === "grid" ? "" : "hidden"
+                    )}>
+                      {displayImages.map((img, i) => {
+                        const isPro = item?.qualityMode === "PRO"
+                        const isSelected = isAppealMode && selectedAppealImages.includes(img)
+                        return (
+                          <motion.button
+                            key={i}
+                            type="button"
+                            className={cn(
+                              "relative aspect-square group overflow-hidden rounded-lg cursor-pointer",
+                              isAppealMode && "hover:scale-105 transition-transform",
+                              isSelected && "ring-4 ring-orange-500 border-orange-500"
+                            )}
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.2, delay: i * 0.03 }}
+                            whileHover={item?.editingImageIndexes?.includes(i) ? undefined : { scale: 1.03 }}
+                            onClick={() => {
+                              if (item?.editingImageIndexes?.length) return
+                              if (isAppealMode) {
+                                setSelectedAppealImages(prev =>
+                                  prev.includes(img)
+                                    ? prev.filter(url => url !== img)
+                                    : [...prev, img]
+                                )
+                              } else {
+                                setSelectedImage(img)
+                                setSelectedImageIndex(i)
+                              }
+                            }}
+                            disabled={!!item?.editingImageIndexes?.length}
+                            title={
+                              item?.editingImageIndexes?.includes(i)
+                                ? "重绘中..."
+                                : isAppealMode
+                                ? isSelected ? "点击取消选择" : "点击选择"
+                                : "点击查看/编辑"
+                            }
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={img}
+                              alt={`Generated ${i + 1}`}
+                              className={`w-full h-full ${isPro ? "object-contain" : "object-cover"}`}
+                            />
+
+                            {isAppealMode && isSelected && (
+                              <div className="absolute top-2 right-2 w-8 h-8 bg-orange-500 rounded-full flex items-center justify-center shadow-lg">
+                                <Check className="w-5 h-5 text-white" />
+                              </div>
+                            )}
+
+                            {isAppealMode && !isSelected && (
+                              <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <span className="text-sm text-white font-medium">点击选择</span>
+                              </div>
+                            )}
+
+                            {!isAppealMode && item?.editingImageIndexes?.includes(i) ? (
+                              <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
+                                <Loader2 className="w-8 h-8 text-purple-400 animate-spin" />
+                                <span className="text-xs text-white/80">重绘中...</span>
+                              </div>
+                            ) : !isAppealMode ? (
+                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
+                                <Pencil className="w-6 h-6 text-white drop-shadow-md" />
+                                <span className="text-xs text-white/80">点击编辑</span>
+                              </div>
+                            ) : null}
+                          </motion.button>
+                        )
+                      })}
+                    </div>
+
+                    {/* Full Mode */}
+                    <div className={cn(
+                      "relative rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 flex items-center justify-center p-4",
+                      viewMode === "full" ? "" : "hidden"
+                    )}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={fullImageUrl || ""}
+                        alt="Generated Full"
+                        className="max-w-full max-h-[70vh] object-contain"
+                      />
+                    </div>
+                  </>
                 )}
               </motion.div>
             </AnimatePresence>

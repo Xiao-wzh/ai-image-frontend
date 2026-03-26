@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { HistoryCard, type HistoryItem } from "@/components/history-card"
 import { HistoryDetailDialog } from "@/components/history-detail-dialog"
+import { getThumbnailUrl } from "@/lib/cdnUrl"
 
 function useDebouncedValue<T>(value: T, delay = 300) {
   const [debounced, setDebounced] = useState(value)
@@ -211,9 +212,10 @@ export default function GalleryPage() {
                             {/* Image */}
                             <div className="relative aspect-square overflow-hidden">
                               <img
-                                src={item.generatedImages?.[0] || item.generatedImage || "/placeholder.svg"}
+                                src={getThumbnailUrl(item.generatedImages?.[0] || item.generatedImage, 400) || "/placeholder.svg"}
                                 alt={item.productName}
                                 className={`w-full h-full transition-transform duration-500 group-hover:scale-105 ${isPro ? "object-contain" : "object-cover"}`}
+                                loading="lazy"
                               />
 
                               {/* Hover Overlay */}
