@@ -36,6 +36,8 @@ export function ProForm(props: CockpitFormProps) {
         isSubmitting, onSubmit,
         generatedImages, setGeneratedImages,
         setFullImageUrl, setCurrentGenerationId,
+        isCloneOnlyPage = false,
+        hideGenerationModeSwitch = false,
     } = props
 
     const [isLanguageOpen, setIsLanguageOpen] = React.useState(false)
@@ -255,91 +257,96 @@ export function ProForm(props: CockpitFormProps) {
             </div>
 
             {/* ═══ 第三步：创意/克隆 (放在控制台外，避免 z-index 问题) ═══ */}
-            <div>
-                <div className="flex items-center gap-3 mb-2">
-                    <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest shrink-0">
-                        {taskType === "DETAIL_PAGE" ? "③ 详情页风格" : "② 生成风格"}
-                    </p>
+            {/* 首页创意模式和克隆页面都隐藏此切换 */}
+            {!hideGenerationModeSwitch && !isCloneOnlyPage && (
+                <div>
+                    <div className="flex items-center gap-3 mb-2">
+                        <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest shrink-0">
+                            {taskType === "DETAIL_PAGE" ? "③ 详情页风格" : "② 生成风格"}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/50 border border-white/10 w-fit">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setGenerationMode("CREATIVE")
+                                setProductType("")
+                                if (generatedImages.length > 0) { setGeneratedImages([]); setFullImageUrl(null); setCurrentGenerationId(null) }
+                            }}
+                            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${generationMode === "CREATIVE"
+                                ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md"
+                                : "text-slate-400 hover:text-white hover:bg-white/5"
+                                }`}
+                        >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            创意模式
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setGenerationMode("CLONE")
+                                setProductType("")
+                                if (generatedImages.length > 0) { setGeneratedImages([]); setFullImageUrl(null); setCurrentGenerationId(null) }
+                            }}
+                            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${generationMode === "CLONE"
+                                ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-500/20"
+                                : "text-slate-400 hover:text-white hover:bg-white/5"
+                                }`}
+                        >
+                            <Copy className="w-3.5 h-3.5" />
+                            克隆模式
+                        </button>
+                    </div>
+                    {generationMode === "CLONE" && (
+                        <p className="text-xs text-amber-400/80 mt-2">
+                            克隆模式将复制参考图的构图风格，适合快速生成相似风格的图片
+                        </p>
+                    )}
                 </div>
-                <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/50 border border-white/10 w-fit">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setGenerationMode("CREATIVE")
-                            setProductType("")
-                            if (generatedImages.length > 0) { setGeneratedImages([]); setFullImageUrl(null); setCurrentGenerationId(null) }
-                        }}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${generationMode === "CREATIVE"
-                            ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md"
-                            : "text-slate-400 hover:text-white hover:bg-white/5"
-                            }`}
-                    >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        创意模式
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setGenerationMode("CLONE")
-                            setProductType("")
-                            if (generatedImages.length > 0) { setGeneratedImages([]); setFullImageUrl(null); setCurrentGenerationId(null) }
-                        }}
-                        className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${generationMode === "CLONE"
-                            ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-500/20"
-                            : "text-slate-400 hover:text-white hover:bg-white/5"
-                            }`}
-                    >
-                        <Copy className="w-3.5 h-3.5" />
-                        克隆模式
-                    </button>
-                </div>
-                {generationMode === "CLONE" && (
-                    <p className="text-xs text-amber-400/80 mt-2">
-                        克隆模式将复制参考图的构图风格，适合快速生成相似风格的图片
-                    </p>
-                )}
-            </div>
+            )}
 
             {/* ═══ 表单字段 — 放在控制台外，下拉菜单可正常溢出 ═══ */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* 平台 / 风格 */}
-                <div className="md:col-span-2">
-                    <label className="block text-xs font-medium text-amber-300/80 mb-2">平台 / 风格</label>
-                    <DropdownMenu open={isCascaderOpen} onOpenChange={setIsCascaderOpen}>
-                        <DropdownMenuTrigger asChild>
-                            <button
-                                type="button"
-                                className="w-full h-11 rounded-xl border border-amber-500/15 bg-white/5 hover:bg-white/10 px-4 text-sm text-white outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all flex items-center justify-between"
-                            >
-                                <span className="truncate">
-                                    {(() => {
-                                        const p = selectedPlatform
-                                        const t = typeOptions.find((x) => x.value === productType)
-                                        const platformLabel = p?.label || platformKey
-                                        const typeLabel = t?.label || (ProductTypeLabel as any)[productType] || productType || "请选择"
-                                        return `${platformLabel} / ${typeLabel}`
-                                    })()}
-                                </span>
-                                <ChevronDown className="w-4 h-4 text-amber-400/60" />
-                            </button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent sideOffset={8} className="p-0">
-                            <CascaderPanel
-                                items={platforms || []}
-                                value={{ platformKey, productType: productType || undefined }}
-                                onChange={(next) => {
-                                    setPlatformKey(next.platformKey)
-                                    setProductType((next.productType as ProductTypeKey) || "")
-                                    if (next.productType) setIsCascaderOpen(false)
-                                }}
-                            />
-                        </DropdownMenuContent>
-                    </DropdownMenu>
-                    {typeSelectDisabled && <div className="mt-2 text-xs text-slate-500">当前平台暂无可用风格</div>}
-                </div>
+            <div className={`grid grid-cols-1 gap-4 ${!isCloneOnlyPage ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+                {/* 平台 / 风格 — 克隆页面隐藏 */}
+                {!isCloneOnlyPage && (
+                    <div className="md:col-span-2">
+                        <label className="block text-xs font-medium text-amber-300/80 mb-2">平台 / 风格</label>
+                        <DropdownMenu open={isCascaderOpen} onOpenChange={setIsCascaderOpen}>
+                            <DropdownMenuTrigger asChild>
+                                <button
+                                    type="button"
+                                    className="w-full h-11 rounded-xl border border-amber-500/15 bg-white/5 hover:bg-white/10 px-4 text-sm text-white outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all flex items-center justify-between"
+                                >
+                                    <span className="truncate">
+                                        {(() => {
+                                            const p = selectedPlatform
+                                            const t = typeOptions.find((x) => x.value === productType)
+                                            const platformLabel = p?.label || platformKey
+                                            const typeLabel = t?.label || (ProductTypeLabel as any)[productType] || productType || "请选择"
+                                            return `${platformLabel} / ${typeLabel}`
+                                        })()}
+                                    </span>
+                                    <ChevronDown className="w-4 h-4 text-amber-400/60" />
+                                </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent sideOffset={8} className="p-0">
+                                <CascaderPanel
+                                    items={platforms || []}
+                                    value={{ platformKey, productType: productType || undefined }}
+                                    onChange={(next) => {
+                                        setPlatformKey(next.platformKey)
+                                        setProductType((next.productType as ProductTypeKey) || "")
+                                        if (next.productType) setIsCascaderOpen(false)
+                                    }}
+                                />
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                        {typeSelectDisabled && <div className="mt-2 text-xs text-slate-500">当前平台暂无可用风格</div>}
+                    </div>
+                )}
 
                 {/* 商品名称 */}
-                <div className="md:col-span-1">
+                <div className={isCloneOnlyPage ? '' : 'md:col-span-1'}>
                     <label className="block text-xs font-medium text-amber-300/80 mb-2">商品名称</label>
                     <input
                         type="text"
@@ -351,7 +358,7 @@ export function ProForm(props: CockpitFormProps) {
                 </div>
 
 
-                {/* 语言 */}
+                {/* 语言 — 克隆页面也保留 */}
                 <div className="md:col-span-1 relative z-20">
                     <label className="block text-xs font-medium text-amber-300/80 mb-2">输出文字语言</label>
                     <div className="relative">

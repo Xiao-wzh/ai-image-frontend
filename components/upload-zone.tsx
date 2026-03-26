@@ -28,13 +28,19 @@ type SignResponse = {
 
 interface UploadZoneProps {
   isAuthenticated?: boolean
+  // 页面模式配置
+  pageMode?: "default" | "creativeOnly" | "cloneOnly"
 }
 
-export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
+export function UploadZone({ isAuthenticated = false, pageMode = "default" }: UploadZoneProps) {
   const router = useRouter()
   const { data: session, update } = useSession()
   const { costs } = useCosts()
   const loginModal = useLoginModal()
+
+  // 根据页面模式确定是否为极简模式
+  const isCreativeOnly = pageMode === "creativeOnly"
+  const isCloneOnly = pageMode === "cloneOnly"
 
   /* ══════════════════ ALL STATE — 提升至父层 ══════════════════ */
   const [taskType, setTaskType] = useState<"MAIN_IMAGE" | "DETAIL_PAGE">("MAIN_IMAGE")
@@ -59,7 +65,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const [detailBatch, setDetailBatch] = useState<"A" | "B">("A")
 
   // 克隆模式
-  const [generationMode, setGenerationMode] = useState<"CREATIVE" | "CLONE">("CREATIVE")
+  const [generationMode, setGenerationMode] = useState<"CREATIVE" | "CLONE">(
+    isCloneOnly ? "CLONE" : "CREATIVE"
+  )
   const [features, setFeatures] = useState("")
   const [refFiles, setRefFiles] = useState<File[]>([])
   const [refPreviewUrls, setRefPreviewUrls] = useState<string[]>([])
@@ -71,7 +79,9 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false)
 
   // PRO 模式 — qualityMode 是全局开关
-  const [qualityMode, setQualityMode] = useState<"STANDARD" | "PRO">("STANDARD")
+  const [qualityMode, setQualityMode] = useState<"STANDARD" | "PRO">(
+    isCloneOnly ? "PRO" : "STANDARD"
+  )
   const [proImageCount, setProImageCount] = useState<number>(1)
   const [proAspectRatio, setProAspectRatio] = useState("1:1")
   const [proPollingId, setProPollingId] = useState<string | null>(null)
@@ -164,7 +174,10 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
           const found = list.find((p) => p.value === platformKey)
           if (!found && list.length > 0) setPlatformKey(list[0].value)
           const typesForPlatform = (found || list[0])?.types || []
-          if (productType && !typesForPlatform.find((t) => t.value === productType)) {
+          // 克隆专用页面：自动选择第一个可用的商品类型
+          if (isCloneOnly && typesForPlatform.length > 0 && !productType) {
+            setProductType(typesForPlatform[0].value as ProductTypeKey)
+          } else if (productType && !typesForPlatform.find((t) => t.value === productType)) {
             setProductType(typesForPlatform[0]?.value as ProductTypeKey || "")
           }
         }
@@ -174,7 +187,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     }
     load()
     return () => { cancelled = true }
-  }, [taskType, generationMode, qualityMode])
+  }, [taskType, generationMode, qualityMode, isCloneOnly, productType])
 
   const selectedPlatform = useMemo(() => {
     return (platforms || []).find((p) => p.value === platformKey) || null
@@ -339,7 +352,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
 
     if (!isAuthenticated) { loginModal.open(); return }
     if (!productName.trim()) { toast.error("请填写商品名称"); return }
-    if (!productType) { toast.error("请选择平台/风格"); return }
+    // 克隆页面自动选择商品类型，跳过验证
+    if (!isCloneOnly && !productType) { toast.error("请选择平台/风格"); return }
     if (files.length === 0) { toast.error("请上传商品图片"); return }
     if (generationMode === "CLONE" && refFiles.length === 0) {
       toast.error("克隆模式需要上传参考图"); return
@@ -447,7 +461,7 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     setProStyle("")
   }, [])
 
-  const typeSelectDisabled = typeOptions.length === 0
+  const typeSelectDisabled = !isCloneOnly && typeOptions.length === 0
 
   /* ──────────────── 子组件共享 Props ──────────────── */
   const cockpitProps: CockpitFormProps = {
@@ -472,6 +486,8 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
     isSubmitting, onSubmit,
     generatedImages, setGeneratedImages,
     setFullImageUrl, setCurrentGenerationId,
+    isCloneOnlyPage: isCloneOnly,
+    hideGenerationModeSwitch: isCreativeOnly || isCloneOnly,
   }
 
   /* ══════════════════ RENDER ══════════════════ */
@@ -539,143 +555,155 @@ export function UploadZone({ isAuthenticated = false }: UploadZoneProps) {
         </motion.div>
 
         {/* ── 第一步：生成模式选择（最优先决策） ── */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="space-y-3"
-        >
-          <div className="flex items-center gap-2">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">① 选择生成模式</p>
-            <button
-              type="button"
-              onClick={() => setIsModeCompareOpen(true)}
-              className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-blue-400 transition-colors group"
-            >
-              <span className="group-hover:text-amber-400 transition-colors">✨</span>
-              <span className="underline underline-offset-2 decoration-dotted">查看模式对比</span>
-            </button>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {/* 标准极速卡片 */}
-            <button
-              type="button"
-              onClick={() => setQualityMode("STANDARD")}
-              className={`relative flex flex-col gap-2 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
-                qualityMode === "STANDARD"
-                  ? "border-blue-500/50 bg-blue-950/30 shadow-lg shadow-blue-500/10"
-                  : "border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`p-1.5 rounded-lg transition-colors ${qualityMode === "STANDARD" ? "bg-blue-500/20" : "bg-white/10"}`}>
-                    <Zap className={`w-4 h-4 transition-colors ${qualityMode === "STANDARD" ? "text-blue-400" : "text-slate-400"}`} />
-                  </div>
-                  <span className={`text-sm font-bold transition-colors ${qualityMode === "STANDARD" ? "text-white" : "text-slate-400"}`}>标准极速</span>
-                </div>
-                <motion.div
-                  animate={{ scale: qualityMode === "STANDARD" ? 1 : 0, opacity: qualityMode === "STANDARD" ? 1 : 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="w-2 h-2 rounded-full bg-blue-400 shadow-lg shadow-blue-400/60"
-                />
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed">快速出图，适合批量操作</p>
-              <div className={`text-xs font-semibold transition-colors ${qualityMode === "STANDARD" ? "text-blue-400" : "text-slate-600"}`}>
-                {costs.MAIN_IMAGE_STANDARD_COST} 积分起
-              </div>
-              {qualityMode === "STANDARD" && (
-                <div className="absolute inset-0 rounded-xl ring-1 ring-blue-500/40 pointer-events-none" />
+        {/* 克隆专用页面隐藏此切换 */}
+        {!isCloneOnly && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="space-y-3"
+          >
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">① 选择生成模式</p>
+              {!isCreativeOnly && (
+                <button
+                  type="button"
+                  onClick={() => setIsModeCompareOpen(true)}
+                  className="flex items-center gap-1 text-[11px] text-slate-500 hover:text-blue-400 transition-colors group"
+                >
+                  <span className="group-hover:text-amber-400 transition-colors">✨</span>
+                  <span className="underline underline-offset-2 decoration-dotted">查看模式对比</span>
+                </button>
               )}
-            </button>
-
-            {/* PRO 增强卡片 */}
-            <button
-              type="button"
-              onClick={() => {
-                setQualityMode("PRO")
-                // 切换到 PRO 模式时，设置默认张数为 9
-                setProImageCount(9)
-              }}
-              className={`relative flex flex-col gap-2 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
-                qualityMode === "PRO"
-                  ? "border-amber-500/50 bg-amber-950/20 shadow-lg shadow-amber-500/10"
-                  : "border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`p-1.5 rounded-lg transition-colors ${qualityMode === "PRO" ? "bg-amber-500/20" : "bg-white/10"}`}>
-                    <Crown className={`w-4 h-4 transition-colors ${qualityMode === "PRO" ? "text-amber-400" : "text-slate-400"}`} />
-                  </div>
-                  <span className={`text-sm font-bold transition-colors ${qualityMode === "PRO" ? "text-amber-300" : "text-slate-400"}`}>PRO 增强</span>
-                </div>
-                <motion.div
-                  animate={{ scale: qualityMode === "PRO" ? 1 : 0, opacity: qualityMode === "PRO" ? 1 : 0 }}
-                  transition={{ duration: 0.15 }}
-                  className="w-2 h-2 rounded-full bg-amber-400 shadow-lg shadow-amber-400/60"
-                />
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed">高画质精品，按张计费</p>
-              <div className={`text-xs font-semibold transition-colors ${qualityMode === "PRO" ? "text-amber-400" : "text-slate-600"}`}>
-                {costs.PRO_COST_PER_IMAGE} 积分 / 张
-              </div>
-              {qualityMode === "PRO" && (
-                <div className="absolute inset-0 rounded-xl ring-1 ring-amber-500/40 pointer-events-none" />
-              )}
-            </button>
-          </div>
-        </motion.div>
-
-        {/* ── 第二步：内容类型选择 ── */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="flex items-center gap-3"
-        >
-          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest shrink-0">② 生成内容</p>
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/50 border border-white/10">
-            {([
-              { value: "MAIN_IMAGE" as const, label: "主图生成", icon: <Zap className="w-3.5 h-3.5" /> },
-              { value: "DETAIL_PAGE" as const, label: "详情页", icon: <Sparkles className="w-3.5 h-3.5" /> },
-            ]).map((tab) => (
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {/* 标准极速卡片 */}
               <button
-                key={tab.value}
                 type="button"
-                onClick={() => {
-                  setTaskType(tab.value)
-                  // PRO 模式下切换任务类型时，更新默认比例和张数
-                  setProAspectRatio(tab.value === "DETAIL_PAGE" ? "9:16" : "1:1")
-                  if (qualityMode === "PRO") {
-                    setProImageCount(9)
-                  }
-                  if (isSubmitting || generatedImages.length > 0) {
-                    setIsSubmitting(false)
-                    setGeneratedImages([])
-                    setFullImageUrl(null)
-                    setCurrentGenerationId(null)
-                  }
-                }}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
-                  taskType === tab.value
-                    ? qualityMode === "PRO"
-                      ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md"
-                      : "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
-                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                onClick={() => setQualityMode("STANDARD")}
+                className={`relative flex flex-col gap-2 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                  qualityMode === "STANDARD"
+                    ? "border-blue-500/50 bg-blue-950/30 shadow-lg shadow-blue-500/10"
+                    : "border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20"
                 }`}
               >
-                {tab.icon}
-                {tab.label}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-lg transition-colors ${qualityMode === "STANDARD" ? "bg-blue-500/20" : "bg-white/10"}`}>
+                      <Zap className={`w-4 h-4 transition-colors ${qualityMode === "STANDARD" ? "text-blue-400" : "text-slate-400"}`} />
+                    </div>
+                    <span className={`text-sm font-bold transition-colors ${qualityMode === "STANDARD" ? "text-white" : "text-slate-400"}`}>标准极速</span>
+                  </div>
+                  <motion.div
+                    animate={{ scale: qualityMode === "STANDARD" ? 1 : 0, opacity: qualityMode === "STANDARD" ? 1 : 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="w-2 h-2 rounded-full bg-blue-400 shadow-lg shadow-blue-400/60"
+                  />
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">快速出图，适合批量操作</p>
+                <div className={`text-xs font-semibold transition-colors ${qualityMode === "STANDARD" ? "text-blue-400" : "text-slate-600"}`}>
+                  {costs.MAIN_IMAGE_STANDARD_COST} 积分起
+                </div>
+                {qualityMode === "STANDARD" && (
+                  <div className="absolute inset-0 rounded-xl ring-1 ring-blue-500/40 pointer-events-none" />
+                )}
               </button>
-            ))}
-          </div>
-        </motion.div>
+
+              {/* PRO 增强卡片 */}
+              <button
+                type="button"
+                onClick={() => {
+                  setQualityMode("PRO")
+                  // 切换到 PRO 模式时，设置默认张数为 9
+                  setProImageCount(9)
+                }}
+                className={`relative flex flex-col gap-2 p-4 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                  qualityMode === "PRO"
+                    ? "border-amber-500/50 bg-amber-950/20 shadow-lg shadow-amber-500/10"
+                    : "border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`p-1.5 rounded-lg transition-colors ${qualityMode === "PRO" ? "bg-amber-500/20" : "bg-white/10"}`}>
+                      <Crown className={`w-4 h-4 transition-colors ${qualityMode === "PRO" ? "text-amber-400" : "text-slate-400"}`} />
+                    </div>
+                    <span className={`text-sm font-bold transition-colors ${qualityMode === "PRO" ? "text-amber-300" : "text-slate-400"}`}>PRO 增强</span>
+                  </div>
+                  <motion.div
+                    animate={{ scale: qualityMode === "PRO" ? 1 : 0, opacity: qualityMode === "PRO" ? 1 : 0 }}
+                    transition={{ duration: 0.15 }}
+                    className="w-2 h-2 rounded-full bg-amber-400 shadow-lg shadow-amber-400/60"
+                  />
+                </div>
+                <p className="text-xs text-slate-500 leading-relaxed">高画质精品，按张计费</p>
+                <div className={`text-xs font-semibold transition-colors ${qualityMode === "PRO" ? "text-amber-400" : "text-slate-600"}`}>
+                  {costs.PRO_COST_PER_IMAGE} 积分 / 张
+                </div>
+                {qualityMode === "PRO" && (
+                  <div className="absolute inset-0 rounded-xl ring-1 ring-amber-500/40 pointer-events-none" />
+                )}
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── 第二步：内容类型选择 ── */}
+        {/* 克隆专用页面隐藏此切换 */}
+        {!isCloneOnly && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="flex items-center gap-3"
+          >
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest shrink-0">② 生成内容</p>
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/50 border border-white/10">
+              {([
+                { value: "MAIN_IMAGE" as const, label: "主图生成", icon: <Zap className="w-3.5 h-3.5" /> },
+                { value: "DETAIL_PAGE" as const, label: "详情页", icon: <Sparkles className="w-3.5 h-3.5" /> },
+              ]).map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => {
+                    setTaskType(tab.value)
+                    // PRO 模式下切换任务类型时，更新默认比例和张数
+                    setProAspectRatio(tab.value === "DETAIL_PAGE" ? "9:16" : "1:1")
+                    if (qualityMode === "PRO") {
+                      setProImageCount(9)
+                    }
+                    if (isSubmitting || generatedImages.length > 0) {
+                      setIsSubmitting(false)
+                      setGeneratedImages([])
+                      setFullImageUrl(null)
+                      setCurrentGenerationId(null)
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                    taskType === tab.value
+                      ? qualityMode === "PRO"
+                        ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md"
+                        : "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md"
+                      : "text-slate-400 hover:text-white hover:bg-white/5"
+                  }`}
+                >
+                  {tab.icon}
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* ── 驾驶舱切换区 ── */}
         <AnimatePresence mode="wait">
           {!isSubmitting && generatedImages.length === 0 && !proPollingId ? (
-            qualityMode === "STANDARD" ? (
+            // 克隆页固定使用 ProForm
+            // 首页和默认模式：根据 qualityMode 切换 StandardForm/ProForm
+            isCloneOnly ? (
+              <ProForm key="pro-cockpit" {...cockpitProps} />
+            ) : qualityMode === "STANDARD" ? (
               <StandardForm key="standard-cockpit" {...cockpitProps} />
             ) : (
               <ProForm key="pro-cockpit" {...cockpitProps} />

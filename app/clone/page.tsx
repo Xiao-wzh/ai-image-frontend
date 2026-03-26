@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
-import { useSession, signOut } from "next-auth/react"
+import { Suspense, useState, useEffect } from "react"
+import { useSession } from "next-auth/react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
 import { Sidebar } from "@/components/sidebar"
@@ -12,16 +12,11 @@ import { TopBanner } from "@/components/top-banner"
 import { ReferralCampaignModal } from "@/components/referral-campaign-modal"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { LogIn, Megaphone, Zap, BookOpen } from "lucide-react"
+import { LogIn, Megaphone, Zap, BookOpen, Copy } from "lucide-react"
 import { useAnnouncementModal } from "@/hooks/use-announcement-modal"
 
-export interface DashboardContentProps {
-    siteName?: string
-    welcomeMsg?: string
-}
-
-// 内部组件：使用 useSearchParams
-export function DashboardContent({ siteName = "AI Species", welcomeMsg = "专业AI电商图片视频生成平台" }: DashboardContentProps) {
+// 克隆专用页面 — 强制 PRO + CLONE 模式
+export default function ClonePage() {
     const { data: session, status } = useSession()
     const searchParams = useSearchParams()
     const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
@@ -145,14 +140,13 @@ export function DashboardContent({ siteName = "AI Species", welcomeMsg = "专业
                     )}
                 </header>
 
-
                 <main className="flex-1 overflow-y-auto">
                     {/* Hero Section */}
                     <div className="relative pt-16 pb-8 px-8">
                         {/* Gradient orbs background */}
                         <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                            <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl"></div>
-                            <div className="absolute top-20 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl"></div>
+                            <div className="absolute top-0 left-1/4 w-96 h-96 bg-amber-500/20 rounded-full blur-3xl"></div>
+                            <div className="absolute top-20 right-1/4 w-96 h-96 bg-orange-500/20 rounded-full blur-3xl"></div>
                         </div>
 
                         {/* Hero Content */}
@@ -163,16 +157,19 @@ export function DashboardContent({ siteName = "AI Species", welcomeMsg = "专业
                                 transition={{ duration: 0.6 }}
                                 className="text-5xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight"
                             >
-                                <span className="gradient-text">{siteName}</span>
+                                <span className="bg-clip-text text-transparent bg-gradient-to-r from-amber-400 to-orange-500">
+                                    AI 克隆图片
+                                </span>
                             </motion.h1>
-                            <motion.h1
+                            <motion.div
                                 initial={{ opacity: 0, y: -10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.6, delay: 0.1 }}
-                                className="text-3xl text-slate-400 max-w-2xl mx-auto"
+                                className="flex items-center justify-center gap-2 text-slate-400"
                             >
-                                {welcomeMsg}
-                            </motion.h1>
+                                <Copy className="w-5 h-5 text-amber-400" />
+                                <span className="text-xl">上传参考图，一键克隆风格</span>
+                            </motion.div>
                         </div>
 
                         {/* Glassmorphism Container */}
@@ -183,12 +180,10 @@ export function DashboardContent({ siteName = "AI Species", welcomeMsg = "专业
                             className="relative max-w-5xl mx-auto"
                         >
                             <div className="glass rounded-3xl p-10 glass-hover">
-                                <UploadZone isAuthenticated={!!session?.user} pageMode="creativeOnly" />
+                                <UploadZone isAuthenticated={!!session?.user} pageMode="cloneOnly" />
                             </div>
                         </motion.div>
                     </div>
-
-                    {/* History moved to /history */}
                 </main>
             </div>
 

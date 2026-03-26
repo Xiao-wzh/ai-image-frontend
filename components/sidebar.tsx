@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useSession } from "next-auth/react"
 import useSWR from "swr"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser, BarChart3, FileText, Users, Receipt, Video, Zap, BookOpen, ExternalLink } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser, BarChart3, FileText, Users, Receipt, Video, Zap, BookOpen, ExternalLink, Copy } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -23,6 +23,7 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { icon: Sparkles, label: "AI 生图", href: "/" },
+  { icon: Copy, label: "AI 克隆图片", href: "/clone" },
   // { icon: Video, label: "AI 视频", href: "/video" },
   { icon: FileText, label: "智能商品描述", href: "/copywriting" },
   { icon: Droplets, label: "水印模板", href: "/settings/watermark" },
@@ -131,9 +132,11 @@ export function Sidebar() {
         {/* Navigation - scrollable */}
         <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
+            // 对于 "/" 和 "/clone" 需要精确匹配，其他路径使用 startsWith
             const isActive =
-              pathname === item.href ||
-              (item.href === "/" ? pathname === "/" : pathname?.startsWith(item.href))
+              item.href === "/" || item.href === "/clone"
+                ? pathname === item.href
+                : pathname?.startsWith(item.href)
 
             const showPendingBadge = item.badge === "pending" && pendingCount > 0
             const showLimitedFreeBadge = item.badge === "limited_free" && isFreePeriod
@@ -156,11 +159,11 @@ export function Sidebar() {
                     {pendingCount > 9 ? "9+" : pendingCount}
                   </span>
                 )}
-                {showLimitedFreeBadge && (
+                {/* {showLimitedFreeBadge && (
                   <span className="ml-auto inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 shrink-0">
                     限时免费
                   </span>
-                )}
+                )} */}
               </button>
             )
           })}

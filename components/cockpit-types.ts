@@ -71,4 +71,9 @@ export interface CockpitFormProps {
     setGeneratedImages: (v: string[]) => void
     setFullImageUrl: (v: string | null) => void
     setCurrentGenerationId: (v: string | null) => void
+
+    // ── 极简模式（克隆专用页面） ──
+    isCloneOnlyPage?: boolean
+    // ── 隐藏创意/克隆切换（首页创意专用） ──
+    hideGenerationModeSwitch?: boolean
 }
