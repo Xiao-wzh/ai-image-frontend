@@ -52,8 +52,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "无权对此记录发起申诉" }, { status: 403 })
         }
 
-        // Check if generation is completed
-        if (generation.status !== "COMPLETED") {
+        // Check if generation is completed (COMPLETED or PARTIAL_SUCCESS)
+        if (generation.status !== "COMPLETED" && generation.status !== "PARTIAL_SUCCESS") {
             return NextResponse.json({ error: "只能对已完成的生成发起申诉" }, { status: 400 })
         }
 

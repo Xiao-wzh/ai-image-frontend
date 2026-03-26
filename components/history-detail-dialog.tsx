@@ -387,7 +387,9 @@ export function HistoryDetailDialog({
 
   const canAppeal = useMemo(() => {
     if (!item) return false
-    if (item.status !== "COMPLETED") return false
+    // COMPLETED 和 PARTIAL_SUCCESS 都可以申诉
+    const status = item.status?.toUpperCase()
+    if (status !== "COMPLETED" && status !== "PARTIAL_SUCCESS") return false
     // 移除 PRO 模式限制，现在 PRO 也可以申诉
     if (!item.appeal) return true
     return item.appeal.status === "REJECTED"
@@ -1006,7 +1008,7 @@ export function HistoryDetailDialog({
                 )
               })()}
 
-              {item?.status === "COMPLETED" && (
+              {(item?.status === "COMPLETED" || item?.status === "PARTIAL_SUCCESS") && (
                 canAppeal ? (
                   <Button
                     onClick={() => {
