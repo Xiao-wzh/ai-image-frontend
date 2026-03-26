@@ -12,18 +12,17 @@ import { Button } from "./ui/button"
 import { PricingModal } from "./pricing-modal"
 import { DailyCheckin } from "./daily-checkin"
 import { useLoginModal } from "@/hooks/use-login-modal"
-import { WATERMARK_REMOVE_FREE_END_AT } from "@/lib/constants"
 
 type NavItem = {
   icon: any
   label: string
   href: string
-  badge?: "pending" | "limited_free" // Special badge type
+  badge?: "pending" | "limited_free" | "new" // Special badge type
 }
 
 const navItems: NavItem[] = [
   { icon: Sparkles, label: "AI 生图", href: "/" },
-  { icon: Copy, label: "AI 克隆图片", href: "/clone" },
+  { icon: Copy, label: "AI 克隆图片", href: "/clone", badge: "new" },
   // { icon: Video, label: "AI 视频", href: "/video" },
   { icon: FileText, label: "智能商品描述", href: "/copywriting" },
   { icon: Droplets, label: "水印模板", href: "/settings/watermark" },
@@ -68,24 +67,6 @@ export function Sidebar() {
   const router = useRouter()
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false)
   const loginModal = useLoginModal()
-  const [isFreePeriod, setIsFreePeriod] = useState(true)
-
-  // 检查是否在活动期内
-  useEffect(() => {
-    const checkFreePeriod = () => {
-      const now = new Date().getTime()
-      const endTime = new Date(WATERMARK_REMOVE_FREE_END_AT).getTime()
-      setIsFreePeriod(now <= endTime)
-    }
-
-    // 立即检查一次
-    checkFreePeriod()
-
-    // 设置检查间隔（每5分钟检查一次，避免频繁触发重渲染）
-    const interval = setInterval(checkFreePeriod, 5 * 60 * 1000)
-
-    return () => clearInterval(interval)
-  }, [])
 
   // 用 SWR 轮询轻量级 pending-count 接口
   // count > 0 时每 5 秒刷新；count = 0 时停止轮询（refreshInterval 返回 0 = 不轮询）
@@ -139,7 +120,6 @@ export function Sidebar() {
                 : pathname?.startsWith(item.href)
 
             const showPendingBadge = item.badge === "pending" && pendingCount > 0
-            const showLimitedFreeBadge = item.badge === "limited_free" && isFreePeriod
 
             return (
               <button
@@ -159,11 +139,11 @@ export function Sidebar() {
                     {pendingCount > 9 ? "9+" : pendingCount}
                   </span>
                 )}
-                {/* {showLimitedFreeBadge && (
-                  <span className="ml-auto inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300 shrink-0">
-                    限时免费
+                {item.badge === "new" && (
+                  <span className="ml-auto inline-flex items-center rounded-full bg-gradient-to-r from-blue-500 to-purple-500 px-2 py-0.5 text-[10px] font-semibold text-white shrink-0 animate-pulse">
+                    NEW
                   </span>
-                )} */}
+                )}
               </button>
             )
           })}
