@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url)
         const status = searchParams.get("status") // Optional filter: PENDING, APPROVED, REJECTED
-        const limit = Math.min(Number(searchParams.get("limit") || 50), 100)
+        const limit = Math.min(Number(searchParams.get("limit") || 10), 100)
         const offset = Math.max(Number(searchParams.get("offset") || 0), 0)
 
         const where = status ? { status } : {}

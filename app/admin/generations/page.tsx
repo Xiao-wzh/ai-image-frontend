@@ -19,6 +19,8 @@ import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ProductTypeLabel } from "@/lib/constants"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
+import { getThumbnailUrl } from "@/lib/cdnUrl"
+import { LazyImage } from "@/components/lazy-image"
 
 type UserOption = {
     id: string
@@ -93,7 +95,7 @@ export default function AdminGenerationsPage() {
     const [page, setPage] = useState(1)
     const [total, setTotal] = useState(0)
     const [totalPages, setTotalPages] = useState(0)
-    const limit = 20
+    const limit = 10  // 减少每页数量，避免图片请求过多
 
     // Image preview
     const [previewImages, setPreviewImages] = useState<string[]>([])
@@ -665,7 +667,7 @@ export default function AdminGenerationsPage() {
                                             <div className="flex -space-x-1.5">
                                                 {item.originalImage?.slice(0, 2).map((img, idx) => (
                                                     <div key={idx} className="relative w-9 h-9 rounded-lg border-2 border-[#0a0a0f] overflow-hidden cursor-pointer hover:z-10 hover:scale-110 transition-transform" onClick={() => openPreview(item.originalImage, idx)}>
-                                                        <img src={img} alt="" className="w-full h-full object-cover" />
+                                                        <LazyImage src={getThumbnailUrl(img, 100) ?? img} alt="" className="object-cover" />
                                                     </div>
                                                 ))}
                                                 {(item.originalImage?.length || 0) > 2 && (
@@ -677,7 +679,7 @@ export default function AdminGenerationsPage() {
                                                 <div className="flex -space-x-1.5">
                                                     {item.refImages.slice(0, 2).map((img, idx) => (
                                                         <div key={idx} className="relative w-9 h-9 rounded-lg border-2 border-cyan-500/30 overflow-hidden cursor-pointer hover:z-10 hover:scale-110 transition-transform" onClick={() => openPreview(item.refImages, idx)}>
-                                                            <img src={img} alt="" className="w-full h-full object-cover" />
+                                                            <LazyImage src={getThumbnailUrl(img, 100) ?? img} alt="" className="object-cover" />
                                                         </div>
                                                     ))}
                                                 </div>
@@ -693,7 +695,11 @@ export default function AdminGenerationsPage() {
                                                     const imgs = item.qualityMode === "PRO" && item.generatedImages?.length > 0 ? item.generatedImages : [item.generatedImage || item.generatedImages?.[0]!]
                                                     openPreview(imgs, 0)
                                                 }}>
-                                                    <img src={item.generatedImage || item.generatedImages?.[0]} alt="" className={`w-full h-full ${item.qualityMode === "PRO" ? "object-contain bg-black/50" : "object-cover"}`} />
+                                                    <LazyImage
+                                                        src={getThumbnailUrl(item.generatedImage || item.generatedImages?.[0], 150) ?? (item.generatedImage || item.generatedImages?.[0])}
+                                                        alt=""
+                                                        className={item.qualityMode === "PRO" ? "object-contain bg-black/50" : "object-cover"}
+                                                    />
                                                 </div>
                                                 <span className="text-[10px] text-slate-500">
                                                     {item.qualityMode === "PRO" ? `${item.generatedImages?.length || 0}/${item.imageCount ?? "?"}张` : `${item.generatedImages?.length || 0}张`}
@@ -741,7 +747,7 @@ export default function AdminGenerationsPage() {
                 {previewImages.length > 0 && (
                     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={closePreview}>
                         <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative max-w-4xl max-h-[90vh]" onClick={(e) => e.stopPropagation()}>
-                            <img src={previewImage || ""} alt="" className="max-w-full max-h-[90vh] object-contain rounded-lg" />
+                            <img src={previewImage || ""} alt="" className="max-w-full max-h-[90vh] object-contain rounded-lg" loading="lazy" />
                             <Button variant="outline" size="icon" className="absolute top-2 right-2 bg-black/50 border-white/20 text-white hover:bg-black/70" onClick={closePreview}>
                                 <X className="w-5 h-5" />
                             </Button>

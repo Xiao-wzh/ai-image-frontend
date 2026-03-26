@@ -14,6 +14,8 @@ import {
     Loader2,
     Crown,
     Eye,
+    ChevronLeft,
+    ChevronRight,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -28,6 +30,8 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog"
 import { AppealComparisonModal } from "@/components/admin/appeal-comparison-modal"
+import { getThumbnailUrl } from "@/lib/cdnUrl"
+import { LazyImage } from "@/components/lazy-image"
 
 type Appeal = {
     id: string
@@ -79,6 +83,12 @@ export default function AdminAppealsPage() {
     const [loading, setLoading] = useState(true)
     const [statusFilter, setStatusFilter] = useState<string>("all")
 
+    // 分页
+    const [page, setPage] = useState(1)
+    const [totalPages, setTotalPages] = useState(1)
+    const [total, setTotal] = useState(0)
+    const limit = 10
+
     // Comparison modal
     const [comparisonOpen, setComparisonOpen] = useState(false)
     const [selectedAppeal, setSelectedAppeal] = useState<Appeal | null>(null)
@@ -100,8 +110,11 @@ export default function AdminAppealsPage() {
     const [approveNote, setApproveNote] = useState("")
 
     const fetchAppeals = useCallback(async () => {
+        setLoading(true)
         try {
             const params = new URLSearchParams()
+            params.set("limit", String(limit))
+            params.set("offset", String((page - 1) * limit))
             if (statusFilter !== "all") params.set("status", statusFilter)
 
             const res = await fetch(`/api/admin/appeals?${params.toString()}`)
@@ -110,12 +123,14 @@ export default function AdminAppealsPage() {
             const data = await res.json()
             setAppeals(data.appeals || [])
             setStats(data.stats || null)
+            setTotal(data.page?.total || 0)
+            setTotalPages(Math.ceil((data.page?.total || 0) / limit))
         } catch (err) {
             toast.error("获取申诉列表失败")
         } finally {
             setLoading(false)
         }
-    }, [statusFilter])
+    }, [statusFilter, page])
 
     useEffect(() => {
         fetchAppeals()
@@ -315,7 +330,10 @@ export default function AdminAppealsPage() {
                         ].map((tab) => (
                             <button
                                 key={tab.value}
-                                onClick={() => setStatusFilter(tab.value)}
+                                onClick={() => {
+                                    setStatusFilter(tab.value)
+                                    setPage(1) // 重置页码
+                                }}
                                 className={`px-4 py-2 rounded-xl text-sm transition-all ${statusFilter === tab.value
                                     ? "bg-purple-600 text-white"
                                     : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
@@ -391,10 +409,10 @@ export default function AdminAppealsPage() {
                                                                         setPreviewOpen(true)
                                                                     }}
                                                                 >
-                                                                    <img
-                                                                        src={appeal.generation.originalImage[0]}
+                                                                    <LazyImage
+                                                                        src={getThumbnailUrl(appeal.generation.originalImage[0], 100) ?? appeal.generation.originalImage[0]}
                                                                         alt="用户上传"
-                                                                        className="w-full h-full object-cover"
+                                                                        className="object-cover"
                                                                     />
                                                                 </div>
                                                             ) : (
@@ -417,10 +435,10 @@ export default function AdminAppealsPage() {
                                                                         setPreviewOpen(true)
                                                                     }}
                                                                 >
-                                                                    <img
-                                                                        src={appeal.generation.refImages[0]}
+                                                                    <LazyImage
+                                                                        src={getThumbnailUrl(appeal.generation.refImages[0], 100) ?? appeal.generation.refImages[0]}
                                                                         alt="参考图"
-                                                                        className="w-full h-full object-cover"
+                                                                        className="object-cover"
                                                                     />
                                                                 </div>
                                                                 <span className="text-xs text-blue-400 mt-1">
@@ -463,10 +481,10 @@ export default function AdminAppealsPage() {
                                                     >
                                                         <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 flex-shrink-0">
                                                             {appeal.generation.generatedImages?.[0] ? (
-                                                                <img
-                                                                    src={appeal.generation.generatedImages[0]}
+                                                                <LazyImage
+                                                                    src={getThumbnailUrl(appeal.generation.generatedImages[0], 150) ?? appeal.generation.generatedImages[0]}
                                                                     alt=""
-                                                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform"
+                                                                    className="object-cover group-hover:scale-110 transition-transform"
                                                                 />
                                                             ) : (
                                                                 <div className="w-full h-full flex items-center justify-center">
@@ -501,10 +519,10 @@ export default function AdminAppealsPage() {
                                                                             className="w-10 h-10 rounded overflow-hidden border border-white/10 bg-slate-900/40 cursor-pointer hover:scale-110 transition-transform"
                                                                             onClick={() => window.open(url, '_blank')}
                                                                         >
-                                                                            <img
-                                                                                src={url}
+                                                                            <LazyImage
+                                                                                src={getThumbnailUrl(url, 100) ?? url}
                                                                                 alt={`申诉图片 ${idx + 1}`}
-                                                                                className="w-full h-full object-cover"
+                                                                                className="object-cover"
                                                                             />
                                                                         </div>
                                                                     ))}
@@ -605,6 +623,35 @@ export default function AdminAppealsPage() {
                                 </tbody>
                             </table>
                         )}
+
+                        {/* 分页 */}
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-between p-4 border-t border-white/10">
+                                <div className="text-sm text-slate-400">
+                                    共 {total} 条 · 第 {page} / {totalPages} 页
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={page <= 1}
+                                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                                        className="bg-white/5 border-white/10 text-white hover:bg-white/10"
+                                    >
+                                        <ChevronLeft className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={page >= totalPages}
+                                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                        className="bg-white/5 border-white/10 text-white hover:bg-white/10"
+                                    >
+                                        <ChevronRight className="w-4 h-4" />
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -617,7 +664,7 @@ export default function AdminAppealsPage() {
                         <div className="grid grid-cols-3 gap-2 mt-4">
                             {previewImages.map((img, i) => (
                                 <div key={i} className="aspect-square rounded-lg overflow-hidden bg-slate-800">
-                                    <img src={img} alt="" className="w-full h-full object-cover" />
+                                    <LazyImage src={getThumbnailUrl(img, 300) ?? img} alt="" className="object-cover" />
                                 </div>
                             ))}
                         </div>
