@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { toast } from "sonner"
 import { useCosts } from "@/hooks/use-costs"
+import { getThumbnailUrl } from "@/lib/cdnUrl"
 
 interface GenerationResultProps {
   generationId: string
@@ -218,10 +219,18 @@ export function GenerationResult({
                   transition={{ duration: 0.3, delay: i * 0.05 }}
                   whileHover={{ scale: 1.05 }}
                 >
-                  <img src={img} alt={`生成图片 ${i + 1}`} className={`w-full h-full ${isPro ? "object-contain" : "object-cover"}`} />
+                  {/* <img src={img} alt={`生成图片 ${i + 1}`} className={`w-full h-full ${isPro ? "object-contain" : "object-cover"}`} /> */}
+                  {/* 将原来的 <img src={img} ... /> 修改为： */}
+                  <img
+                    src={getThumbnailUrl(img, 400) || img}
+                    alt={`生成图片 ${i + 1}`}
+                    className={`w-full h-full ${isPro ? "object-contain" : "object-cover"}`}
+                    loading="lazy"
+                  />
                   <div
                     className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
-                    onClick={() => onPreview(img)}
+                    // onClick={() => onPreview(img)}
+                    onClick={() => onPreview(getThumbnailUrl(img, 1500) || img)}
                   >
                     <ZoomIn className="w-8 h-8 text-white" />
                   </div>
@@ -247,8 +256,14 @@ export function GenerationResult({
               className="relative group rounded-2xl overflow-hidden border border-white/20 backdrop-blur-sm flex items-center justify-center bg-slate-900/50"
               whileHover={{ scale: 1.02 }}
             >
-              <img
+              {/* <img
                 src={fullImageUrl || ""}
+                alt="Generated Full Image"
+                className="max-w-full max-h-[70vh] object-contain"
+              /> */}
+              {/* 将原来的 <img src={fullImageUrl || ""} ... /> 修改为： */}
+              <img
+                src={getThumbnailUrl(fullImageUrl, 1500) || fullImageUrl || ""}
                 alt="Generated Full Image"
                 className="max-w-full max-h-[70vh] object-contain"
               />

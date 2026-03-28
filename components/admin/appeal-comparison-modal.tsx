@@ -1,17 +1,24 @@
 "use client"
 
 import { useState } from "react"
-import { X, ChevronLeft, ChevronRight, ZoomIn } from "lucide-react"
+import { X, ChevronLeft, ChevronRight, ZoomIn, Loader2, Sparkles, RefreshCw, Bot, AlertTriangle } from "lucide-react"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
+import { toast } from "sonner"
 
 type Appeal = {
     id: string
     reason: string
+    status: "PENDING" | "PROCESSING" | "APPROVED" | "REJECTED" | "PENDING_MANUAL_REVIEW"
     appealedImages: string[]
+    // AI 审核相关字段
+    aiConfidence: number | null
+    aiAnalysis: string | null
+    userMessage: string | null  // AI 给用户的简短提示
     generation: {
         productName: string
         productType: string
+        mode: string  // CREATIVE / CLONE
         qualityMode?: string | null
         generatedImages: string[]
         originalImage: string[]
@@ -22,13 +29,16 @@ export function AppealComparisonModal({
     open,
     onOpenChange,
     appeal,
+    onTriggerAi,
 }: {
     open: boolean
     onOpenChange: (v: boolean) => void
     appeal: Appeal | null
+    onTriggerAi?: (appealId: string) => Promise<void>
 }) {
     const [selectedImageIndex, setSelectedImageIndex] = useState(0)
     const [previewImage, setPreviewImage] = useState<string | null>(null)
+    const [triggeringAi, setTriggeringAi] = useState(false)
 
     if (!appeal) return null
 
@@ -38,6 +48,27 @@ export function AppealComparisonModal({
 
     const currentGenImage = generatedImages[selectedImageIndex]
     const isAppealedImage = currentGenImage && appealedImages.includes(currentGenImage)
+
+    // 判断是否为处理中状态
+    const isProcessing = appeal.status === "PROCESSING"
+    // 判断是否可以重新提交 AI 审核
+    const canRetriggerAi = appeal.status === "PENDING" || appeal.status === "PENDING_MANUAL_REVIEW"
+
+    // 触发 AI 重新审核
+    const handleTriggerAi = async () => {
+        if (!onTriggerAi || triggeringAi) return
+
+        setTriggeringAi(true)
+        try {
+            await onTriggerAi(appeal.id)
+            toast.success("已重新提交 AI 审核")
+            onOpenChange(false)
+        } catch (error: any) {
+            toast.error(error.message || "提交失败")
+        } finally {
+            setTriggeringAi(false)
+        }
+    }
 
     return (
         <>
@@ -51,6 +82,10 @@ export function AppealComparisonModal({
                             </h2>
                             <p className="text-xs text-slate-400 mt-1">
                                 {appeal.generation.qualityMode === "PRO" ? "PRO模式" : "标准模式"} • {appeal.generation.productType}
+                                <span className="mx-2">•</span>
+                                <span className={appeal.generation.mode === "CLONE" ? "text-blue-400" : "text-purple-400"}>
+                                    {appeal.generation.mode === "CLONE" ? "克隆模式" : "创意模式"}
+                                </span>
                             </p>
                         </div>
                         <button
@@ -179,6 +214,66 @@ export function AppealComparisonModal({
                                 <div className="text-sm text-slate-300 leading-relaxed">{appeal.reason}</div>
                             </div>
                         )}
+
+                        {/* AI 诊断报告 */}
+                        {appeal.aiAnalysis && (
+                            <div className="px-6 py-4 border-t border-white/10 bg-gradient-to-r from-blue-500/10 to-purple-500/10">
+                                <div className="flex items-center gap-2 mb-3">
+                                    <Bot className="w-4 h-4 text-blue-400" />
+                                    <span className="text-xs font-medium text-blue-400">AI 诊断报告</span>
+                                    {appeal.aiConfidence !== null && (
+                                        <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded-full ${
+                                            appeal.aiConfidence > 0.85
+                                                ? "bg-green-500/20 text-green-400"
+                                                : appeal.aiConfidence > 0.6
+                                                    ? "bg-yellow-500/20 text-yellow-400"
+                                                    : "bg-red-500/20 text-red-400"
+                                        }`}>
+                                            置信度 {Math.round(appeal.aiConfidence * 100)}%
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="text-sm text-slate-300 leading-relaxed bg-black/20 rounded-lg p-3">
+                                    {appeal.aiAnalysis}
+                                </div>
+                                {/* 给用户的提示 */}
+                                {appeal.userMessage && (
+                                    <div className="mt-3 flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 rounded-lg px-3 py-2 border border-emerald-500/20">
+                                        <span className="font-medium">用户提示：</span>
+                                        <span>{appeal.userMessage}</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Processing Status Banner */}
+                        {isProcessing && (
+                            <div className="px-6 py-4 border-t border-white/10 bg-blue-500/10 flex items-center justify-center gap-3">
+                                <Loader2 className="w-5 h-5 text-blue-400 animate-spin" />
+                                <span className="text-sm text-blue-400">AI 正在审核中，请稍候...</span>
+                            </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="px-6 py-4 border-t border-white/10 bg-slate-900/30 flex items-center justify-end gap-3">
+                            {/* 重新提交 AI 审核 */}
+                            {canRetriggerAi && onTriggerAi && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleTriggerAi}
+                                    disabled={triggeringAi}
+                                    className="border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400"
+                                >
+                                    {triggeringAi ? (
+                                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    ) : (
+                                        <RefreshCw className="w-4 h-4 mr-2" />
+                                    )}
+                                    重新提交 AI 审核
+                                </Button>
+                            )}
+                        </div>
                     </div>
                 </DialogContent>
             </Dialog>

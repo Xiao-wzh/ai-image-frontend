@@ -46,6 +46,7 @@ export async function GET(req: NextRequest) {
                             productType: true,
                             outputLanguage: true,
                             qualityMode: true,       // PRO / STANDARD
+                            mode: true,              // CREATIVE / CLONE
                             imageCount: true,        // PRO: 期望张数
                             costPerImage: true,      // PRO: 单张成本快照
                             totalCost: true,         // 总费用
@@ -94,8 +95,10 @@ export async function GET(req: NextRequest) {
         }))
 
         // Get counts by status for dashboard
-        const [pendingCount, approvedCount, rejectedCount] = await Promise.all([
+        const [pendingCount, processingCount, manualReviewCount, approvedCount, rejectedCount] = await Promise.all([
             prisma.appeal.count({ where: { status: "PENDING" } }),
+            prisma.appeal.count({ where: { status: "PROCESSING" } }),
+            prisma.appeal.count({ where: { status: "PENDING_MANUAL_REVIEW" } }),
             prisma.appeal.count({ where: { status: "APPROVED" } }),
             prisma.appeal.count({ where: { status: "REJECTED" } }),
         ])
@@ -104,10 +107,12 @@ export async function GET(req: NextRequest) {
             success: true,
             appeals: enrichedAppeals,
             stats: {
-                pending: pendingCount,
+                pending: pendingCount + processingCount + manualReviewCount,
+                processing: processingCount,
+                manualReview: manualReviewCount,
                 approved: approvedCount,
                 rejected: rejectedCount,
-                total: pendingCount + approvedCount + rejectedCount,
+                total: pendingCount + processingCount + manualReviewCount + approvedCount + rejectedCount,
             },
             page: {
                 limit,

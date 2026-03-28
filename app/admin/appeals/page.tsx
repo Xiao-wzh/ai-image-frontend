@@ -16,6 +16,12 @@ import {
     Eye,
     ChevronLeft,
     ChevronRight,
+    RefreshCw,
+    Sparkles,
+    Bot,
+    FileText,
+    Users,
+    AlertCircle,
 } from "lucide-react"
 import { toast } from "sonner"
 
@@ -38,10 +44,15 @@ type Appeal = {
     userId: string
     generationId: string
     reason: string
-    status: "PENDING" | "APPROVED" | "REJECTED"
+    status: "PENDING" | "PROCESSING" | "APPROVED" | "REJECTED" | "PENDING_MANUAL_REVIEW"
     refundAmount: number
     adminNote: string | null
     appealedImages: string[]  // 新增：申诉的具体图片
+    // AI 审核相关字段
+    aiConfidence: number | null
+    aiAnalysis: string | null
+    userMessage: string | null  // AI 给用户的简短提示
+    reviewedBy: string | null
     createdAt: string
     user: {
         id: string
@@ -64,6 +75,7 @@ type Appeal = {
         generatedImage: string | null
         originalImage: string[]
         refImages: string[]
+        mode: string  // CREATIVE / CLONE
         hasUsedDiscountedRetry: boolean
         createdAt: string
     }
@@ -71,6 +83,8 @@ type Appeal = {
 
 type Stats = {
     pending: number
+    processing: number
+    manualReview: number  // API 返回 manualReview
     approved: number
     rejected: number
     total: number
@@ -135,6 +149,23 @@ export default function AdminAppealsPage() {
     useEffect(() => {
         fetchAppeals()
     }, [fetchAppeals])
+
+    // 触发 AI 审核
+    const handleTriggerAiReview = async (appealId: string) => {
+        const res = await fetch("/api/admin/appeals/trigger-ai", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ appealId }),
+        })
+
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || "操作失败")
+
+        // 只更新单条记录的状态，保持滚动位置
+        setAppeals(prev => prev.map(a =>
+            a.id === appealId ? { ...a, status: "PROCESSING" } : a
+        ))
+    }
 
     const handleApprove = async () => {
         if (!approvingAppeal) return
@@ -238,28 +269,57 @@ export default function AdminAppealsPage() {
         setRejectOpen(true)
     }
 
-    const statusBadge = (status: string) => {
+    const statusBadge = (status: string, aiConfidence?: number | null) => {
         switch (status) {
             case "PENDING":
                 return (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400">
-                        <Clock className="w-3 h-3" />
-                        待处理
-                    </span>
+                    <div className="flex flex-col gap-1">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-500/15 text-yellow-400 border border-yellow-500/30">
+                            <Clock className="w-3.5 h-3.5" />
+                            待处理
+                        </span>
+                    </div>
+                )
+            case "PROCESSING":
+                return (
+                    <div className="flex flex-col gap-1">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-500/15 text-blue-400 border border-blue-500/30">
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            AI 审核中
+                        </span>
+                    </div>
+                )
+            case "PENDING_MANUAL_REVIEW":
+                return (
+                    <div className="flex flex-col gap-1">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-orange-500/15 text-orange-400 border border-orange-500/30">
+                            <AlertCircle className="w-3.5 h-3.5" />
+                            待人工审核
+                        </span>
+                        {aiConfidence !== null && aiConfidence !== undefined && (
+                            <span className="text-[10px] text-orange-300/70">
+                                AI 置信度 {Math.round(aiConfidence * 100)}%
+                            </span>
+                        )}
+                    </div>
                 )
             case "APPROVED":
                 return (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400">
-                        <CheckCircle className="w-3 h-3" />
-                        已通过
-                    </span>
+                    <div className="flex flex-col gap-1">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/15 text-green-400 border border-green-500/30">
+                            <CheckCircle className="w-3.5 h-3.5" />
+                            已通过
+                        </span>
+                    </div>
                 )
             case "REJECTED":
                 return (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400">
-                        <XCircle className="w-3 h-3" />
-                        已拒绝
-                    </span>
+                    <div className="flex flex-col gap-1">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/15 text-red-400 border border-red-500/30">
+                            <XCircle className="w-3.5 h-3.5" />
+                            已拒绝
+                        </span>
+                    </div>
                 )
             default:
                 return null
@@ -300,303 +360,393 @@ export default function AdminAppealsPage() {
 
                     {/* Stats Cards */}
                     {stats && (
-                        <div className="grid grid-cols-4 gap-4 mb-6">
-                            <div className="glass rounded-xl p-4 border border-white/10">
-                                <div className="text-2xl font-bold text-white">{stats.total}</div>
-                                <div className="text-xs text-slate-400">总申诉</div>
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                            <div className="glass rounded-xl p-5 border border-white/10 hover:border-white/20 transition-colors group">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="text-3xl font-bold text-white">{stats.total}</div>
+                                        <div className="text-sm text-slate-400 mt-1">总申诉</div>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-slate-600 to-slate-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <FileText className="w-6 h-6 text-slate-300" />
+                                    </div>
+                                </div>
                             </div>
-                            <div className="glass rounded-xl p-4 border border-yellow-500/20">
-                                <div className="text-2xl font-bold text-yellow-400">{stats.pending}</div>
-                                <div className="text-xs text-slate-400">待处理</div>
+                            <div className="glass rounded-xl p-5 border border-blue-500/20 hover:border-blue-500/40 transition-colors group">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="text-3xl font-bold text-blue-400">{stats.processing || 0}</div>
+                                        <div className="text-sm text-slate-400 mt-1">AI 审核中</div>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <Loader2 className="w-6 h-6 text-blue-400 animate-spin" />
+                                    </div>
+                                </div>
                             </div>
-                            <div className="glass rounded-xl p-4 border border-green-500/20">
-                                <div className="text-2xl font-bold text-green-400">{stats.approved}</div>
-                                <div className="text-xs text-slate-400">已通过</div>
+                            <div className="glass rounded-xl p-5 border border-orange-500/20 hover:border-orange-500/40 transition-colors group">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="text-3xl font-bold text-orange-400">{stats.manualReview || 0}</div>
+                                        <div className="text-sm text-slate-400 mt-1">待人工审核</div>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500/20 to-amber-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <AlertCircle className="w-6 h-6 text-orange-400" />
+                                    </div>
+                                </div>
                             </div>
-                            <div className="glass rounded-xl p-4 border border-red-500/20">
-                                <div className="text-2xl font-bold text-red-400">{stats.rejected}</div>
-                                <div className="text-xs text-slate-400">已拒绝</div>
+                            <div className="glass rounded-xl p-5 border border-green-500/20 hover:border-green-500/40 transition-colors group">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="text-3xl font-bold text-green-400">{stats.approved}</div>
+                                        <div className="text-sm text-slate-400 mt-1">已通过</div>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-500/20 to-emerald-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <CheckCircle className="w-6 h-6 text-green-400" />
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="glass rounded-xl p-5 border border-red-500/20 hover:border-red-500/40 transition-colors group">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <div className="text-3xl font-bold text-red-400">{stats.rejected}</div>
+                                        <div className="text-sm text-slate-400 mt-1">已拒绝</div>
+                                    </div>
+                                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-red-500/20 to-rose-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        <XCircle className="w-6 h-6 text-red-400" />
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     )}
 
                     {/* Filter Tabs */}
-                    <div className="flex gap-2 mb-6">
+                    <div className="flex gap-2 mb-6 flex-wrap">
                         {[
-                            { value: "all", label: "全部" },
-                            { value: "PENDING", label: "待处理" },
-                            { value: "APPROVED", label: "已通过" },
-                            { value: "REJECTED", label: "已拒绝" },
+                            { value: "all", label: "全部", color: "purple" },
+                            { value: "PENDING", label: "待处理", color: "yellow" },
+                            { value: "PROCESSING", label: "AI 审核中", color: "blue" },
+                            { value: "PENDING_MANUAL_REVIEW", label: "待人工", color: "orange" },
+                            { value: "APPROVED", label: "已通过", color: "green" },
+                            { value: "REJECTED", label: "已拒绝", color: "red" },
                         ].map((tab) => (
                             <button
                                 key={tab.value}
                                 onClick={() => {
                                     setStatusFilter(tab.value)
-                                    setPage(1) // 重置页码
+                                    setPage(1)
                                 }}
-                                className={`px-4 py-2 rounded-xl text-sm transition-all ${statusFilter === tab.value
-                                    ? "bg-purple-600 text-white"
-                                    : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white"
-                                    }`}
+                                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                                    statusFilter === tab.value
+                                        ? tab.color === "purple" ? "bg-purple-600 text-white shadow-lg shadow-purple-500/25"
+                                            : tab.color === "yellow" ? "bg-yellow-500/90 text-black shadow-lg shadow-yellow-500/25"
+                                            : tab.color === "blue" ? "bg-blue-500/90 text-white shadow-lg shadow-blue-500/25"
+                                            : tab.color === "orange" ? "bg-orange-500/90 text-white shadow-lg shadow-orange-500/25"
+                                            : tab.color === "green" ? "bg-green-500/90 text-white shadow-lg shadow-green-500/25"
+                                            : "bg-red-500/90 text-white shadow-lg shadow-red-500/25"
+                                        : "bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white border border-white/10"
+                                }`}
                             >
                                 {tab.label}
                             </button>
                         ))}
                     </div>
 
-                    {/* Table */}
-                    <div className="glass rounded-2xl border border-white/10 overflow-hidden">
+                    {/* Appeals Cards */}
+                    <div className="space-y-4">
                         {loading ? (
-                            <div className="p-6 space-y-4">
-                                {Array.from({ length: 5 }).map((_, i) => (
-                                    <div key={i} className="flex items-center gap-4">
-                                        <Skeleton className="w-16 h-16 rounded-lg bg-white/10" />
-                                        <div className="flex-1 space-y-2">
-                                            <Skeleton className="h-4 w-1/3 bg-white/10" />
-                                            <Skeleton className="h-3 w-1/4 bg-white/10" />
+                            <div className="space-y-4">
+                                {Array.from({ length: 3 }).map((_, i) => (
+                                    <div key={i} className="glass rounded-2xl border border-white/10 p-5">
+                                        <div className="flex gap-4">
+                                            <Skeleton className="w-24 h-24 rounded-xl bg-white/10" />
+                                            <div className="flex-1 space-y-2">
+                                                <Skeleton className="h-4 w-1/3 bg-white/10" />
+                                                <Skeleton className="h-3 w-1/2 bg-white/10" />
+                                                <Skeleton className="h-3 w-1/4 bg-white/10" />
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         ) : appeals.length === 0 ? (
-                            <div className="p-12 text-center">
+                            <div className="glass rounded-2xl border border-white/10 p-12 text-center">
                                 <AlertTriangle className="w-12 h-12 text-slate-500 mx-auto mb-4" />
                                 <div className="text-slate-400">暂无申诉记录</div>
                             </div>
                         ) : (
-                            <table className="w-full">
-                                <thead>
-                                    <tr className="border-b border-white/10">
-                                        <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">用户</th>
-                                        <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">原图</th>
-                                        <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">类型</th>
-                                        <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">语言</th>
-                                        <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">生成结果</th>
-                                        <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">申诉原因</th>
-                                        <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">退款</th>
-                                        <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">状态</th>
-                                        <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">时间</th>
-                                        <th className="text-left p-4 text-xs font-medium text-slate-400 uppercase">操作</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <AnimatePresence>
-                                        {appeals.map((appeal) => (
-                                            <motion.tr
-                                                key={appeal.id}
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                exit={{ opacity: 0 }}
-                                                className="border-b border-white/5 hover:bg-white/5"
-                                            >
-                                                {/* User */}
-                                                <td className="p-4">
-                                                    <div className="text-sm text-white">{appeal.user.name || appeal.user.username || "用户"}</div>
-                                                    <div className="text-xs text-slate-500">{appeal.user.email}</div>
-                                                </td>
-
-                                                {/* Original Image (User uploaded) */}
-                                                <td className="p-4">
+                            <>
+                                <AnimatePresence>
+                                    {appeals.map((appeal) => (
+                                        <motion.div
+                                            key={appeal.id}
+                                            initial={{ opacity: 0, y: 20 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -20 }}
+                                            className="glass rounded-2xl border border-white/10 hover:border-white/20 transition-all overflow-hidden"
+                                        >
+                                            <div className="p-5">
+                                                {/* 顶部：状态 + 时间 */}
+                                                <div className="flex items-center justify-between mb-4">
                                                     <div className="flex items-center gap-3">
-                                                        {/* Original Images */}
-                                                        <div className="flex flex-col items-center">
-                                                            {appeal.generation.originalImage?.[0] ? (
-                                                                <div
-                                                                    className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 cursor-pointer hover:ring-2 hover:ring-purple-500/50"
-                                                                    onClick={() => {
-                                                                        setPreviewImages(appeal.generation.originalImage)
-                                                                        setPreviewTitle(`原图 - ${appeal.generation.productName}`)
-                                                                        setPreviewOpen(true)
-                                                                    }}
-                                                                >
-                                                                    <LazyImage
-                                                                        src={getThumbnailUrl(appeal.generation.originalImage[0], 100) ?? appeal.generation.originalImage[0]}
-                                                                        alt="用户上传"
-                                                                        className="object-cover"
-                                                                    />
-                                                                </div>
-                                                            ) : (
-                                                                <div className="w-12 h-12 rounded-lg bg-slate-800 flex items-center justify-center">
-                                                                    <ImageIcon className="w-5 h-5 text-slate-600" />
-                                                                </div>
-                                                            )}
-                                                            <span className="text-xs text-slate-500 mt-1">
-                                                                原图{appeal.generation.originalImage?.length || 0}张
-                                                            </span>
-                                                        </div>
-                                                        {/* Reference Images */}
-                                                        {appeal.generation.refImages?.length > 0 && (
-                                                            <div className="flex flex-col items-center">
-                                                                <div
-                                                                    className="w-12 h-12 rounded-lg overflow-hidden bg-blue-900/30 cursor-pointer hover:ring-2 hover:ring-blue-500/50 border border-blue-500/30"
-                                                                    onClick={() => {
-                                                                        setPreviewImages(appeal.generation.refImages)
-                                                                        setPreviewTitle(`参考图 - ${appeal.generation.productName}`)
-                                                                        setPreviewOpen(true)
-                                                                    }}
-                                                                >
-                                                                    <LazyImage
-                                                                        src={getThumbnailUrl(appeal.generation.refImages[0], 100) ?? appeal.generation.refImages[0]}
-                                                                        alt="参考图"
-                                                                        className="object-cover"
-                                                                    />
-                                                                </div>
-                                                                <span className="text-xs text-blue-400 mt-1">
-                                                                    参考{appeal.generation.refImages.length}张
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </td>
-
-                                                {/* Product Type / Platform */}
-                                                <td className="p-4">
-                                                    <div className="text-sm text-white">
-                                                        {appeal.generation.productTypeDescription || (ProductTypeLabel as any)[appeal.generation.productType] || appeal.generation.productType || "-"}
-                                                    </div>
-                                                    <div className="flex items-center gap-1 mt-1 flex-wrap">
-                                                        {appeal.generation.qualityMode === "PRO" ? (
-                                                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-[10px] text-white font-bold">
-                                                                <Crown className="w-2.5 h-2.5" />
-                                                                PRO · {appeal.generation.imageCount ?? "?"}张
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-xs text-slate-500">
-                                                                {appeal.generation.hasUsedDiscountedRetry ? "优惠重试" : "正常生成"}
+                                                        {statusBadge(appeal.status, appeal.aiConfidence)}
+                                                        {appeal.generation.qualityMode === "PRO" && (
+                                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-xs text-white font-bold">
+                                                                <Crown className="w-3 h-3" />
+                                                                PRO
                                                             </span>
                                                         )}
                                                     </div>
-                                                </td>
+                                                    <div className="text-xs text-slate-500">
+                                                        {new Date(appeal.createdAt).toLocaleDateString("zh-CN")} {new Date(appeal.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
+                                                    </div>
+                                                </div>
 
-                                                {/* Language */}
-                                                <td className="p-4">
-                                                    <span className="text-xs text-slate-300">{appeal.generation.outputLanguage || "中文"}</span>
-                                                </td>
-
-                                                {/* Generated Result */}
-                                                <td className="p-4">
-                                                    <div
-                                                        onClick={() => openPreview(appeal)}
-                                                        className="flex items-center gap-3 cursor-pointer group"
-                                                    >
-                                                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 flex-shrink-0">
-                                                            {appeal.generation.generatedImages?.[0] ? (
-                                                                <LazyImage
-                                                                    src={getThumbnailUrl(appeal.generation.generatedImages[0], 150) ?? appeal.generation.generatedImages[0]}
-                                                                    alt=""
-                                                                    className="object-cover group-hover:scale-110 transition-transform"
-                                                                />
-                                                            ) : (
-                                                                <div className="w-full h-full flex items-center justify-center">
-                                                                    <ImageIcon className="w-5 h-5 text-slate-600" />
+                                                {/* 主内容区：三列布局 */}
+                                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                                                    {/* 左侧：图片对比 */}
+                                                    <div className="lg:col-span-4 flex gap-3">
+                                                        {/* 原图/参考图 */}
+                                                        <div className="flex flex-col gap-2">
+                                                            <div className="text-xs text-slate-500 mb-1">原图</div>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {appeal.generation.originalImage?.slice(0, 2).map((url, idx) => (
+                                                                    <div
+                                                                        key={idx}
+                                                                        className="w-16 h-16 rounded-lg overflow-hidden bg-slate-800 cursor-pointer hover:ring-2 hover:ring-purple-500/50 transition-all hover:scale-105"
+                                                                        onClick={() => {
+                                                                            setPreviewImages(appeal.generation.originalImage)
+                                                                            setPreviewTitle(`原图 - ${appeal.generation.productName}`)
+                                                                            setPreviewOpen(true)
+                                                                        }}
+                                                                    >
+                                                                        <LazyImage
+                                                                            src={getThumbnailUrl(url, 100) ?? url}
+                                                                            alt={`原图 ${idx + 1}`}
+                                                                            className="object-cover w-full h-full"
+                                                                        />
+                                                                    </div>
+                                                                ))}
+                                                                {(appeal.generation.originalImage?.length || 0) > 2 && (
+                                                                    <div className="w-16 h-16 rounded-lg bg-slate-800 flex items-center justify-center text-xs text-slate-400">
+                                                                        +{(appeal.generation.originalImage?.length || 0) - 2}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            {/* 参考图 */}
+                                                            {appeal.generation.refImages && appeal.generation.refImages.length > 0 && (
+                                                                <div className="mt-2">
+                                                                    <div className="text-xs text-blue-400 mb-1">参考图</div>
+                                                                    <div
+                                                                        className="w-16 h-16 rounded-lg overflow-hidden bg-blue-900/30 cursor-pointer hover:ring-2 hover:ring-blue-500/50 border border-blue-500/30"
+                                                                        onClick={() => {
+                                                                            setPreviewImages(appeal.generation.refImages)
+                                                                            setPreviewTitle(`参考图 - ${appeal.generation.productName}`)
+                                                                            setPreviewOpen(true)
+                                                                        }}
+                                                                    >
+                                                                        <LazyImage
+                                                                            src={getThumbnailUrl(appeal.generation.refImages[0], 100) ?? appeal.generation.refImages[0]}
+                                                                            alt="参考图"
+                                                                            className="object-cover w-full h-full"
+                                                                        />
+                                                                    </div>
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        <div>
-                                                            <div className="text-sm text-white group-hover:text-purple-400 transition-colors truncate max-w-[120px]">
-                                                                {appeal.generation.productName}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </td>
 
-                                                {/* Reason */}
-                                                <td className="p-4">
-                                                    <div className="space-y-2">
-                                                        <div className="text-sm text-slate-300 max-w-[200px] line-clamp-2" title={appeal.reason}>
-                                                            {appeal.reason}
+                                                        {/* 箭头 */}
+                                                        <div className="flex items-center text-slate-600">
+                                                            <ChevronRight className="w-5 h-5" />
                                                         </div>
-                                                        {/* 申诉的具体图片 */}
-                                                        {appeal.appealedImages && appeal.appealedImages.length > 0 && (
-                                                            <div className="space-y-1">
-                                                                <div className="text-xs font-medium text-slate-400">
-                                                                    申诉图片 ({appeal.appealedImages.length} 张)
-                                                                </div>
-                                                                <div className="flex gap-1 flex-wrap">
-                                                                    {appeal.appealedImages.slice(0, 4).map((url, idx) => (
+
+                                                        {/* 生成图/申诉图 */}
+                                                        <div className="flex flex-col gap-2">
+                                                            <div className="text-xs text-slate-500 mb-1">生成结果</div>
+                                                            <div className="flex flex-wrap gap-2">
+                                                                {appeal.generation.generatedImages?.slice(0, 2).map((url, idx) => {
+                                                                    const isAppealed = appeal.appealedImages?.includes(url)
+                                                                    return (
                                                                         <div
                                                                             key={idx}
-                                                                            className="w-10 h-10 rounded overflow-hidden border border-white/10 bg-slate-900/40 cursor-pointer hover:scale-110 transition-transform"
-                                                                            onClick={() => window.open(url, '_blank')}
+                                                                            className={`relative w-16 h-16 rounded-lg overflow-hidden cursor-pointer transition-all hover:scale-105 ${
+                                                                                isAppealed
+                                                                                    ? "ring-2 ring-orange-500 shadow-lg shadow-orange-500/20"
+                                                                                    : "bg-slate-800 hover:ring-2 hover:ring-white/30"
+                                                                            }`}
+                                                                            onClick={() => {
+                                                                                setPreviewImages(appeal.generation.generatedImages)
+                                                                                setPreviewTitle(`生成结果 - ${appeal.generation.productName}`)
+                                                                                setPreviewOpen(true)
+                                                                            }}
                                                                         >
                                                                             <LazyImage
                                                                                 src={getThumbnailUrl(url, 100) ?? url}
-                                                                                alt={`申诉图片 ${idx + 1}`}
-                                                                                className="object-cover"
+                                                                                alt={`生成 ${idx + 1}`}
+                                                                                className="object-cover w-full h-full"
                                                                             />
+                                                                            {isAppealed && (
+                                                                                <div className="absolute inset-0 bg-orange-500/20 flex items-center justify-center pointer-events-none">
+                                                                                    <span className="text-[8px] text-orange-300 bg-black/60 px-1 rounded">申诉</span>
+                                                                                </div>
+                                                                            )}
                                                                         </div>
-                                                                    ))}
-                                                                    {appeal.appealedImages.length > 4 && (
-                                                                        <div className="w-10 h-10 rounded bg-slate-800 flex items-center justify-center text-xs text-slate-400">
-                                                                            +{appeal.appealedImages.length - 4}
-                                                                        </div>
-                                                                    )}
+                                                                    )
+                                                                })}
+                                                                {(appeal.generation.generatedImages?.length || 0) > 2 && (
+                                                                    <div className="w-16 h-16 rounded-lg bg-slate-800 flex items-center justify-center text-xs text-slate-400">
+                                                                        +{(appeal.generation.generatedImages?.length || 0) - 2}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 中间：信息 */}
+                                                    <div className="lg:col-span-5 flex flex-col gap-3">
+                                                        {/* 用户信息 */}
+                                                        <div className="flex items-center gap-2">
+                                                            <Users className="w-4 h-4 text-slate-500" />
+                                                            <span className="text-sm text-white">{appeal.user.name || appeal.user.username || "用户"}</span>
+                                                            <span className="text-xs text-slate-500">{appeal.user.email}</span>
+                                                        </div>
+
+                                                        {/* 商品信息 */}
+                                                        <div>
+                                                            <div className="text-sm text-white font-medium truncate" title={appeal.generation.productName}>
+                                                                {appeal.generation.productName}
+                                                            </div>
+                                                            <div className="flex items-center gap-2 mt-1">
+                                                                <span className="text-xs text-slate-400">
+                                                                    {appeal.generation.productTypeDescription || (ProductTypeLabel as any)[appeal.generation.productType] || appeal.generation.productType}
+                                                                </span>
+                                                                <span className="text-xs text-slate-600">•</span>
+                                                                <span className="text-xs text-slate-400">{appeal.generation.outputLanguage || "中文"}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 申诉原因 */}
+                                                        {appeal.reason && (
+                                                            <div className="bg-white/5 rounded-lg p-3 border border-white/5">
+                                                                <div className="text-xs text-slate-500 mb-1">申诉原因</div>
+                                                                <div className="text-sm text-slate-300 line-clamp-2" title={appeal.reason}>
+                                                                    {appeal.reason}
                                                                 </div>
                                                             </div>
                                                         )}
-                                                    </div>
-                                                </td>
 
-                                                {/* Refund */}
-                                                <td className="p-4">
-                                                    <span className="text-purple-400 font-semibold">{appeal.refundAmount}</span>
-                                                    <span className="text-slate-500 text-xs ml-1">积分</span>
-                                                    {appeal.generation.qualityMode === "PRO" && appeal.generation.costPerImage && (
-                                                        <div className="text-[10px] text-amber-400/70 mt-0.5">
-                                                            {appeal.generation.costPerImage}×{appeal.generation.imageCount ?? "?"}
+                                                        {/* AI 分析结果 */}
+                                                        {appeal.aiAnalysis && (
+                                                            <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 rounded-lg p-3 border border-blue-500/20">
+                                                                <div className="flex items-center gap-2 mb-2">
+                                                                    <Bot className="w-4 h-4 text-blue-400" />
+                                                                    <span className="text-xs text-blue-400 font-medium">AI 诊断</span>
+                                                                    {appeal.aiConfidence !== null && (
+                                                                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                                                                            appeal.aiConfidence > 0.85
+                                                                                ? "bg-green-500/20 text-green-400"
+                                                                                : "bg-yellow-500/20 text-yellow-400"
+                                                                        }`}>
+                                                                            {Math.round(appeal.aiConfidence * 100)}% 置信度
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <p className="text-xs text-slate-300 line-clamp-2" title={appeal.aiAnalysis}>
+                                                                    {appeal.aiAnalysis}
+                                                                </p>
+                                                                {/* 给用户的提示 */}
+                                                                {appeal.userMessage && (
+                                                                    <div className="mt-2 flex items-center gap-1.5 text-xs text-emerald-400">
+                                                                        <span className="font-medium">用户提示:</span>
+                                                                        <span>{appeal.userMessage}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
+
+                                                        {/* 退款金额 */}
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-xs text-slate-500">退款:</span>
+                                                            <span className="text-purple-400 font-semibold">{appeal.refundAmount}</span>
+                                                            <span className="text-xs text-slate-500">积分</span>
                                                         </div>
-                                                    )}
-                                                </td>
+                                                    </div>
 
-                                                {/* Status */}
-                                                <td className="p-4">
-                                                    {statusBadge(appeal.status)}
-                                                    {appeal.status !== "PENDING" && appeal.adminNote && (
-                                                        <div className="text-xs text-slate-500 mt-1 truncate max-w-[120px]" title={appeal.adminNote}>
-                                                            {appeal.adminNote}
+                                                    {/* 右侧：操作 */}
+                                                    <div className="lg:col-span-3 flex flex-col gap-2">
+                                                        {/* 第一行：对比 + AI审核 */}
+                                                        <div className="flex gap-2">
+                                                            <Button
+                                                                onClick={() => {
+                                                                    setSelectedAppeal(appeal)
+                                                                    setComparisonOpen(true)
+                                                                }}
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="flex-1 border-blue-500/50 text-blue-400 hover:bg-blue-500/10"
+                                                            >
+                                                                <Eye className="w-4 h-4 mr-1" />
+                                                                对比审核
+                                                            </Button>
                                                         </div>
-                                                    )}
-                                                </td>
 
+                                                        {/* AI 审核按钮 / 重新审核 */}
+                                                        {(appeal.status === "PENDING" || appeal.status === "PENDING_MANUAL_REVIEW" || appeal.status === "PROCESSING") && (
+                                                            <Button
+                                                                onClick={async () => {
+                                                                    if (processing === appeal.id) return
+                                                                    setProcessing(appeal.id)
+                                                                    try {
+                                                                        const res = await fetch("/api/admin/appeals/trigger-ai", {
+                                                                            method: "POST",
+                                                                            headers: { "Content-Type": "application/json" },
+                                                                            body: JSON.stringify({ appealId: appeal.id }),
+                                                                        })
+                                                                        const data = await res.json()
+                                                                        if (!res.ok) throw new Error(data.error || "操作失败")
+                                                                        toast.success(appeal.status === "PROCESSING" ? "已重新提交 AI 审核" : "AI 审核已触发")
+                                                                        // 只更新单条记录的状态，保持滚动位置
+                                                                        setAppeals(prev => prev.map(a =>
+                                                                            a.id === appeal.id ? { ...a, status: "PROCESSING" } : a
+                                                                        ))
+                                                                    } catch (err: any) {
+                                                                        toast.error(err.message || "操作失败")
+                                                                    } finally {
+                                                                        setProcessing(null)
+                                                                    }
+                                                                }}
+                                                                disabled={processing === appeal.id}
+                                                                size="sm"
+                                                                variant="outline"
+                                                                className="w-full border-purple-500/50 text-purple-400 hover:bg-purple-500/10"
+                                                            >
+                                                                {processing === appeal.id ? (
+                                                                    <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                                                                ) : (
+                                                                    <RefreshCw className="w-4 h-4 mr-1" />
+                                                                )}
+                                                                {appeal.status === "PROCESSING" ? "重新 AI 审核" : "AI 审核"}
+                                                            </Button>
+                                                        )}
 
-                                                {/* Date */}
-                                                <td className="p-4">
-                                                    <div className="text-sm text-slate-400">
-                                                        {new Date(appeal.createdAt).toLocaleDateString("zh-CN")}
-                                                    </div>
-                                                    <div className="text-xs text-slate-500">
-                                                        {new Date(appeal.createdAt).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" })}
-                                                    </div>
-                                                </td>
+                                                        {/* 分隔线 */}
+                                                        {(appeal.status === "PENDING" || appeal.status === "PENDING_MANUAL_REVIEW" || appeal.status === "PROCESSING") && (
+                                                            <div className="border-t border-white/10 my-1" />
+                                                        )}
 
-                                                {/* Actions */}
-                                                <td className="p-4">
-                                                    <div className="flex gap-2 flex-wrap">
-                                                        <Button
-                                                            onClick={() => {
-                                                                setSelectedAppeal(appeal)
-                                                                setComparisonOpen(true)
-                                                            }}
-                                                            size="sm"
-                                                            variant="outline"
-                                                            className="border-blue-500/50 text-blue-400 hover:bg-blue-500/10 text-xs"
-                                                        >
-                                                            <Eye className="w-3 h-3 mr-1" />
-                                                            对比
-                                                        </Button>
-                                                        {appeal.status === "PENDING" ? (
-                                                            <>
+                                                        {/* 第二行：通过 + 拒绝 */}
+                                                        {(appeal.status === "PENDING" || appeal.status === "PENDING_MANUAL_REVIEW" || appeal.status === "PROCESSING") && (
+                                                            <div className="grid grid-cols-2 gap-2">
                                                                 <Button
                                                                     onClick={() => openApproveDialog(appeal)}
                                                                     disabled={processing === appeal.id}
                                                                     size="sm"
-                                                                    className="bg-green-600 hover:bg-green-700 text-white text-xs"
+                                                                    className="bg-green-600 hover:bg-green-700 text-white"
                                                                 >
                                                                     {processing === appeal.id ? (
-                                                                        <Loader2 className="w-3 h-3 animate-spin" />
+                                                                        <Loader2 className="w-4 h-4 animate-spin" />
                                                                     ) : (
                                                                         <>
-                                                                            <CheckCircle className="w-3 h-3 mr-1" />
+                                                                            <CheckCircle className="w-4 h-4 mr-1" />
                                                                             通过
                                                                         </>
                                                                     )}
@@ -606,51 +756,63 @@ export default function AdminAppealsPage() {
                                                                     disabled={processing === appeal.id}
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    className="border-red-500/50 text-red-400 hover:bg-red-500/10 text-xs"
+                                                                    className="border-red-500/50 text-red-400 hover:bg-red-500/10"
                                                                 >
-                                                                    <XCircle className="w-3 h-3 mr-1" />
+                                                                    <XCircle className="w-4 h-4 mr-1" />
                                                                     拒绝
                                                                 </Button>
-                                                            </>
-                                                        ) : (
-                                                            <span className="text-xs text-slate-500">已处理</span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* 已完成状态 */}
+                                                        {appeal.status === "APPROVED" && (
+                                                            <div className="flex items-center justify-center gap-2 text-sm text-green-400 py-2 bg-green-500/10 rounded-lg">
+                                                                <CheckCircle className="w-4 h-4" />
+                                                                已通过
+                                                            </div>
+                                                        )}
+                                                        {appeal.status === "REJECTED" && (
+                                                            <div className="flex items-center justify-center gap-2 text-sm text-red-400 py-2 bg-red-500/10 rounded-lg">
+                                                                <XCircle className="w-4 h-4" />
+                                                                已拒绝
+                                                            </div>
                                                         )}
                                                     </div>
-                                                </td>
-                                            </motion.tr>
-                                        ))}
-                                    </AnimatePresence>
-                                </tbody>
-                            </table>
-                        )}
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    ))}
+                                </AnimatePresence>
 
-                        {/* 分页 */}
-                        {totalPages > 1 && (
-                            <div className="flex items-center justify-between p-4 border-t border-white/10">
-                                <div className="text-sm text-slate-400">
-                                    共 {total} 条 · 第 {page} / {totalPages} 页
-                                </div>
-                                <div className="flex gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={page <= 1}
-                                        onClick={() => setPage(p => Math.max(1, p - 1))}
-                                        className="bg-white/5 border-white/10 text-white hover:bg-white/10"
-                                    >
-                                        <ChevronLeft className="w-4 h-4" />
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={page >= totalPages}
-                                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                        className="bg-white/5 border-white/10 text-white hover:bg-white/10"
-                                    >
-                                        <ChevronRight className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            </div>
+                                {/* 分页 */}
+                                {totalPages > 1 && (
+                                    <div className="flex items-center justify-between p-4 glass rounded-xl border border-white/10">
+                                        <div className="text-sm text-slate-400">
+                                            共 {total} 条 · 第 {page} / {totalPages} 页
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={page <= 1}
+                                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                                className="bg-white/5 border-white/10 text-white hover:bg-white/10"
+                                            >
+                                                <ChevronLeft className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={page >= totalPages}
+                                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                                className="bg-white/5 border-white/10 text-white hover:bg-white/10"
+                                            >
+                                                <ChevronRight className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
@@ -773,6 +935,7 @@ export default function AdminAppealsPage() {
                     open={comparisonOpen}
                     onOpenChange={setComparisonOpen}
                     appeal={selectedAppeal}
+                    onTriggerAi={handleTriggerAiReview}
                 />
             </main>
         </div>

@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/select"
 import { cn, downloadImage } from "@/lib/utils"
 import { getWatermarkedUrl, WatermarkParams } from "@/lib/tos-watermark"
+import { getThumbnailUrl } from "@/lib/cdnUrl"
 import { useCosts } from "@/hooks/use-costs"
 import type { HistoryItem } from "@/components/history-card"
 import { ImageEditorModal } from "@/components/image-editor-modal"
@@ -707,7 +708,7 @@ export function HistoryDetailDialog({
                   {originalImages.map((url, i) => (
                     <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-white/10 bg-slate-900/40">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt={`Original ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                      <img src={getThumbnailUrl(url, 300) || url} alt={`Original ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
                     </div>
                   ))}
                 </div>
@@ -723,7 +724,7 @@ export function HistoryDetailDialog({
                   {refImages.map((url, i) => (
                     <div key={i} className="relative aspect-square rounded-xl overflow-hidden border border-white/10 bg-slate-900/40">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img src={url} alt={`Original ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                      <img src={getThumbnailUrl(url, 300) || url} alt={`Original ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
                     </div>
                   ))}
                 </div>
@@ -758,7 +759,7 @@ export function HistoryDetailDialog({
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
-                            src={img}
+                            src={getThumbnailUrl(img, 800) || img}
                             alt={`Slice ${i + 1}`}
                             className="w-full h-auto block"
                             style={{ marginBottom: '-1px' }}
@@ -810,7 +811,7 @@ export function HistoryDetailDialog({
                           }
                         >
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={img} alt={`Slice ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                          <img src={getThumbnailUrl(img, 400) || img} alt={`Slice ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
 
                           {/* 申诉选择模式：选中标记 */}
                           {isAppealMode && isSelected && (
@@ -855,8 +856,10 @@ export function HistoryDetailDialog({
                       (() => {
                         const isPro = item?.qualityMode === "PRO"
                         const count = displayImages.length
+                        // PRO 模式：1-2 张用 2 列，3+ 张用 3 列（避免单张图片太大）
+                        // 标准模式：3-5 列
                         return isPro
-                          ? count === 1 ? "grid-cols-1" : count === 2 ? "grid-cols-2" : "grid-cols-3"
+                          ? count <= 2 ? "grid-cols-2" : "grid-cols-3"
                           : "grid-cols-3 sm:grid-cols-4 lg:grid-cols-5"
                       })(),
                       "grid gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2",
@@ -903,7 +906,7 @@ export function HistoryDetailDialog({
                           >
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
-                              src={img}
+                              src={getThumbnailUrl(img, 400) || img}
                               alt={`Generated ${i + 1}`}
                               className={`w-full h-full ${isPro ? "object-contain" : "object-cover"}`}
                             />
@@ -943,7 +946,7 @@ export function HistoryDetailDialog({
                     )}>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={fullImageUrl || ""}
+                        src={getThumbnailUrl(fullImageUrl, 1200) || fullImageUrl || ""}
                         alt="Generated Full"
                         className="max-w-full max-h-[70vh] object-contain"
                       />
@@ -1418,7 +1421,7 @@ function PreviewImageModal({ src, onClose }: { src: string; onClose: () => void 
         </Button>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={src}
+          src={getThumbnailUrl(src, 1500) || src}
           alt="Preview"
           className="max-w-full max-h-[92vh] object-contain rounded-xl shadow-2xl"
         />

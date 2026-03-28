@@ -6,6 +6,37 @@ import { transformGenerationUrls, extractObjectKey, keyToCdnUrl } from "@/lib/cd
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
+// n8n 申诉审核 webhook URL
+const N8N_APPEAL_WEBHOOK_URL = process.env.N8N_APPEAL_WEBHOOK_URL || "http://localhost:5678/webhook/appeal-judge"
+// 复用已有的 N8N_WEBHOOK_SECRET 作为回调安全密钥
+const N8N_CALLBACK_SECRET = process.env.N8N_WEBHOOK_SECRET || ""
+
+/**
+ * 异步触发 n8n 申诉审核工作流（Fire and forget）
+ */
+async function triggerAppealWorkflow(payload: {
+    appealId: string
+    productName: string
+    generationMode: string
+    userReason: string | null
+    images: string[]
+    originalImages: string[]
+    cloneRefImages: string[]  // 克隆模式参考图
+    callbackToken: string
+}) {
+    try {
+        await fetch(N8N_APPEAL_WEBHOOK_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        })
+        console.log(`[申诉工作流] ✅ 已触发 n8n 审核: appealId=${payload.appealId}`)
+    } catch (error) {
+        console.error(`[申诉工作流] ❌ 触发 n8n 失败:`, error)
+        // 注意：这里不抛出异常，因为是 fire-and-forget
+    }
+}
+
 /**
  * POST /api/user/appeal
  * Create an appeal for a generation result
@@ -100,20 +131,34 @@ export async function POST(req: NextRequest) {
         const refundAmount = generation.hasUsedDiscountedRetry ? 99 : 199
 
         // Create appeal with proper relation connections
+        // 状态初始为 PROCESSING，等待 AI 审核结果
         const appeal = await prisma.appeal.create({
             data: {
                 user: { connect: { id: userId } },
                 generation: { connect: { id: generationId } },
                 reason: reasonText,
                 refundAmount,
-                status: "PENDING",
+                status: "PROCESSING",
                 appealedImages: validImages,  // 存储验证后的图片 URL
             },
         })
 
+        // 异步触发 n8n 申诉审核工作流（Fire and forget）
+        // 不阻塞响应，无论 n8n 是否成功，都立即返回
+        triggerAppealWorkflow({
+            appealId: appeal.id,
+            productName: generation.productName,
+            generationMode: generation.mode, // CREATIVE / CLONE
+            userReason: reasonText,
+            images: validImages, // 申诉的生成图
+            originalImages: generation.originalImage, // 原始上传图
+            cloneRefImages: generation.refImages || [], // 克隆参考图（如果有）
+            callbackToken: N8N_CALLBACK_SECRET,
+        })
+
         return NextResponse.json({
             success: true,
-            message: "申诉已提交，请等待审核",
+            message: "申诉已提交，AI 正在审核中...",
             appeal: {
                 id: appeal.id,
                 status: appeal.status,
