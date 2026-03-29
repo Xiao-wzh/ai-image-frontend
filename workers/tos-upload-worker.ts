@@ -125,23 +125,24 @@ const worker = new Worker<TosUploadJobData, TosUploadJobResult>(
 
       console.log(`[TOS-Worker] 📝 更新数据库: actualIndex=${actualIndex}, editingIndexes=${JSON.stringify(editingIndexes)}, cleanedIndexes=${JSON.stringify(cleanedIndexes)}`)
 
-      // 分两步更新，确保 editingImageIndexes 被正确清除
-      // 第一步：更新 generatedImages
-      await prisma.generation.update({
-        where: { id: generationId },
-        data: { generatedImages: updatedImages },
-      })
-
-      // 第二步：单独更新 editingImageIndexes（Prisma 对空数组更新有问题）
-      if (cleanedIndexes.length === 0) {
-        // 空数组使用原生 SQL 强制更新
-        await prisma.$executeRaw`UPDATE "Generation" SET "editingImageIndexes" = '{}' WHERE id = ${generationId}::uuid`
-      } else {
-        await prisma.generation.update({
+      // 使用事务原子性更新，确保 generatedImages 和 editingImageIndexes 同时成功或失败
+      await prisma.$transaction(async (tx: any) => {
+        // 第一步：更新 generatedImages
+        await tx.generation.update({
           where: { id: generationId },
-          data: { editingImageIndexes: cleanedIndexes },
+          data: { generatedImages: updatedImages },
         })
-      }
+
+        // 第二步：更新 editingImageIndexes（空数组使用原生 SQL）
+        if (cleanedIndexes.length === 0) {
+          await tx.$executeRaw`UPDATE "Generation" SET "editingImageIndexes" = '{}' WHERE id = ${generationId}::uuid`
+        } else {
+          await tx.generation.update({
+            where: { id: generationId },
+            data: { editingImageIndexes: cleanedIndexes },
+          })
+        }
+      })
 
       console.log(`[TOS-Worker] ✅ 数据库更新完成`)
 

@@ -42,7 +42,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "申诉记录不存在" }, { status: 404 })
         }
 
-        if (appeal.status !== "PENDING") {
+        // 允许处理的状态：PENDING、PROCESSING（AI审核中）、PENDING_MANUAL_REVIEW
+        const allowedStatuses = ["PENDING", "PROCESSING", "PENDING_MANUAL_REVIEW"]
+        if (!allowedStatuses.includes(appeal.status)) {
             return NextResponse.json({ error: "该申诉已处理过，无法重复操作" }, { status: 400 })
         }
 
