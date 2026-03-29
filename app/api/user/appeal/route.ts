@@ -127,8 +127,19 @@ export async function POST(req: NextRequest) {
             )
         }
 
-        // Determine refund amount based on whether discounted retry was used
-        const refundAmount = generation.hasUsedDiscountedRetry ? 99 : 199
+        // 计算退款金额：根据申诉的图片数量按比例计算
+        let refundAmount = 0
+        if (validImages.length > 0 && generation.totalCost) {
+            // 计算每张图片的成本
+            const totalImages = generation.qualityMode === "STANDARD"
+                ? Math.max(generation.generatedImages.length, 9)
+                : (generation.imageCount || 9)
+            const perImageCost = Math.floor(generation.totalCost / totalImages)
+            refundAmount = perImageCost * validImages.length
+        } else {
+            // 兜底：旧逻辑（按是否使用优惠重试）
+            refundAmount = generation.hasUsedDiscountedRetry ? 99 : 199
+        }
 
         // Create appeal with proper relation connections
         // 状态初始为 PROCESSING，等待 AI 审核结果

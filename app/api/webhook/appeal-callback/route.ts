@@ -91,14 +91,40 @@ export async function POST(req: NextRequest) {
                 },
             })
 
-            // 如果需要退款，执行退款逻辑
-            if (shouldRefund && appeal.refundAmount > 0) {
-                await refundCredits(
-                    tx,
-                    appeal.userId,
-                    appeal.refundAmount,
-                    `申诉通过退款: ${appeal.generation.productName}`
-                )
+            // 如果需要退款，重新计算正确的退款金额
+            if (shouldRefund) {
+                // 计算实际退款金额（按申诉图片数量比例)
+                const generation = appeal.generation
+                let actualRefundAmount = 0
+
+                if (appeal.appealedImages && appeal.appealedImages.length > 0 && generation.totalCost) {
+                    // 按张计算
+                    const totalImages = generation.qualityMode === "STANDARD"
+                        ? Math.max(generation.generatedImages.length, 9)
+                        : (generation.imageCount || 9)
+                    const perImageCost = Math.floor(generation.totalCost / totalImages)
+                    actualRefundAmount = perImageCost * appeal.appealedImages.length
+                } else {
+                    // 兜底：使用记录中的退款金额（旧数据或无 totalCost）
+                    actualRefundAmount = appeal.refundAmount || 0
+                }
+
+                if (actualRefundAmount > 0) {
+                    // 更新申诉记录中的退款金额（纠正旧数据）
+                    await tx.appeal.update({
+                        where: { id: appealId },
+                        data: { refundAmount: actualRefundAmount },
+                    })
+
+                    await refundCredits(
+                        tx,
+                        appeal.userId,
+                        actualRefundAmount,
+                        `申诉通过退款: ${generation.productName}`
+                    )
+
+                    console.log(`[申诉回调] 💰 退款金额: ${actualRefundAmount} 积分 (申诉 ${appeal.appealedImages?.length || 0} 张图)`)
+                }
             }
         })
 
