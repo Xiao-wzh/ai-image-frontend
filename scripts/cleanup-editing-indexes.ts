@@ -20,9 +20,9 @@ const pool = new pg.Pool({ connectionString: DATABASE_URL })
 async function getEditCost(): Promise<number> {
   const result = await pool.query(`SELECT value FROM "SystemConfig" WHERE key = 'IMAGE_EDIT_COST'`)
   if (result.rows.length > 0) {
-    return parseInt(result.rows[0].value, 35)
+    return parseInt(result.rows[0].value, 45)
   }
-  return 35 // 默认 35 积分
+  return 45 // 默认 45 积分
 }
 
 // 直接退款
