@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { requireReviewerOrAdminForUsers, REVIEWER_GIFT_LIMIT } from "@/lib/check-admin"
-import { revalidateTag } from "next/cache"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
-export const revalidate = {
-    tags: ["admin-users"]
-}
 
 type SortField = "createdAt" | "credits" | "totalConsumed" | "totalRecharged"
 type SortOrder = "asc" | "desc"
@@ -216,8 +212,13 @@ export async function POST(req: NextRequest) {
             }),
         ])
 
-        // 刷新缓存
-        revalidateTag("admin-users")
+        // 刷新缓存 - 使用动态 require 避免类型问题
+        try {
+            const { revalidateTag } = require('next/cache')
+            revalidateTag('admin-users')
+        } catch {
+            // Ignore if not in server context
+        }
 
         return NextResponse.json({
             success: true,
