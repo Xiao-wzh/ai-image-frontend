@@ -22,10 +22,12 @@ import {
     FileText,
     Users,
     AlertCircle,
+    Search,
 } from "lucide-react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Sidebar } from "@/components/sidebar"
 import { ProductTypeLabel } from "@/lib/constants"
@@ -97,10 +99,15 @@ export default function AdminAppealsPage() {
     const [loading, setLoading] = useState(true)
     const [statusFilter, setStatusFilter] = useState<string>("all")
 
+    // 搜索
+    const [searchKeyword, setSearchKeyword] = useState("")
+    const [searchInput, setSearchInput] = useState("") // 输入框的值
+
     // 分页
     const [page, setPage] = useState(1)
     const [totalPages, setTotalPages] = useState(1)
     const [total, setTotal] = useState(0)
+    const [jumpPage, setJumpPage] = useState("") // 跳转页码输入
     const limit = 10
 
     // Comparison modal
@@ -130,6 +137,7 @@ export default function AdminAppealsPage() {
             params.set("limit", String(limit))
             params.set("offset", String((page - 1) * limit))
             if (statusFilter !== "all") params.set("status", statusFilter)
+            if (searchKeyword) params.set("search", searchKeyword)
 
             const res = await fetch(`/api/admin/appeals?${params.toString()}`)
             if (!res.ok) throw new Error("获取失败")
@@ -144,11 +152,28 @@ export default function AdminAppealsPage() {
         } finally {
             setLoading(false)
         }
-    }, [statusFilter, page])
+    }, [statusFilter, page, searchKeyword])
 
     useEffect(() => {
         fetchAppeals()
     }, [fetchAppeals])
+
+    // 搜索处理
+    const handleSearch = () => {
+        setSearchKeyword(searchInput.trim())
+        setPage(1) // 搜索时重置到第一页
+    }
+
+    // 页码跳转处理
+    const handleJumpPage = () => {
+        const pageNum = parseInt(jumpPage, 10)
+        if (isNaN(pageNum) || pageNum < 1 || pageNum > totalPages) {
+            toast.error(`请输入 1-${totalPages} 之间的页码`)
+            return
+        }
+        setPage(pageNum)
+        setJumpPage("")
+    }
 
     // 触发 AI 审核
     const handleTriggerAiReview = async (appealId: string) => {
@@ -420,7 +445,7 @@ export default function AdminAppealsPage() {
                     )}
 
                     {/* Filter Tabs */}
-                    <div className="flex gap-2 mb-6 flex-wrap">
+                    <div className="flex gap-2 mb-4 flex-wrap">
                         {[
                             { value: "all", label: "全部", color: "purple" },
                             { value: "PENDING", label: "待处理", color: "yellow" },
@@ -449,6 +474,39 @@ export default function AdminAppealsPage() {
                                 {tab.label}
                             </button>
                         ))}
+                    </div>
+
+                    {/* 搜索框 */}
+                    <div className="flex gap-2 mb-6">
+                        <div className="relative flex-1 max-w-md">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <Input
+                                placeholder="搜索用户名/邮箱/商品名..."
+                                value={searchInput}
+                                onChange={(e) => setSearchInput(e.target.value)}
+                                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                                className="pl-10 bg-white/5 border-white/10 text-white placeholder:text-slate-500 focus:border-purple-500/50"
+                            />
+                        </div>
+                        <Button
+                            onClick={handleSearch}
+                            className="bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                            搜索
+                        </Button>
+                        {searchKeyword && (
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setSearchInput("")
+                                    setSearchKeyword("")
+                                    setPage(1)
+                                }}
+                                className="bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
+                            >
+                                清除
+                            </Button>
+                        )}
                     </div>
 
                     {/* Appeals Cards */}
@@ -790,25 +848,50 @@ export default function AdminAppealsPage() {
                                         <div className="text-sm text-slate-400">
                                             共 {total} 条 · 第 {page} / {totalPages} 页
                                         </div>
-                                        <div className="flex gap-2">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                disabled={page <= 1}
-                                                onClick={() => setPage(p => Math.max(1, p - 1))}
-                                                className="bg-white/5 border-white/10 text-white hover:bg-white/10"
-                                            >
-                                                <ChevronLeft className="w-4 h-4" />
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                disabled={page >= totalPages}
-                                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                                className="bg-white/5 border-white/10 text-white hover:bg-white/10"
-                                            >
-                                                <ChevronRight className="w-4 h-4" />
-                                            </Button>
+                                        <div className="flex items-center gap-3">
+                                            {/* 页码跳转 */}
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm text-slate-400">跳转至</span>
+                                                <Input
+                                                    type="number"
+                                                    min={1}
+                                                    max={totalPages}
+                                                    value={jumpPage}
+                                                    onChange={(e) => setJumpPage(e.target.value)}
+                                                    onKeyDown={(e) => e.key === "Enter" && handleJumpPage()}
+                                                    className="w-16 h-8 text-center bg-white/5 border-white/10 text-white text-sm"
+                                                />
+                                                <span className="text-sm text-slate-400">页</span>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleJumpPage}
+                                                    className="h-8 bg-white/5 border-white/10 text-white hover:bg-white/10"
+                                                >
+                                                    跳转
+                                                </Button>
+                                            </div>
+                                            {/* 上一页/下一页 */}
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    disabled={page <= 1}
+                                                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                                                    className="bg-white/5 border-white/10 text-white hover:bg-white/10"
+                                                >
+                                                    <ChevronLeft className="w-4 h-4" />
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    disabled={page >= totalPages}
+                                                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                                    className="bg-white/5 border-white/10 text-white hover:bg-white/10"
+                                                >
+                                                    <ChevronRight className="w-4 h-4" />
+                                                </Button>
+                                            </div>
                                         </div>
                                     </div>
                                 )}

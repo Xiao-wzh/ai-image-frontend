@@ -46,11 +46,15 @@ export async function POST(req: NextRequest) {
   const objectKey = `uploads/${yyyymmdd()}/${uuid}${ext ? "." + ext : ""}`
 
   // 生成 PUT 预签名 URL（300s）
+  // 注意：必须指定 Content-Type，否则客户端上传时签名不匹配会返回 403
   const uploadUrl = await tosClient.getPreSignedUrl({
     bucket: TOS_BUCKET,
     key: objectKey,
     method: "PUT",
     expires: 300,
+    headers: {
+      "Content-Type": contentType,
+    },
   })
 
   // publicUrl：假设桶公有读

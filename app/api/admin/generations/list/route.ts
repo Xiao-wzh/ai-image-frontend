@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { auth } from "@/auth"
+import { requireReviewerOrAdminForUsers } from "@/lib/check-admin"
 import prisma from "@/lib/prisma"
 import { transformGenerationUrlsList } from "@/lib/cdnUrl"
 
@@ -7,16 +7,12 @@ export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
 export async function GET(req: NextRequest) {
-    try {
-        // 验证管理员权限
-        const session = await auth()
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: "未登录" }, { status: 401 })
-        }
-        if (session.user.role !== "ADMIN") {
-            return NextResponse.json({ error: "无权限" }, { status: 403 })
-        }
+    const guard = await requireReviewerOrAdminForUsers()
+    if (!guard.ok) {
+        return NextResponse.json({ error: guard.error }, { status: guard.status })
+    }
 
+    try {
         const { searchParams } = new URL(req.url)
 
         // 分页参数

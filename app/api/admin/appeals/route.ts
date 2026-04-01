@@ -21,8 +21,21 @@ export async function GET(req: NextRequest) {
         const status = searchParams.get("status") // Optional filter: PENDING, APPROVED, REJECTED
         const limit = Math.min(Number(searchParams.get("limit") || 10), 100)
         const offset = Math.max(Number(searchParams.get("offset") || 0), 0)
+        const search = searchParams.get("search")?.trim() // 搜索关键词（用户名/邮箱/商品名）
 
-        const where = status ? { status } : {}
+        // 构建查询条件
+        const where: any = {}
+        if (status) {
+            where.status = status
+        }
+        if (search) {
+            where.OR = [
+                { user: { name: { contains: search, mode: "insensitive" } } },
+                { user: { username: { contains: search, mode: "insensitive" } } },
+                { user: { email: { contains: search, mode: "insensitive" } } },
+                { generation: { productName: { contains: search, mode: "insensitive" } } },
+            ]
+        }
 
         const [appeals, total] = await Promise.all([
             prisma.appeal.findMany({

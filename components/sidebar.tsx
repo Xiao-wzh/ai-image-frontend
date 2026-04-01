@@ -55,8 +55,10 @@ const financeItems: NavItem[] = [
   { icon: Receipt, label: "订单管理", href: "/admin/orders" },
 ]
 
-// 审核员专属导航（仅售后审核）
+// 审核员专属导航（售后审核 + 生成记录管理 + 用户管理）
 const reviewerItems: NavItem[] = [
+  { icon: LayoutGrid, label: "生成记录管理", href: "/admin/generations" },
+  { icon: Users, label: "用户管理", href: "/admin/users" },
   { icon: ShieldCheck, label: "售后审核", href: "/admin/appeals" },
 ]
 

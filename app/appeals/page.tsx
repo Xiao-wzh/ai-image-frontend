@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { motion } from "framer-motion"
+import * as Tooltip from "@radix-ui/react-tooltip"
 import {
     FileText,
     Clock,
@@ -9,8 +10,7 @@ import {
     XCircle,
     AlertCircle,
     Image as ImageIcon,
-    MessageSquare,
-    Loader2,
+    Info,
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
@@ -23,9 +23,11 @@ import { cn } from "@/lib/utils"
 type Appeal = {
     id: string
     reason: string | null
-    status: "PENDING" | "APPROVED" | "REJECTED"
+    status: "PENDING" | "PROCESSING" | "PENDING_MANUAL_REVIEW" | "APPROVED" | "REJECTED"
     refundAmount: number
     adminNote: string | null
+    aiAnalysis?: string | null
+    userMessage?: string | null
     createdAt: string
     generation: {
         id: string
@@ -58,36 +60,87 @@ export default function AppealsPage() {
         fetchAppeals()
     }, [])
 
-    const statusBadge = (status: string, adminNote?: string | null) => {
+    const statusBadge = (
+        status: string,
+        adminNote?: string | null,
+        userMessage?: string | null,
+        aiAnalysis?: string | null
+    ) => {
+        // 获取要显示的消息（优先 aiAnalysis，其次 userMessage）
+        const displayMessage = aiAnalysis || userMessage
+        const hasMessage = Boolean(displayMessage || adminNote)
+
+        // 组合消息内容
+        const tooltipContent = [
+            displayMessage,
+            adminNote ? `管理员备注: ${adminNote}` : null
+        ].filter(Boolean).join('\n')
+
         switch (status) {
             case "PENDING":
+            case "PROCESSING":
+            case "PENDING_MANUAL_REVIEW":
                 return (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-500/15 text-amber-400 border border-amber-500/20">
                         <Clock className="w-3 h-3" />
                         审核中
                     </span>
                 )
             case "APPROVED":
                 return (
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
-                        <CheckCircle className="w-3 h-3" />
-                        已退款
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/20">
+                            <CheckCircle className="w-3 h-3" />
+                            已退款
+                        </span>
+                        {hasMessage && (
+                            <Tooltip.Provider delayDuration={200}>
+                                <Tooltip.Root>
+                                    <Tooltip.Trigger asChild>
+                                        <button className="p-1 rounded-full hover:bg-white/10 transition-colors cursor-pointer">
+                                            <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-300" />
+                                        </button>
+                                    </Tooltip.Trigger>
+                                    <Tooltip.Portal>
+                                        <Tooltip.Content
+                                            className="max-w-xs px-3 py-2 text-xs text-white bg-slate-800 border border-white/10 rounded-lg shadow-xl z-50"
+                                            sideOffset={5}
+                                        >
+                                            <div className="whitespace-pre-wrap">{tooltipContent}</div>
+                                            <Tooltip.Arrow className="fill-slate-800" />
+                                        </Tooltip.Content>
+                                    </Tooltip.Portal>
+                                </Tooltip.Root>
+                            </Tooltip.Provider>
+                        )}
+                    </div>
                 )
             case "REJECTED":
                 return (
-                    <div className="flex flex-col gap-1">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-500/20 text-red-400 border border-red-500/30 w-fit">
+                    <div className="flex items-center gap-1.5">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-rose-500/15 text-rose-400 border border-rose-500/20">
                             <XCircle className="w-3 h-3" />
                             已驳回
                         </span>
-                        {adminNote && (
-                            <div className="flex items-start gap-1.5 mt-1">
-                                <MessageSquare className="w-3 h-3 text-slate-500 mt-0.5 flex-shrink-0" />
-                                <span className="text-xs text-slate-500 line-clamp-2" title={adminNote}>
-                                    {adminNote}
-                                </span>
-                            </div>
+                        {hasMessage && (
+                            <Tooltip.Provider delayDuration={200}>
+                                <Tooltip.Root>
+                                    <Tooltip.Trigger asChild>
+                                        <button className="p-1 rounded-full hover:bg-white/10 transition-colors cursor-pointer">
+                                            <Info className="w-3.5 h-3.5 text-slate-400 hover:text-slate-300" />
+                                        </button>
+                                    </Tooltip.Trigger>
+                                    <Tooltip.Portal>
+                                        <Tooltip.Content
+                                            className="max-w-xs px-3 py-2 text-xs text-white bg-slate-800 border border-white/10 rounded-lg shadow-xl z-50"
+                                            sideOffset={5}
+                                        >
+                                            <div className="whitespace-pre-wrap">{tooltipContent}</div>
+                                            <Tooltip.Arrow className="fill-slate-800" />
+                                        </Tooltip.Content>
+                                    </Tooltip.Portal>
+                                </Tooltip.Root>
+                            </Tooltip.Provider>
                         )}
                     </div>
                 )
@@ -221,7 +274,7 @@ export default function AppealsPage() {
 
                                                     {/* Status */}
                                                     <td className="p-4">
-                                                        {statusBadge(appeal.status, appeal.adminNote)}
+                                                        {statusBadge(appeal.status, appeal.adminNote, appeal.userMessage, appeal.aiAnalysis)}
                                                     </td>
 
                                                     {/* Date */}
@@ -249,26 +302,26 @@ export default function AppealsPage() {
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
-                                className="mt-6 flex gap-4 justify-center"
+                                className="mt-6 flex gap-4 justify-center flex-wrap"
                             >
                                 <div className="glass rounded-xl px-4 py-2 border border-white/10 text-center">
                                     <div className="text-lg font-bold text-white">{appeals.length}</div>
                                     <div className="text-xs text-slate-400">总记录</div>
                                 </div>
-                                <div className="glass rounded-xl px-4 py-2 border border-yellow-500/20 text-center">
-                                    <div className="text-lg font-bold text-yellow-400">
-                                        {appeals.filter(a => a.status === "PENDING").length}
+                                <div className="glass rounded-xl px-4 py-2 border border-amber-500/20 text-center">
+                                    <div className="text-lg font-bold text-amber-400">
+                                        {appeals.filter(a => ["PENDING", "PROCESSING", "PENDING_MANUAL_REVIEW"].includes(a.status)).length}
                                     </div>
                                     <div className="text-xs text-slate-400">审核中</div>
                                 </div>
-                                <div className="glass rounded-xl px-4 py-2 border border-green-500/20 text-center">
-                                    <div className="text-lg font-bold text-green-400">
+                                <div className="glass rounded-xl px-4 py-2 border border-emerald-500/20 text-center">
+                                    <div className="text-lg font-bold text-emerald-400">
                                         {appeals.filter(a => a.status === "APPROVED").length}
                                     </div>
                                     <div className="text-xs text-slate-400">已退款</div>
                                 </div>
-                                <div className="glass rounded-xl px-4 py-2 border border-red-500/20 text-center">
-                                    <div className="text-lg font-bold text-red-400">
+                                <div className="glass rounded-xl px-4 py-2 border border-rose-500/20 text-center">
+                                    <div className="text-lg font-bold text-rose-400">
                                         {appeals.filter(a => a.status === "REJECTED").length}
                                     </div>
                                     <div className="text-xs text-slate-400">已驳回</div>
@@ -281,4 +334,3 @@ export default function AppealsPage() {
         </div>
     )
 }
-

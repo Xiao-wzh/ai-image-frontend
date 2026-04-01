@@ -367,7 +367,8 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
           </motion.div>
           <DialogTitle className="text-3xl font-bold text-white">充值积分</DialogTitle>
           <DialogDescription className="text-slate-400 max-w-md mx-auto">
-            选择套餐后可直接扫码支付，或使用卡密兑换
+            选择套餐后可直接扫码支付，或使用卡密兑换<br/>
+            积分属于虚拟商品，一经充值使用，不支持退款。
           </DialogDescription>
         </DialogHeader>
 

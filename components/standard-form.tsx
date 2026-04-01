@@ -285,6 +285,9 @@ export function StandardForm(props: CockpitFormProps) {
                             参考图片 <span className="text-amber-400/60 font-normal">(用于复制构图)</span>
                         </label>
                     </div>
+                    <div className="mt-2 text-xs text-amber-400/80 bg-amber-400/10 px-3 py-2 rounded-lg">
+                        ⚠️ 请勿上传与商品图片相同的参考图，否则无法生成有效结果
+                    </div>
                     <div className="mt-3">
                         <ImageUploadZone files={refFiles} previewUrls={refPreviewUrls} onFilesChange={onRefFilesChange} maxFiles={6} />
                     </div>
