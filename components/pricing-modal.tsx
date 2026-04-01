@@ -1,8 +1,26 @@
 "use client"
 
 import { useState, useEffect, useCallback, useRef } from "react"
-import { motion } from "framer-motion"
-import { Check, CreditCard, Loader2, ExternalLink, Gift, QrCode, X, RefreshCw, HelpCircle } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  Check,
+  CreditCard,
+  Loader2,
+  Gift,
+  QrCode,
+  X,
+  RefreshCw,
+  HelpCircle,
+  Sparkles,
+  ImagePlus,
+  CalendarDays,
+  Users,
+  ChevronDown,
+  ChevronUp,
+  Zap,
+  Shield,
+  Clock,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { toast } from "sonner"
@@ -49,6 +67,72 @@ interface PricingModalProps {
   onClose: () => void
 }
 
+// 积分权益说明数据
+const CREDITS_BENEFITS = [
+  {
+    icon: ImagePlus,
+    title: "AI 图片生成",
+    description: "生成专业电商主图/详情页",
+    cost: "约 2000 积分/次",
+    highlight: true,
+  },
+  {
+    icon: Sparkles,
+    title: "图片智能编辑",
+    description: "AI 局部重绘、替换背景",
+    cost: "约 30 积分/次",
+    highlight: false,
+  },
+  {
+    icon: Shield,
+    title: "水印处理",
+    description: "添加/去除水印",
+    cost: "约 100 积分/次",
+    highlight: false,
+  },
+]
+
+// 获取积分途径数据
+const CREDITS_SOURCES = [
+  {
+    icon: Gift,
+    title: "新用户注册",
+    amount: "+600",
+    description: "注册即送",
+    color: "text-emerald-400",
+  },
+  {
+    icon: Users,
+    title: "邀请好友",
+    amount: "+200",
+    description: "每成功邀请一位",
+    color: "text-blue-400",
+  },
+  {
+    icon: CalendarDays,
+    title: "限时活动",
+    amount: "大量积分",
+    description: "关注我们偶尔进行的限时活动",
+    color: "text-purple-400",
+  },
+]
+
+// 常见问题数据
+const FAQ_ITEMS = [
+  {
+    question: "积分有什么用？",
+    answer: "积分用于生成 AI 图片、图片编辑、水印处理等功能。每次使用功能会消耗相应积分。",
+  },
+  {
+    question: "积分可以退款吗？",
+    answer: "积分属于虚拟商品，一经充值使用，不支持退款。请根据实际需求合理充值。",
+  },
+  {
+    question: "充值后积分多久到账？",
+    answer: "微信扫码支付成功后，积分会实时自动到账。如遇到账延迟，请联系客服处理。",
+  },
+]
+
 export function PricingModal({ isOpen, onClose }: PricingModalProps) {
   const { data: session, update } = useSession()
 
@@ -67,6 +151,9 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
   const [currentOrder, setCurrentOrder] = useState<CurrentOrder | null>(null)
+
+  // FAQ 展开状态
+  const [expandedFaq, setExpandedFaq] = useState<number | null>(null)
 
   // 轮询定时器
   const pollRef = useRef<NodeJS.Timeout | null>(null)
@@ -350,144 +437,339 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
     )
   }
 
-  // ================== 套餐选择页面 ==================
+  // ================== 套餐选择页面 =================
   return (
     <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-4xl border-white/10 bg-slate-900/95 backdrop-blur-xl p-0 overflow-hidden">
-        <DialogHeader className="p-8 pb-4 text-center">
+      <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto border-white/10 bg-slate-900/95 backdrop-blur-xl p-0">
+        {/* 头部 */}
+        <DialogHeader className="p-8 pb-4 text-center border-b border-white/5">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             className="inline-flex items-center gap-3 mb-4 mx-auto"
           >
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg glow-blue">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg">
               <CreditCard className="w-6 h-6 text-white" />
             </div>
             <span className="text-2xl font-bold gradient-text">AI-Species</span>
           </motion.div>
-          <DialogTitle className="text-3xl font-bold text-white">充值积分</DialogTitle>
-          <DialogDescription className="text-slate-400 max-w-md mx-auto">
-            选择套餐后可直接扫码支付，或使用卡密兑换<br/>
-            积分属于虚拟商品，一经充值使用，不支持退款。
+          {/* <DialogTitle className="text-3xl font-bold text-white">充值积分</DialogTitle> */}
+          <DialogDescription className="text-slate-400 max-w-md mx-auto mt-2">
+            积分属于虚拟商品，一经充值使用，不支持退款
+
+
           </DialogDescription>
         </DialogHeader>
 
-        <div className="p-8 pt-4">
-          {/* 套餐列表 */}
-          {isLoadingPlans ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+        <div className="p-8 pt-6 space-y-8">
+          {/* ========== 积分权益说明 ========== */}
+          {/* <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Zap className="w-5 h-5 text-amber-400" />
+              <h3 className="text-lg font-semibold text-white">积分能做什么？</h3>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-              {plans.map((plan) => (
-                <motion.div
-                  key={plan.id}
-                  onClick={() => setSelectedPlan(plan)}
-                  className={cn(
-                    "relative rounded-2xl p-6 border-2 transition-all duration-300 cursor-pointer",
-                    selectedPlan?.id === plan.id
-                      ? "border-purple-500 bg-purple-500/10 shadow-2xl shadow-purple-500/30"
-                      : "border-white/10 bg-white/5 hover:bg-white/10",
-                  )}
-                  whileHover={{ y: -5 }}
-                >
-                  {plan.isRecommend && (
-                    <div className="absolute -top-3 right-4 px-3 py-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold rounded-full shadow-lg">
-                      推荐
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {CREDITS_BENEFITS.map((benefit, index) => {
+                const Icon = benefit.icon
+                return (
+                  <motion.div
+                    key={index}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.15 + index * 0.05 }}
+                    className={cn(
+                      "relative p-5 rounded-2xl border transition-all cursor-default",
+                      benefit.highlight
+                        ? "bg-gradient-to-br from-purple-500/10 to-blue-500/10 border-purple-500/30"
+                        : "bg-white/5 border-white/10 hover:border-white/20"
+                    )}
+                  >
+                    {benefit.highlight && (
+                      <div className="absolute -top-2 -right-2 px-2 py-0.5 bg-gradient-to-r from-purple-500 to-blue-500 text-white text-xs font-bold rounded-full">
+                        热门
+                      </div>
+                    )}
+                    <div className="flex items-start gap-3">
+                      <div className={cn(
+                        "w-10 h-10 rounded-xl flex items-center justify-center",
+                        benefit.highlight ? "bg-purple-500/20" : "bg-white/10"
+                      )}>
+                        <Icon className={cn("w-5 h-5", benefit.highlight ? "text-purple-400" : "text-slate-300")} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-medium text-white">{benefit.title}</h4>
+                        <p className="text-sm text-slate-400 mt-0.5">{benefit.description}</p>
+                        <p className="text-xs text-slate-500 mt-2">{benefit.cost}</p>
+                      </div>
                     </div>
-                  )}
+                  </motion.div>
+                )
+              })}
+            </div>
+          </motion.section> */}
 
-                  <div className="text-4xl font-bold gradient-text-alt">{plan.credits.toLocaleString()}</div>
-                  <div className="text-slate-400 text-sm">付费积分</div>
-                  {plan.giftCredits > 0 && (
-                    <div className="mt-2 text-xs font-semibold text-emerald-400 flex items-center gap-1">
-                      <Gift className="w-3.5 h-3.5" />
-                      赠送 {plan.giftCredits.toLocaleString()}
-                    </div>
-                  )}
+          {/* ========== 套餐选择 ========== */}
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Gift className="w-5 h-5 text-emerald-400" />
+                <h3 className="text-lg font-semibold text-white">选择套餐</h3>
+              </div>
+              <span className="text-xs text-slate-500">套餐积分永久有效</span>
+            </div>
 
-                  <div className="text-slate-400 text-sm mb-4">&nbsp;</div>
+            {isLoadingPlans ? (
+              <div className="flex justify-center py-12">
+                <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {plans.map((plan, index) => {
+                  // 计算性价比（每元积分）
+                  const yuanPrice = plan.price / 100
+                  const totalCredits = plan.credits + plan.giftCredits
+                  const creditsPerYuan = Math.round(totalCredits / 2 *9)
 
-                  <div className="text-xl font-semibold text-white">¥ {formatPrice(plan.price)}</div>
-
-                  {selectedPlan?.id === plan.id && (
+                  return (
                     <motion.div
-                      layoutId="selected-check"
-                      className="absolute top-2 right-2 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center"
+                      key={plan.id}
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: 0.25 + index * 0.05 }}
+                      onClick={() => setSelectedPlan(plan)}
+                      className={cn(
+                        "relative rounded-2xl p-5 border-2 transition-all duration-300 cursor-pointer group",
+                        selectedPlan?.id === plan.id
+                          ? "border-purple-500 bg-purple-500/10 shadow-2xl shadow-purple-500/20"
+                          : "border-white/10 bg-white/5 hover:bg-white/10 hover:border-white/20"
+                      )}
                     >
-                      <Check className="w-4 h-4 text-white" />
+                      {plan.isRecommend && (
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xs font-bold rounded-full shadow-lg whitespace-nowrap">
+                          推荐
+                        </div>
+                      )}
+
+                      {/* 积分数量 */}
+                      <div className="text-center mb-3">
+                        <div className="text-3xl font-bold gradient-text-alt">
+                          {plan.credits.toLocaleString()}
+                        </div>
+                        <div className="text-xs text-slate-400 mt-0.5">付费积分</div>
+                      </div>
+
+                      {/* 赠送积分 */}
+                      {plan.giftCredits > 0 && (
+                        <div className="flex items-center justify-center gap-1 text-sm font-semibold text-emerald-400 mb-3">
+                          <Gift className="w-3.5 h-3.5" />
+                          <span>+{plan.giftCredits.toLocaleString()} 赠送</span>
+                        </div>
+                      )}
+
+                      {/* 总计 */}
+                      <div className="text-center py-2 border-t border-white/10 mb-3">
+                        {/* <div className="text-xs text-slate-500">总计</div>
+                        <div className="text-lg font-semibold text-white">
+                          {(plan.credits + plan.giftCredits).toLocaleString()}
+                        </div> */}
+                      </div>
+
+                      {/* 价格 */}
+                      <div className="text-center mb-3">
+                        <div className="text-xl font-bold text-white">
+                          ¥ {formatPrice(plan.price)}
+                        </div>
+                        {/* <div className="text-xs text-slate-500 mt-0.5">
+                          约 {creditsPerYuan} 张图
+                        </div> */}
+                      </div>
+
+                      {/* 选中标记 */}
+                      {selectedPlan?.id === plan.id && (
+                        <motion.div
+                          layoutId="selected-check"
+                          className="absolute top-2 right-2 w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center"
+                        >
+                          <Check className="w-4 h-4 text-white" />
+                        </motion.div>
+                      )}
                     </motion.div>
-                  )}
-                </motion.div>
-              ))}
+                  )
+                })}
+              </div>
+            )}
+          </motion.section>
+
+          {/* ========== 支付方式 ========== */}
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <CreditCard className="w-5 h-5 text-blue-400" />
+              <h3 className="text-lg font-semibold text-white">支付方式</h3>
             </div>
-          )}
 
-          {/* 支付按钮 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-            {/* 微信支付 */}
-            <Button
-              onClick={() => initiatePayment(true)}
-              disabled={isPaying || !selectedPlan}
-              className="h-14 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 text-white font-semibold text-lg shadow-lg shadow-emerald-500/30 transition-all"
-            >
-              {isPaying ? (
-                <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* 微信支付 */}
+              <Button
+                onClick={() => initiatePayment(true)}
+                disabled={isPaying || !selectedPlan}
+                className="h-14 rounded-xl bg-gradient-to-r from-emerald-600 to-green-600 text-white font-semibold text-lg shadow-lg shadow-emerald-500/30 transition-all hover:shadow-emerald-500/50"
+              >
+                {isPaying ? (
+                  <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                ) : (
+                  <QrCode className="w-5 h-5 mr-2" />
+                )}
+                微信扫码支付
+              </Button>
+
+              {/* 支付宝支付 */}
+              <Button
+                onClick={() => toast.info("支付宝支付功能暂未开通")}
+                disabled={true}
+                className="h-14 rounded-xl bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold text-lg shadow-lg opacity-60"
+              >
                 <QrCode className="w-5 h-5 mr-2" />
-              )}
-              微信扫码支付
-            </Button>
-
-            {/* 支付宝支付 */}
-            {/* // 不能点击，按钮右上角角标：暂未开通 */}
-            <Button
-              onClick={() => toast.info("支付宝支付功能暂未开通")}
-              disabled={true}
-              className="h-14 rounded-xl bg-gradient-to-r from-emerald-600 to-blue-600 text-white font-semibold text-lg shadow-lg shadow-emerald-500/30 transition-all"
-            >
-              {isPaying ? (
-                <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              ) : (
-                <QrCode className="w-5 h-5 mr-2" />
-              )}
-              支付宝扫码支付(暂未开通)
-            </Button>
-
-            {/* <Button
-              onClick={handleGoStore}
-              variant="outline"
-              className="h-14 rounded-xl border-white/10 bg-white/5 hover:bg-white/10 text-white font-semibold text-lg"
-            >
-              <ExternalLink className="w-5 h-5 mr-2" />
-              前往商店购买卡密
-            </Button> */}
-          </div>
+                支付宝支付（暂未开通）
+              </Button>
+            </div>
+          </motion.section>
 
           {/* 分割线 */}
-          <div className="my-8 h-px bg-white/10" />
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-white/10"></div>
+            </div>
+            <div className="relative flex justify-center">
+              <span className="px-4 bg-slate-900 text-sm text-slate-500">或</span>
+            </div>
+          </div>
 
-          {/* 卡密兑换 */}
-          <div>
-            <div className="text-white font-semibold mb-2">兑换卡密</div>
-            <div className="text-xs text-slate-500 mb-4">请输入你的卡密，兑换后会自动到账。</div>
+          {/* ========== 卡密兑换 ========== */}
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.35 }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Gift className="w-5 h-5 text-amber-400" />
+              <h3 className="text-lg font-semibold text-white">兑换卡密</h3>
+            </div>
+            <p className="text-sm text-slate-400 mb-4">
+              如果您已购买卡密，可在此处兑换，积分将自动到账
+            </p>
 
             <div className="flex gap-3">
               <input
                 value={redeemCode}
                 onChange={(e) => setRedeemCode(e.target.value)}
-                placeholder="请输入卡密 / Enter Code"
+                placeholder="请输入卡密"
                 className="flex-1 h-12 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500 focus:bg-white/10 focus:ring-2 focus:ring-blue-500/20 transition-all"
               />
               <Button
                 onClick={handleRedeem}
                 disabled={isRedeeming}
-                className="h-12 px-6 rounded-xl bg-white/10 hover:bg-white/15 text-white border border-white/10"
+                className="h-12 px-6 rounded-xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-700 hover:to-orange-700 text-white font-semibold"
               >
                 {isRedeeming ? <Loader2 className="w-5 h-5 animate-spin" /> : "立即兑换"}
               </Button>
             </div>
+          </motion.section>
+
+          {/* ========== 获取积分途径 ========== */}
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="p-5 rounded-2xl bg-gradient-to-br from-white/5 to-white/[0.02] border border-white/10"
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="w-5 h-5 text-purple-400" />
+              <h3 className="text-lg font-semibold text-white">免费获取积分</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {CREDITS_SOURCES.map((source, index) => {
+                const Icon = source.icon
+                return (
+                  <div key={index} className="flex items-center gap-3 p-3 rounded-xl bg-white/5">
+                    <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
+                      <Icon className={cn("w-5 h-5", source.color)} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-white">{source.title}</span>
+                        <span className={cn("text-sm font-bold", source.color)}>{source.amount}</span>
+                      </div>
+                      <p className="text-xs text-slate-500">{source.description}</p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </motion.section>
+
+          {/* ========== 常见问题 ========== */}
+          <motion.section
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.45 }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <HelpCircle className="w-5 h-5 text-slate-400" />
+              <h3 className="text-lg font-semibold text-white">常见问题</h3>
+            </div>
+            <div className="space-y-2">
+              {FAQ_ITEMS.map((faq, index) => (
+                <div
+                  key={index}
+                  className="rounded-xl border border-white/10 overflow-hidden"
+                >
+                  <button
+                    onClick={() => setExpandedFaq(expandedFaq === index ? null : index)}
+                    className="w-full flex items-center justify-between p-4 text-left bg-white/5 hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    <span className="font-medium text-white">{faq.question}</span>
+                    {expandedFaq === index ? (
+                      <ChevronUp className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-slate-400" />
+                    )}
+                  </button>
+                  <AnimatePresence>
+                    {expandedFaq === index && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="overflow-hidden"
+                      >
+                        <p className="p-4 pt-0 text-sm text-slate-400">{faq.answer}</p>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              ))}
+            </div>
+          </motion.section>
+
+          {/* 底部提示 */}
+          <div className="text-center pt-4 border-t border-white/5">
+            <p className="text-xs text-slate-500 flex items-center justify-center gap-1">
+              <Shield className="w-3 h-3" />
+              积分属于虚拟商品，一经充值使用，不支持退款
+            </p>
           </div>
         </div>
       </DialogContent>
