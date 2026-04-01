@@ -125,7 +125,7 @@ const FAQ_ITEMS = [
   },
   {
     question: "积分可以退款吗？",
-    answer: "积分属于虚拟商品，一经充值使用，不支持退款。请根据实际需求合理充值。",
+    answer: "积分属于虚拟商品，不支持退款。请根据实际需求合理充值。",
   },
   {
     question: "充值后积分多久到账？",
@@ -455,7 +455,7 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
           </motion.div>
           {/* <DialogTitle className="text-3xl font-bold text-white">充值积分</DialogTitle> */}
           <DialogDescription className="text-slate-400 max-w-md mx-auto mt-2">
-            积分属于虚拟商品，一经充值使用，不支持退款
+            选择套餐后可直接扫码支付
 
 
           </DialogDescription>
@@ -768,7 +768,7 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
           <div className="text-center pt-4 border-t border-white/5">
             <p className="text-xs text-slate-500 flex items-center justify-center gap-1">
               <Shield className="w-3 h-3" />
-              积分属于虚拟商品，一经充值使用，不支持退款
+              积分属于虚拟商品，不支持退款
             </p>
           </div>
         </div>
