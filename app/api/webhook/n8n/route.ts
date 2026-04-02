@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
         data: { status: "FAILED", refundAmount: totalCost },
       })
       if (generation.userId) {
-        await refundCredits(tx, generation.userId, totalCost, "N8N生成失败（缺少文件路径）全额退款")
+        await refundCredits(tx, generation.userId, totalCost, "生成失败（缺少文件路径）全额退款")
       }
     })
     return NextResponse.json({ error: "缺少或无效的 filePaths 数组" }, { status: 400 })

@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, skipped: true, status: generation.status })
   }
 
-  const errorDesc = `N8N工作流失败${nodeId ? `(节点: ${nodeId})` : ""}: ${errorMessage || "未知错误"}`
+  const errorDesc = `谷歌模型服务器繁忙，请稍后再试${nodeId ? `(节点: ${nodeId})` : ""}: ${errorMessage || "未知错误"}`
   console.error(`[N8N错误回调] ❌ ${shortId}... ${errorDesc}`)
 
   // ── 5. 标记为 FAILED 并全额退款 ──

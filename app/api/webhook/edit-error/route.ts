@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
     await prisma.$transaction(async (tx: any) => {
       // 更新 editingImageIndexes
       if (cleanedIndexes.length === 0) {
-        await tx.$executeRaw`UPDATE "Generation" SET "editingImageIndexes" = '{}' WHERE id = ${generationId}::uuid`
+        await tx.$executeRaw`UPDATE "Generation" SET "editingImageIndexes" = ARRAY[]::INTEGER[] WHERE id = ${generationId}::uuid`
       } else {
         await tx.generation.update({
           where: { id: generationId },

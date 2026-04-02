@@ -61,11 +61,14 @@ export function getTosUploadQueue(): Queue {
 }
 
 /**
- * 幂等入队：默认用 generationId 作为 jobId，可传入自定义 jobId（编辑模式用）
+ * 幂等入队：默认用 generationId 作为 jobId
+ * 编辑模式：传入 jobId 时添加时间戳后缀，确保每次编辑都是新任务
  */
 export async function addTosUploadJob(data: TosUploadJobData, jobId?: string): Promise<Job> {
   const queue = getTosUploadQueue()
-  const job = await queue.add("upload", data, { jobId: jobId ?? data.generationId })
-  console.log(`[TOS上传队列] 任务已加入队列: ${jobId ?? data.generationId}`)
+  // 编辑模式：添加时间戳确保每次都是新任务
+  const finalJobId = jobId ? `${jobId}_${Date.now()}` : data.generationId
+  const job = await queue.add("upload", data, { jobId: finalJobId })
+  console.log(`[TOS上传队列] 任务已加入队列: ${finalJobId}`)
   return job
 }

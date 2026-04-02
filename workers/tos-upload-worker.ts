@@ -133,9 +133,9 @@ const worker = new Worker<TosUploadJobData, TosUploadJobResult>(
           data: { generatedImages: updatedImages },
         })
 
-        // 第二步：更新 editingImageIndexes（空数组使用原生 SQL）
+        // 第二步：更新 editingImageIndexes（空数组使用原生 SQL，PostgreSQL 需要显式类型转换）
         if (cleanedIndexes.length === 0) {
-          await tx.$executeRaw`UPDATE "Generation" SET "editingImageIndexes" = '{}' WHERE id = ${generationId}::uuid`
+          await tx.$executeRaw`UPDATE "Generation" SET "editingImageIndexes" = ARRAY[]::INTEGER[] WHERE id = ${generationId}::uuid`
         } else {
           await tx.generation.update({
             where: { id: generationId },
