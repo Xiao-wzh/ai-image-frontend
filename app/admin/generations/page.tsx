@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
     Search, RefreshCw, ChevronLeft, ChevronRight, User, Loader2, X, ZoomIn, Crown,
-    Image, Sparkles, TrendingUp, CheckCircle, Zap, Filter, LayoutGrid, Layers, Palette, Calendar
+    Image, Sparkles, TrendingUp, CheckCircle, Zap, Filter, LayoutGrid, Layers, Palette, Calendar,
+    ChevronDown, ChevronUp, RotateCcw, DollarSign, AlertCircle
 } from "lucide-react"
 import { format } from "date-fns"
 
@@ -48,6 +49,11 @@ type Generation = {
     imageCount: number | null
     costPerImage: number | null
     totalCost: number | null
+    refundAmount: number | null
+    aspectRatio: string | null
+    features: string | null
+    proFeatures: string | null
+    proStyle: string | null
     originalImage: string[]
     refImages: string[]
     generatedImage: string | null
@@ -60,10 +66,12 @@ type Generation = {
 type Stats = {
     todayCount: number
     totalCost: number
+    totalRefund: number
     proCount: number
     completedCount: number
     successRate: number
     proRate: number
+    refundRate: number
 }
 
 export default function AdminGenerationsPage() {
@@ -81,8 +89,12 @@ export default function AdminGenerationsPage() {
     const [qualityMode, setQualityMode] = useState<string>("all")
     const [taskType, setTaskType] = useState<string>("all")
     const [mode, setMode] = useState<string>("all")
+    const [hasRefund, setHasRefund] = useState<string>("all")
     const [startDate, setStartDate] = useState("")
     const [endDate, setEndDate] = useState("")
+
+    // 展开行状态
+    const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
     // Platforms and product types from database
     const [platforms, setPlatforms] = useState<PlatformOption[]>([])
@@ -223,6 +235,7 @@ export default function AdminGenerationsPage() {
             if (qualityMode && qualityMode !== "all") params.set("qualityMode", qualityMode)
             if (taskType && taskType !== "all") params.set("taskType", taskType)
             if (mode && mode !== "all") params.set("mode", mode)
+            if (hasRefund && hasRefund !== "all") params.set("hasRefund", hasRefund)
             if (startDate) params.set("startDate", startDate)
             if (endDate) params.set("endDate", endDate)
 
@@ -239,7 +252,7 @@ export default function AdminGenerationsPage() {
         } finally {
             setLoading(false)
         }
-    }, [page, selectedUser, productSearch, productType, status, qualityMode, taskType, mode, startDate, endDate])
+    }, [page, selectedUser, productSearch, productType, status, qualityMode, taskType, mode, hasRefund, startDate, endDate])
 
     useEffect(() => {
         fetchData()
@@ -259,9 +272,24 @@ export default function AdminGenerationsPage() {
         setQualityMode("all")
         setTaskType("all")
         setMode("all")
+        setHasRefund("all")
         setStartDate("")
         setEndDate("")
         setPage(1)
+        setExpandedRows(new Set())
+    }
+
+    // 切换展开行
+    const toggleRow = (id: string) => {
+        setExpandedRows(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) {
+                next.delete(id)
+            } else {
+                next.add(id)
+            }
+            return next
+        })
     }
 
     // Status badge
@@ -385,6 +413,21 @@ export default function AdminGenerationsPage() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* 退款统计 */}
+                        {stats.totalRefund > 0 && (
+                            <div className="bg-gradient-to-br from-rose-500/10 to-rose-600/5 border border-rose-500/20 rounded-xl p-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2.5 bg-rose-500/20 rounded-lg">
+                                        <RotateCcw className="w-5 h-5 text-rose-400" />
+                                    </div>
+                                    <div>
+                                        <p className="text-xs text-slate-400">已退款</p>
+                                        <p className="text-xl font-bold text-white">{stats.totalRefund?.toLocaleString()}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </motion.div>
                 )}
 
@@ -553,6 +596,21 @@ export default function AdminGenerationsPage() {
                             </Select>
                         </div>
 
+                        {/* Has Refund */}
+                        <div className="space-y-1.5">
+                            <label className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
+                                <RotateCcw className="w-3 h-3" /> 退款
+                            </label>
+                            <Select value={hasRefund} onValueChange={setHasRefund}>
+                                <SelectTrigger className="h-9 bg-white/5 border-white/10 text-white text-sm"><SelectValue placeholder="全部" /></SelectTrigger>
+                                <SelectContent className="bg-slate-900 border-white/10">
+                                    <SelectItem value="all" className="text-white">全部</SelectItem>
+                                    <SelectItem value="true" className="text-white">已退款</SelectItem>
+                                    <SelectItem value="false" className="text-white">未退款</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
                         {/* Date Range */}
                         <div className="col-span-2 space-y-1.5">
                             <label className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
@@ -586,9 +644,16 @@ export default function AdminGenerationsPage() {
                     <div className="text-sm text-slate-400">
                         共 <span className="text-white font-medium">{total}</span> 条记录
                         {stats && total > 0 && (
-                            <span className="ml-3 text-purple-400">
-                                消耗 <span className="font-medium">{stats.totalCost.toLocaleString()}</span> 积分
-                            </span>
+                            <>
+                                <span className="ml-3 text-purple-400">
+                                    消耗 <span className="font-medium">{stats.totalCost.toLocaleString()}</span> 积分
+                                </span>
+                                {stats.totalRefund > 0 && (
+                                    <span className="ml-3 text-rose-400">
+                                        退款 <span className="font-medium">{stats.totalRefund?.toLocaleString()}</span> 积分
+                                    </span>
+                                )}
+                            </>
                         )}
                     </div>
                 </div>
@@ -602,14 +667,14 @@ export default function AdminGenerationsPage() {
                 >
                     {/* Table Header */}
                     <div className="hidden md:grid grid-cols-12 gap-3 p-3 border-b border-white/10 text-xs text-slate-500 font-medium bg-white/[0.02]">
+                        <div className="col-span-1"></div>
                         <div className="col-span-2">用户</div>
                         <div className="col-span-2">产品</div>
                         <div className="col-span-1">任务/模式</div>
-                        <div className="col-span-2">原图/参考</div>
                         <div className="col-span-2">生成结果</div>
-                        <div className="col-span-1">费用</div>
+                        <div className="col-span-1">费用/退款</div>
                         <div className="col-span-1">状态</div>
-                        <div className="col-span-1">时间</div>
+                        <div className="col-span-2">时间</div>
                     </div>
 
                     {/* Table Body */}
@@ -624,104 +689,199 @@ export default function AdminGenerationsPage() {
                         </div>
                     ) : (
                         <div className="divide-y divide-white/5">
-                            {data.map((item) => (
-                                <div key={item.id} className="grid grid-cols-1 md:grid-cols-12 gap-3 p-3 items-center hover:bg-white/[0.02] transition-colors">
-                                    {/* User */}
-                                    <div className="col-span-2 flex items-center gap-2">
-                                        <Avatar className="w-7 h-7 flex-shrink-0">
-                                            <AvatarImage src={item.user?.image || ""} />
-                                            <AvatarFallback className="bg-blue-500 text-[10px] text-white">
-                                                {(item.user?.name || item.user?.email)?.[0]?.toUpperCase() || "U"}
-                                            </AvatarFallback>
-                                        </Avatar>
-                                        <div className="min-w-0">
-                                            <div className="text-sm text-white truncate">{item.user?.username || item.user?.name || "未知"}</div>
-                                            <div className="text-xs text-slate-500 truncate">{item.user?.email?.split("@")[0]}</div>
-                                        </div>
-                                    </div>
-
-                                    {/* Product */}
-                                    <div className="col-span-2">
-                                        <div className="text-sm text-white truncate" title={item.productName}>{item.productName}</div>
-                                        <div className="flex items-center gap-1 mt-0.5 flex-wrap">
-                                            <Badge variant="outline" className="text-[10px] border-white/20 text-slate-400 px-1.5 py-0">
-                                                {getProductTypeLabel(item)}
-                                            </Badge>
-                                            {item.qualityMode === "PRO" && (
-                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-[10px] text-white font-bold">
-                                                    <Crown className="w-2.5 h-2.5" />PRO
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Task/Mode */}
-                                    <div className="col-span-1 flex flex-col gap-0.5">
-                                        <span className="text-xs text-slate-300">{getTaskTypeLabel(item.taskType)}</span>
-                                        <span className="text-xs">{getModeLabel(item.mode)}</span>
-                                    </div>
-
-                                    {/* Original Images */}
-                                    <div className="col-span-2">
-                                        <div className="flex gap-1.5">
-                                            <div className="flex -space-x-1.5">
-                                                {item.originalImage?.slice(0, 2).map((img, idx) => (
-                                                    <div key={idx} className="relative w-9 h-9 rounded-lg border-2 border-[#0a0a0f] overflow-hidden cursor-pointer hover:z-10 hover:scale-110 transition-transform" onClick={() => openPreview(item.originalImage, idx)}>
-                                                        <LazyImage src={getThumbnailUrl(img, 100) ?? img} alt="" className="object-cover" />
-                                                    </div>
-                                                ))}
-                                                {(item.originalImage?.length || 0) > 2 && (
-                                                    <div className="w-9 h-9 rounded-lg bg-white/10 border-2 border-[#0a0a0f] flex items-center justify-center text-[10px] text-slate-400">+{item.originalImage.length - 2}</div>
-                                                )}
-                                                {!item.originalImage?.length && <div className="w-9 h-9 bg-white/5 rounded-lg flex items-center justify-center"><span className="text-slate-500 text-[10px]">无</span></div>}
+                            {data.map((item) => {
+                                const isExpanded = expandedRows.has(item.id)
+                                const hasRefund = (item.refundAmount || 0) > 0
+                                const refundPercent = hasRefund && item.totalCost ? Math.round(((item.refundAmount || 0) / item.totalCost) * 100) : 0
+                                return (
+                                    <div key={item.id} className="border-b border-white/5 last:border-b-0">
+                                        <div
+                                            className="grid grid-cols-1 md:grid-cols-12 gap-3 p-3 items-center hover:bg-white/[0.02] transition-colors cursor-pointer"
+                                            onClick={() => toggleRow(item.id)}
+                                        >
+                                            {/* Expand Button */}
+                                            <div className="col-span-1 flex justify-center">
+                                                <button className="p-1 rounded-lg bg-white/5 hover:bg-white/10 transition-colors">
+                                                    {isExpanded ? (
+                                                        <ChevronUp className="w-4 h-4 text-white" />
+                                                    ) : (
+                                                        <ChevronDown className="w-4 h-4 text-slate-400" />
+                                                    )}
+                                                </button>
                                             </div>
-                                            {item.refImages?.length > 0 && (
-                                                <div className="flex -space-x-1.5">
-                                                    {item.refImages.slice(0, 2).map((img, idx) => (
-                                                        <div key={idx} className="relative w-9 h-9 rounded-lg border-2 border-cyan-500/30 overflow-hidden cursor-pointer hover:z-10 hover:scale-110 transition-transform" onClick={() => openPreview(item.refImages, idx)}>
-                                                            <LazyImage src={getThumbnailUrl(img, 100) ?? img} alt="" className="object-cover" />
+
+                                            {/* User */}
+                                            <div className="col-span-2 flex items-center gap-2">
+                                                <Avatar className="w-7 h-7 flex-shrink-0">
+                                                    <AvatarImage src={item.user?.image || ""} />
+                                                    <AvatarFallback className="bg-blue-500 text-[10px] text-white">
+                                                        {(item.user?.name || item.user?.email)?.[0]?.toUpperCase() || "U"}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div className="min-w-0">
+                                                    <div className="text-sm text-white truncate">{item.user?.username || item.user?.name || "未知"}</div>
+                                                    <div className="text-xs text-slate-500 truncate">{item.user?.email?.split("@")[0]}</div>
+                                                </div>
+                                            </div>
+
+                                            {/* Product */}
+                                            <div className="col-span-2">
+                                                <div className="text-sm text-white truncate" title={item.productName}>{item.productName}</div>
+                                                <div className="flex items-center gap-1 mt-0.5 flex-wrap">
+                                                    <Badge variant="outline" className="text-[10px] border-white/20 text-slate-400 px-1.5 py-0">
+                                                        {getProductTypeLabel(item)}
+                                                    </Badge>
+                                                    {item.qualityMode === "PRO" && (
+                                                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-[10px] text-white font-bold">
+                                                            <Crown className="w-2.5 h-2.5" />PRO
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Task/Mode */}
+                                            <div className="col-span-1 flex flex-col gap-0.5">
+                                                <span className="text-xs text-slate-300">{getTaskTypeLabel(item.taskType)}</span>
+                                                <span className="text-xs">{getModeLabel(item.mode)}</span>
+                                            </div>
+
+                                            {/* Generated Image */}
+                                            <div className="col-span-2">
+                                                {item.generatedImage || item.generatedImages?.length > 0 ? (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="relative w-12 h-12 rounded-lg border border-emerald-500/30 overflow-hidden cursor-pointer hover:scale-105 transition-transform" onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            const imgs = item.qualityMode === "PRO" && item.generatedImages?.length > 0 ? item.generatedImages : [item.generatedImage || item.generatedImages?.[0]!]
+                                                            openPreview(imgs, 0)
+                                                        }}>
+                                                            <LazyImage
+                                                                src={getThumbnailUrl(item.generatedImage || item.generatedImages?.[0], 150) ?? (item.generatedImage || item.generatedImages?.[0])}
+                                                                alt=""
+                                                                className={item.qualityMode === "PRO" ? "object-contain bg-black/50" : "object-cover"}
+                                                            />
                                                         </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    {/* Generated Image */}
-                                    <div className="col-span-2">
-                                        {item.generatedImage || item.generatedImages?.length > 0 ? (
-                                            <div className="flex items-center gap-2">
-                                                <div className="relative w-12 h-12 rounded-lg border border-emerald-500/30 overflow-hidden cursor-pointer hover:scale-105 transition-transform" onClick={() => {
-                                                    const imgs = item.qualityMode === "PRO" && item.generatedImages?.length > 0 ? item.generatedImages : [item.generatedImage || item.generatedImages?.[0]!]
-                                                    openPreview(imgs, 0)
-                                                }}>
-                                                    <LazyImage
-                                                        src={getThumbnailUrl(item.generatedImage || item.generatedImages?.[0], 150) ?? (item.generatedImage || item.generatedImages?.[0])}
-                                                        alt=""
-                                                        className={item.qualityMode === "PRO" ? "object-contain bg-black/50" : "object-cover"}
-                                                    />
-                                                </div>
-                                                <span className="text-[10px] text-slate-500">
-                                                    {item.qualityMode === "PRO" ? `${item.generatedImages?.length || 0}/${item.imageCount ?? "?"}张` : `${item.generatedImages?.length || 0}张`}
-                                                </span>
+                                                        <span className="text-[10px] text-slate-500">
+                                                            {item.qualityMode === "PRO" ? `${item.generatedImages?.length || 0}/${item.imageCount ?? "?"}张` : `${item.generatedImages?.length || 0}张`}
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-12 h-12 bg-white/5 rounded-lg flex items-center justify-center"><span className="text-slate-500 text-[10px]">无</span></div>
+                                                )}
                                             </div>
-                                        ) : (
-                                            <div className="w-12 h-12 bg-white/5 rounded-lg flex items-center justify-center"><span className="text-slate-500 text-[10px]">无</span></div>
-                                        )}
+
+                                            {/* Cost/Refund */}
+                                            <div className="col-span-1">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <span className={`text-sm font-medium ${hasRefund ? "text-slate-500 line-through" : "text-purple-400"}`}>
+                                                        {item.totalCost || 0}
+                                                    </span>
+                                                    {hasRefund && (
+                                                        <div className="flex items-center gap-1 text-rose-400">
+                                                            <RotateCcw className="w-3 h-3" />
+                                                            <span className="text-xs">-{item.refundAmount}</span>
+                                                            <span className="text-[10px] text-slate-500">({refundPercent}%)</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Status */}
+                                            <div className="col-span-1">{getStatusBadge(item.status)}</div>
+
+                                            {/* Time */}
+                                            <div className="col-span-2 text-xs text-slate-400">{format(new Date(item.createdAt), "MM-dd HH:mm")}</div>
+                                        </div>
+
+                                        {/* Expanded Details Panel */}
+                                        <AnimatePresence>
+                                            {isExpanded && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0 }}
+                                                    animate={{ height: "auto", opacity: 1 }}
+                                                    exit={{ height: 0, opacity: 0 }}
+                                                    className="overflow-hidden"
+                                                >
+                                                    <div className="p-4 bg-white/[0.02] border-t border-white/5 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                                        {/* 输出语言 */}
+                                                        <div className="space-y-1">
+                                                            <div className="text-slate-500">输出语言</div>
+                                                            <div className="text-white">{item.outputLanguage || "中文"}</div>
+                                                        </div>
+
+                                                        {/* 图片比例 */}
+                                                        <div className="space-y-1">
+                                                            <div className="text-slate-500">图片比例</div>
+                                                            <div className="text-white">{item.aspectRatio || "1:1"}</div>
+                                                        </div>
+
+                                                        {/* 生成张数 */}
+                                                        <div className="space-y-1">
+                                                            <div className="text-slate-500">生成张数</div>
+                                                            <div className="text-white">{item.imageCount || 1} 张</div>
+                                                        </div>
+
+                                                        {/* 单张成本 */}
+                                                        <div className="space-y-1">
+                                                            <div className="text-slate-500">单张成本</div>
+                                                            <div className="text-white">{item.costPerImage || 0} 积分</div>
+                                                        </div>
+
+                                                        {/* PRO功能描述 */}
+                                                        {item.proFeatures && (
+                                                            <div className="col-span-2 space-y-1">
+                                                                <div className="text-slate-500">产品功能</div>
+                                                                <div className="text-white text-sm">{item.proFeatures}</div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* PRO风格描述 */}
+                                                        {item.proStyle && (
+                                                            <div className="col-span-2 space-y-1">
+                                                                <div className="text-slate-500">画面风格</div>
+                                                                <div className="text-white text-sm">{item.proStyle}</div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* 克隆卖点 */}
+                                                        {item.features && (
+                                                            <div className="col-span-2 space-y-1">
+                                                                <div className="text-slate-500">卖点描述</div>
+                                                                <div className="text-white text-sm">{item.features}</div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* 原图 */}
+                                                        <div className="col-span-2 space-y-1">
+                                                            <div className="text-slate-500">原图 ({item.originalImage?.length || 0}张)</div>
+                                                            <div className="flex gap-1.5 flex-wrap">
+                                                                {item.originalImage?.map((img, idx) => (
+                                                                    <div key={idx} className="relative w-10 h-10 rounded-lg border border-white/10 overflow-hidden cursor-pointer hover:scale-105 transition-transform" onClick={() => openPreview(item.originalImage, idx)}>
+                                                                        <LazyImage src={getThumbnailUrl(img, 100) ?? img} alt="" className="object-cover" />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+
+                                                        {/* 参考图 */}
+                                                        {item.refImages?.length > 0 && (
+                                                            <div className="col-span-2 space-y-1">
+                                                                <div className="text-slate-500">参考图 ({item.refImages.length}张)</div>
+                                                                <div className="flex gap-1.5 flex-wrap">
+                                                                    {item.refImages.map((img, idx) => (
+                                                                        <div key={idx} className="relative w-10 h-10 rounded-lg border border-cyan-500/30 overflow-hidden cursor-pointer hover:scale-105 transition-transform" onClick={() => openPreview(item.refImages, idx)}>
+                                                                            <LazyImage src={getThumbnailUrl(img, 100) ?? img} alt="" className="object-cover" />
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
                                     </div>
-
-                                    {/* Cost */}
-                                    <div className="col-span-1">
-                                        <span className="text-sm text-purple-400 font-medium">{item.totalCost || 0}</span>
-                                    </div>
-
-                                    {/* Status */}
-                                    <div className="col-span-1">{getStatusBadge(item.status)}</div>
-
-                                    {/* Time */}
-                                    <div className="col-span-1 text-xs text-slate-400">{format(new Date(item.createdAt), "MM-dd HH:mm")}</div>
-                                </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     )}
 

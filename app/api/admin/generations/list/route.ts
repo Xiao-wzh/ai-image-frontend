@@ -72,6 +72,14 @@ export async function GET(req: NextRequest) {
             whereConditions.push({ mode })
         }
 
+        // 退款筛选
+        const hasRefund = searchParams.get("hasRefund")
+        if (hasRefund === "true") {
+            whereConditions.push({ refundAmount: { gt: 0 } })
+        } else if (hasRefund === "false") {
+            whereConditions.push({ refundAmount: { equals: 0 } })
+        }
+
         // 日期范围筛选
         if (startDate) {
             whereConditions.push({
@@ -144,6 +152,7 @@ export async function GET(req: NextRequest) {
         const [
             todayCount,
             totalCostSum,
+            totalRefundSum,
             proCount,
             completedCount,
             allTotal,
@@ -156,6 +165,11 @@ export async function GET(req: NextRequest) {
             prisma.generation.aggregate({
                 where,
                 _sum: { totalCost: true },
+            }),
+            // 当前筛选条件下的总退款积分
+            prisma.generation.aggregate({
+                where,
+                _sum: { refundAmount: true },
             }),
             // 当前筛选条件下 PRO 模式数量
             prisma.generation.count({
@@ -183,10 +197,14 @@ export async function GET(req: NextRequest) {
             stats: {
                 todayCount,
                 totalCost: totalCostSum._sum.totalCost || 0,
+                totalRefund: totalRefundSum._sum.refundAmount || 0,
                 proCount,
                 completedCount,
                 successRate: total > 0 ? Math.round((completedCount / total) * 100) : 0,
                 proRate: total > 0 ? Math.round((proCount / total) * 100) : 0,
+                refundRate: (totalCostSum._sum.totalCost || 0) > 0
+                    ? Math.round(((totalRefundSum._sum.refundAmount || 0) / (totalCostSum._sum.totalCost || 1)) * 100)
+                    : 0,
             },
         })
     } catch (error) {
