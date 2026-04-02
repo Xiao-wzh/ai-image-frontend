@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import { motion } from "framer-motion"
 import * as Tooltip from "@radix-ui/react-tooltip"
 import {
@@ -11,11 +11,14 @@ import {
     AlertCircle,
     Image as ImageIcon,
     Info,
+    ChevronLeft,
+    ChevronRight,
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
 import { Sidebar } from "@/components/sidebar"
 import { TopBanner } from "@/components/top-banner"
 import { cn } from "@/lib/utils"
@@ -40,25 +43,43 @@ type Appeal = {
     }
 }
 
+type Pagination = {
+    total: number
+    page: number
+    limit: number
+    totalPages: number
+}
+
 export default function AppealsPage() {
     const [appeals, setAppeals] = useState<Appeal[]>([])
     const [loading, setLoading] = useState(true)
+    const [pagination, setPagination] = useState<Pagination>({ total: 0, page: 1, limit: 10, totalPages: 0 })
+
+    const fetchAppeals = useCallback(async (page: number) => {
+        try {
+            setLoading(true)
+            const params = new URLSearchParams({ page: String(page), limit: "10" })
+            const res = await fetch(`/api/user/appeal?${params}`)
+            if (!res.ok) throw new Error("获取失败")
+            const data = await res.json()
+            setAppeals(data.appeals || [])
+            setPagination(data.pagination || { total: 0, page: 1, limit: 10, totalPages: 0 })
+        } catch (err) {
+            console.error("获取售后记录失败:", err)
+        } finally {
+            setLoading(false)
+        }
+    }, [])
 
     useEffect(() => {
-        async function fetchAppeals() {
-            try {
-                const res = await fetch("/api/user/appeal")
-                if (!res.ok) throw new Error("获取失败")
-                const data = await res.json()
-                setAppeals(data.appeals || [])
-            } catch (err) {
-                console.error("获取售后记录失败:", err)
-            } finally {
-                setLoading(false)
-            }
+        fetchAppeals(pagination.page)
+    }, [pagination.page])
+
+    const goToPage = (newPage: number) => {
+        if (newPage >= 1 && newPage <= pagination.totalPages) {
+            setPagination(prev => ({ ...prev, page: newPage }))
         }
-        fetchAppeals()
-    }, [])
+    }
 
     const statusBadge = (
         status: string,
@@ -298,14 +319,14 @@ export default function AppealsPage() {
                         </div>
 
                         {/* Summary (if has records) */}
-                        {!loading && appeals.length > 0 && (
+                        {!loading && pagination.total > 0 && (
                             <motion.div
                                 initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 className="mt-6 flex gap-4 justify-center flex-wrap"
                             >
                                 <div className="glass rounded-xl px-4 py-2 border border-white/10 text-center">
-                                    <div className="text-lg font-bold text-white">{appeals.length}</div>
+                                    <div className="text-lg font-bold text-white">{pagination.total}</div>
                                     <div className="text-xs text-slate-400">总记录</div>
                                 </div>
                                 <div className="glass rounded-xl px-4 py-2 border border-amber-500/20 text-center">
@@ -327,6 +348,35 @@ export default function AppealsPage() {
                                     <div className="text-xs text-slate-400">已驳回</div>
                                 </div>
                             </motion.div>
+                        )}
+
+                        {/* Pagination */}
+                        {pagination.totalPages > 1 && (
+                            <div className="p-4 border-t border-white/10 flex items-center justify-center gap-4">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => goToPage(pagination.page - 1)}
+                                    disabled={pagination.page <= 1}
+                                    className="text-slate-400 hover:text-white disabled:opacity-40"
+                                >
+                                    <ChevronLeft className="w-4 h-4 mr-1" />
+                                    上一页
+                                </Button>
+                                <span className="text-sm text-slate-400">
+                                    第 <span className="text-white font-medium">{pagination.page}</span> 页 / 共 <span className="text-white font-medium">{pagination.totalPages}</span> 页
+                                </span>
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => goToPage(pagination.page + 1)}
+                                    disabled={pagination.page >= pagination.totalPages}
+                                    className="text-slate-400 hover:text-white disabled:opacity-40"
+                                >
+                                    下一页
+                                    <ChevronRight className="w-4 h-4 ml-1" />
+                                </Button>
+                            </div>
                         )}
                     </div>
                 </div>

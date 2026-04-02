@@ -186,6 +186,7 @@ export async function POST(req: NextRequest) {
 /**
  * GET /api/user/appeal
  * Get appeals - users see only their own, admins see all
+ * Supports pagination with page and limit parameters
  */
 export async function GET(req: NextRequest) {
     const session = await auth()
@@ -200,6 +201,11 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url)
         const status = searchParams.get("status") // Optional filter
 
+        // 分页参数
+        const page = Math.max(1, parseInt(searchParams.get("page") || "1"))
+        const limit = Math.min(100, Math.max(1, parseInt(searchParams.get("limit") || "10")))
+        const offset = (page - 1) * limit
+
         // Admin can see all, users can only see their own
         const isAdmin = userRole === "ADMIN"
         const where = {
@@ -207,31 +213,37 @@ export async function GET(req: NextRequest) {
             ...(status ? { status } : {}),
         }
 
-        const appeals = await prisma.appeal.findMany({
-            where,
-            orderBy: { createdAt: "desc" },
-            include: {
-                user: isAdmin ? {
-                    select: {
-                        id: true,
-                        name: true,
-                        username: true,
-                        email: true,
-                    },
-                } : false,
-                generation: {
-                    select: {
-                        id: true,
-                        productName: true,
-                        productType: true,
-                        originalImage: true,
-                        generatedImages: true,
-                        hasUsedDiscountedRetry: true,
-                        createdAt: true,
+        // 并行查询数据和总数
+        const [appeals, total] = await Promise.all([
+            prisma.appeal.findMany({
+                where,
+                orderBy: { createdAt: "desc" },
+                skip: offset,
+                take: limit,
+                include: {
+                    user: isAdmin ? {
+                        select: {
+                            id: true,
+                            name: true,
+                            username: true,
+                            email: true,
+                        },
+                    } : false,
+                    generation: {
+                        select: {
+                            id: true,
+                            productName: true,
+                            productType: true,
+                            originalImage: true,
+                            generatedImages: true,
+                            hasUsedDiscountedRetry: true,
+                            createdAt: true,
+                        },
                     },
                 },
-            },
-        })
+            }),
+            prisma.appeal.count({ where }),
+        ])
 
         // Transform image URLs to CDN
         const transformedAppeals = appeals.map(appeal => ({
@@ -239,10 +251,18 @@ export async function GET(req: NextRequest) {
             generation: transformGenerationUrls(appeal.generation),
         }))
 
+        const totalPages = Math.ceil(total / limit)
+
         return NextResponse.json({
             success: true,
             appeals: transformedAppeals,
             isAdmin,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages,
+            },
         })
     } catch (err: any) {
         console.error("❌ 获取申诉列表失败:", err?.message || err)
