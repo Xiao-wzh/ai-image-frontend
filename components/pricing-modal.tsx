@@ -455,7 +455,8 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
           </motion.div>
           {/* <DialogTitle className="text-3xl font-bold text-white">充值积分</DialogTitle> */}
           <DialogDescription className="text-slate-400 max-w-md mx-auto mt-2">
-            选择套餐后可直接扫码支付
+            选择套餐后可直接扫码支付<br />
+            积分属于虚拟商品，不支持退款
 
 
           </DialogDescription>
@@ -536,7 +537,7 @@ export function PricingModal({ isOpen, onClose }: PricingModalProps) {
                   // 计算性价比（每元积分）
                   const yuanPrice = plan.price / 100
                   const totalCredits = plan.credits + plan.giftCredits
-                  const creditsPerYuan = Math.round(totalCredits / 2 *9)
+                  const creditsPerYuan = Math.round(totalCredits / 2 * 9)
 
                   return (
                     <motion.div
