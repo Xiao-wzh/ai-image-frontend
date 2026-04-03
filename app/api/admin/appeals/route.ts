@@ -116,6 +116,24 @@ export async function GET(req: NextRequest) {
             prisma.appeal.count({ where: { status: "REJECTED" } }),
         ])
 
+        // 今日统计（东八区）
+        const now = new Date()
+        const utc8Offset = 8 * 60 * 60 * 1000
+        const utc8Now = new Date(now.getTime() + now.getTimezoneOffset() * 60000 + utc8Offset)
+        const todayStart = new Date(utc8Now)
+        todayStart.setHours(0, 0, 0, 0)
+        const todayStartUTC = new Date(todayStart.getTime() - utc8Offset)
+
+        const [todayTotal, todayApproved, todayRejected, todayApprovedRefund] = await Promise.all([
+            prisma.appeal.count({ where: { createdAt: { gte: todayStartUTC } } }),
+            prisma.appeal.count({ where: { status: "APPROVED", createdAt: { gte: todayStartUTC } } }),
+            prisma.appeal.count({ where: { status: "REJECTED", createdAt: { gte: todayStartUTC } } }),
+            prisma.appeal.aggregate({
+                where: { status: "APPROVED", createdAt: { gte: todayStartUTC } },
+                _sum: { refundAmount: true },
+            }),
+        ])
+
         return NextResponse.json({
             success: true,
             appeals: enrichedAppeals,
@@ -126,6 +144,12 @@ export async function GET(req: NextRequest) {
                 approved: approvedCount,
                 rejected: rejectedCount,
                 total: pendingCount + processingCount + manualReviewCount + approvedCount + rejectedCount,
+            },
+            todayStats: {
+                total: todayTotal,
+                approved: todayApproved,
+                rejected: todayRejected,
+                approvedRefund: todayApprovedRefund._sum.refundAmount || 0,
             },
             page: {
                 limit,
