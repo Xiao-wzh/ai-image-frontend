@@ -223,6 +223,9 @@ const worker = new Worker<TosUploadJobData, TosUploadJobResult>(
     let finalStatus: string
     let refundAmount: number
 
+    // 计算有效的单张成本（处理套餐 costPerImage=0 的情况）
+    const effectiveCostPerImage = costPerImage > 0 ? costPerImage : (imageCount > 0 ? totalCost / imageCount : 0)
+
     if (qualityMode === "STANDARD") {
       // STANDARD 模式：只有 1 张大图，裁剪成 N 张 URL
       // 要么全部成功（裁剪完成），要么全部失败（大图上传失败）
@@ -233,8 +236,9 @@ const worker = new Worker<TosUploadJobData, TosUploadJobResult>(
       const failedCount = Math.max(imageCount - successCount, 0)
       finalStatus = successCount === 0 ? "FAILED" : failedCount > 0 ? "PARTIAL_SUCCESS" : "COMPLETED"
 
-      // 关键修复：全部失败退还 totalCost，部分失败按 costPerImage 退款
-      refundAmount = successCount === 0 ? totalCost : (failedCount * costPerImage)
+      // 修复：全部失败退还 totalCost，部分失败按有效单张成本退款
+      // 对于套餐（costPerImage=0），使用 totalCost/imageCount 作为单张成本
+      refundAmount = successCount === 0 ? totalCost : Math.round(failedCount * effectiveCostPerImage)
     }
 
     // ── CAS 乐观锁更新 DB ──
@@ -254,7 +258,7 @@ const worker = new Worker<TosUploadJobData, TosUploadJobResult>(
       if (refundAmount > 0 && userId) {
         const reason = qualityMode === "STANDARD"
           ? `STANDARD模式生图失败全额退款`
-          : `PRO模式部分生图失败退款 (${imageCount - successCount}张×${costPerImage}积分)`
+          : `PRO模式部分生图失败退款 (${imageCount - successCount}张×${Math.round(effectiveCostPerImage)}积分)`
         await refundCredits(tx, userId, refundAmount, reason)
       }
     })

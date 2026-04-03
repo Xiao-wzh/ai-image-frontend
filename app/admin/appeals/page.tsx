@@ -227,7 +227,8 @@ export default function AdminAppealsPage() {
         const generation = appeal.generation
 
         if (appeal.appealedImages && appeal.appealedImages.length > 0) {
-            // 按张计算
+            // PRO 模式：使用用户选择的张数（imageCount）
+            // STANDARD 模式：使用实际生成张数（generatedImages.length），最少 9 张
             const totalImages = generation.qualityMode === "STANDARD"
                 ? Math.max(generation.generatedImages.length, 9)
                 : (generation.imageCount || 9)

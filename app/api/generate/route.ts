@@ -736,7 +736,6 @@ async function handleSingleGeneration(
           totalCost = costPerImage * imageCount
         }
         actualCost = totalCost
-        console.log(`[生图API] PRO模式: ${imageCount}张图, 费用${totalCost}积分`)
       } else {
         totalCost = getStandardCost(taskType, costs)
         actualCost = totalCost
