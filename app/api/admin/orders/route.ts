@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
         // 东八区偏移
         const UTC8_MS = 8 * 60 * 60 * 1000;
         const DAY_MS = 24 * 60 * 60 * 1000;
-        const INITIAL_WINDOW_DAYS = 7;
+        const INITIAL_WINDOW_DAYS = 2;
 
         /** 将东八区 YYYY-MM-DD 转为该天 00:00:00 的 UTC Date */
         function utc8DayToUTC(dateStr: string): Date {

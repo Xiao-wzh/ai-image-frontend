@@ -5,7 +5,7 @@ import { motion } from "framer-motion"
 import {
     Receipt, RefreshCw, CheckCircle, Clock, XCircle,
     User, Filter, Calendar, TrendingUp, ShoppingCart,
-    ChevronDown, Loader2, CalendarRange, X
+    ChevronDown, ChevronRight, Loader2, CalendarRange, X
 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
@@ -159,6 +159,9 @@ export default function AdminOrdersPage() {
     // --- 状态筛选 ---
     const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
 
+    // --- 展开/折叠状态 ---
+    const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set())
+
     // --- 防抖 ---
     const fetchingRef = useRef(false)
 
@@ -194,7 +197,8 @@ export default function AdminOrdersPage() {
                 if (append) {
                     setDayGroups(prev => mergeOrdersIntoDayGroups(prev, newOrders))
                 } else {
-                    setDayGroups(mergeOrdersIntoDayGroups([], newOrders))
+                    const groups = mergeOrdersIntoDayGroups([], newOrders)
+                    setDayGroups(groups)
                     if (data.stats) setStats(data.stats)
                     if (data.dailyRevenue) setDailyRevenue(data.dailyRevenue)
                     if (data.monthlyRevenue !== undefined) setMonthlyRevenue(data.monthlyRevenue)
@@ -202,6 +206,11 @@ export default function AdminOrdersPage() {
                     if (data.todayPlanBreakdown) setTodayPlanBreakdown(data.todayPlanBreakdown)
                     if (data.chartData) setChartData(data.chartData)
                     if (data.todayOrderCount !== undefined) setTodayOrderCount(data.todayOrderCount)
+
+                    // 默认展开第一条（最新一天）的数据
+                    if (groups.length > 0) {
+                        setExpandedDays(new Set([groups[0].dateKey]))
+                    }
                 }
 
                 // 后端返回实际使用的时间窗
@@ -530,57 +539,83 @@ export default function AdminOrdersPage() {
                                 </div>
                             ) : (
                                 <div className="space-y-6">
-                                    {dayGroups.map((group, gi) => (
-                                        <motion.div key={group.dateKey} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: gi * 0.04 }}>
-                                            <div className="flex items-center gap-3 mb-3">
-                                                <div className="flex-shrink-0 w-3 h-3 rounded-full bg-purple-500 ring-4 ring-purple-500/20" />
-                                                <div className="flex-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-white/5">
-                                                    <div className="flex items-center gap-2">
-                                                        <Calendar className="w-4 h-4 text-purple-400" />
-                                                        <span className="text-white font-medium text-sm">{group.label}</span>
-                                                    </div>
-                                                    <div className="flex items-center gap-4 text-sm">
-                                                        <span className="text-emerald-400 font-semibold">¥{(group.totalAmount / 100).toFixed(2)}</span>
-                                                        <span className="text-slate-500">{group.orderCount} 笔已支付订单</span>
-                                                    </div>
+                                    {dayGroups.map((group, gi) => {
+                                        const isExpanded = expandedDays.has(group.dateKey)
+                                        const toggleExpand = () => {
+                                            setExpandedDays(prev => {
+                                                const next = new Set(prev)
+                                                if (next.has(group.dateKey)) {
+                                                    next.delete(group.dateKey)
+                                                } else {
+                                                    next.add(group.dateKey)
+                                                }
+                                                return next
+                                            })
+                                        }
+
+                                        return (
+                                            <motion.div key={group.dateKey} initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: gi * 0.04 }}>
+                                                <div className="flex items-center gap-3 mb-3">
+                                                    <div className="flex-shrink-0 w-3 h-3 rounded-full bg-purple-500 ring-4 ring-purple-500/20" />
+                                                    <button
+                                                        onClick={toggleExpand}
+                                                        className="flex-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 px-4 py-2.5 rounded-xl bg-slate-800/60 border border-white/5 hover:bg-slate-800/80 transition-colors cursor-pointer text-left"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            {isExpanded ? (
+                                                                <ChevronDown className="w-4 h-4 text-purple-400" />
+                                                            ) : (
+                                                                <ChevronRight className="w-4 h-4 text-purple-400" />
+                                                            )}
+                                                            <Calendar className="w-4 h-4 text-purple-400" />
+                                                            <span className="text-white font-medium text-sm">{group.label}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-4 text-sm ml-6 sm:ml-0">
+                                                            <span className="text-emerald-400 font-semibold">¥{(group.totalAmount / 100).toFixed(2)}</span>
+                                                            <span className="text-slate-500">{group.orderCount} 笔已支付订单</span>
+                                                            <span className="text-slate-500 text-xs">({group.orders.length} 条记录)</span>
+                                                        </div>
+                                                    </button>
                                                 </div>
-                                            </div>
-                                            <div className="ml-1.5 pl-5 border-l-2 border-purple-500/20 space-y-2">
-                                                {group.orders.map((order, idx) => (
-                                                    <motion.div key={order.id} initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: gi * 0.04 + idx * 0.02 }}
-                                                        className="flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 rounded-xl border border-white/5 bg-slate-900/30 hover:bg-slate-900/50 hover:border-white/10 transition-all">
-                                                        <div className="flex items-center gap-3 sm:w-44 min-w-0">
-                                                            <Avatar className="w-8 h-8 flex-shrink-0">
-                                                                <AvatarImage src={order.user?.image || undefined} />
-                                                                <AvatarFallback className="bg-slate-800 text-white text-xs">
-                                                                    {order.user?.username?.[0]?.toUpperCase() || <User className="w-3.5 h-3.5" />}
-                                                                </AvatarFallback>
-                                                            </Avatar>
-                                                            <div className="min-w-0">
-                                                                <div className="text-white text-sm font-medium truncate">{order.user?.username || '未知用户'}</div>
-                                                                <div className="text-slate-500 text-xs truncate">{order.user?.email || order.user?.id?.slice(0, 8)}</div>
-                                                            </div>
-                                                        </div>
-                                                        <div className="sm:w-40 min-w-0">
-                                                            <div className="text-white text-sm truncate">{order.planName}</div>
-                                                            <div className="text-slate-500 text-xs truncate">{order.outTradeNo}</div>
-                                                        </div>
-                                                        <div className="sm:w-28 text-left sm:text-center">
-                                                            <div className="text-white font-semibold">¥{(order.amount / 100).toFixed(2)}</div>
-                                                            <div className="text-xs text-slate-500">
-                                                                {order.totalCredits} 积分
-                                                                {order.channel && <span className="ml-1 text-blue-400">· {order.channel === 'WECHAT' ? '微信' : order.channel}</span>}
-                                                            </div>
-                                                        </div>
-                                                        <div className="sm:w-20 flex sm:justify-center">{getStatusBadge(order.status)}</div>
-                                                        <div className="sm:flex-1 text-left sm:text-right">
-                                                            <div className="text-slate-400 text-sm">{formatTime(order.createdAt)}</div>
-                                                        </div>
-                                                    </motion.div>
-                                                ))}
-                                            </div>
-                                        </motion.div>
-                                    ))}
+                                                {isExpanded && (
+                                                    <div className="ml-1.5 pl-5 border-l-2 border-purple-500/20 space-y-2">
+                                                        {group.orders.map((order, idx) => (
+                                                            <motion.div key={order.id} initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: idx * 0.02 }}
+                                                                className="flex flex-col sm:flex-row sm:items-center gap-3 p-3.5 rounded-xl border border-white/5 bg-slate-900/30 hover:bg-slate-900/50 hover:border-white/10 transition-all">
+                                                                <div className="flex items-center gap-3 sm:w-44 min-w-0">
+                                                                    <Avatar className="w-8 h-8 flex-shrink-0">
+                                                                        <AvatarImage src={order.user?.image || undefined} />
+                                                                        <AvatarFallback className="bg-slate-800 text-white text-xs">
+                                                                            {order.user?.username?.[0]?.toUpperCase() || <User className="w-3.5 h-3.5" />}
+                                                                        </AvatarFallback>
+                                                                    </Avatar>
+                                                                    <div className="min-w-0">
+                                                                        <div className="text-white text-sm font-medium truncate">{order.user?.username || '未知用户'}</div>
+                                                                        <div className="text-slate-500 text-xs truncate">{order.user?.email || order.user?.id?.slice(0, 8)}</div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="sm:w-40 min-w-0">
+                                                                    <div className="text-white text-sm truncate">{order.planName}</div>
+                                                                    <div className="text-slate-500 text-xs truncate">{order.outTradeNo}</div>
+                                                                </div>
+                                                                <div className="sm:w-28 text-left sm:text-center">
+                                                                    <div className="text-white font-semibold">¥{(order.amount / 100).toFixed(2)}</div>
+                                                                    <div className="text-xs text-slate-500">
+                                                                        {order.totalCredits} 积分
+                                                                        {order.channel && <span className="ml-1 text-blue-400">· {order.channel === 'WECHAT' ? '微信' : order.channel}</span>}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="sm:w-20 flex sm:justify-center">{getStatusBadge(order.status)}</div>
+                                                                <div className="sm:flex-1 text-left sm:text-right">
+                                                                    <div className="text-slate-400 text-sm">{formatTime(order.createdAt)}</div>
+                                                                </div>
+                                                            </motion.div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </motion.div>
+                                        )
+                                    })}
 
                                     {/* Footer */}
                                     <div className="flex flex-col items-center gap-3 pt-4">
