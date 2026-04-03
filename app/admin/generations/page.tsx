@@ -37,6 +37,15 @@ type PlatformOption = {
     prompts: { productType: string; productTypeLabel: string }[]
 }
 
+type Appeal = {
+    id: string
+    status: string
+    appealedImages: string[]
+    reason: string | null
+    refundAmount: number
+    createdAt: string
+}
+
 type Generation = {
     id: string
     productName: string
@@ -61,6 +70,7 @@ type Generation = {
     outputLanguage: string | null
     createdAt: string
     user: UserOption | null
+    appeal: Appeal | null
 }
 
 type Stats = {
@@ -780,6 +790,13 @@ export default function AdminGenerationsPage() {
                                                             <RotateCcw className="w-3 h-3" />
                                                             <span className="text-xs">-{item.refundAmount}</span>
                                                             <span className="text-[10px] text-slate-500">({refundPercent}%)</span>
+                                                        </div>
+                                                    )}
+                                                    {/* 申诉信息 */}
+                                                    {item.appeal && (
+                                                        <div className="flex items-center gap-1 text-amber-400 mt-0.5">
+                                                            <AlertCircle className="w-3 h-3" />
+                                                            <span className="text-[10px]">申诉{item.appeal.appealedImages?.length || 0}张</span>
                                                         </div>
                                                     )}
                                                 </div>

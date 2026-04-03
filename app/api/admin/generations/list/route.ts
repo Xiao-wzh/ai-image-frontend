@@ -114,6 +114,16 @@ export async function GET(req: NextRequest) {
                             image: true,
                         },
                     },
+                    appeal: {
+                        select: {
+                            id: true,
+                            status: true,
+                            appealedImages: true,
+                            reason: true,
+                            refundAmount: true,
+                            createdAt: true,
+                        },
+                    },
                 },
             }),
             prisma.generation.count({ where }),
