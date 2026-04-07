@@ -121,8 +121,9 @@ export const GENERATION_LANGUAGES = [
   { label: "韩文", value: "Korean" },
   { label: "泰文", value: "Thai" },
   { label: "越南文", value: "Vietnamese" },
-  // 印尼  巴西  葡萄牙
+  // 印尼  巴西  葡萄牙  菲律宾
   { label: "印尼", value: "Indonesia" },
+  { label: "菲律宾", value: "Filipino" },
   { label: "巴西", value: "Brazil" },
   { label: "葡萄牙", value: "Portugal" },
   { label: "西班牙", value: "Spanish" },

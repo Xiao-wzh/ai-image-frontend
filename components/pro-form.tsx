@@ -376,7 +376,7 @@ export function ProForm(props: CockpitFormProps) {
                                     initial={{ opacity: 0, y: -10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -10 }}
-                                    className="absolute z-50 mt-2 w-full bg-slate-800 border border-amber-500/20 rounded-xl overflow-hidden shadow-2xl"
+                                    className="absolute z-50 mt-2 w-full bg-slate-800 border border-amber-500/20 rounded-xl overflow-hidden shadow-2xl max-h-60 overflow-y-auto"
                                 >
                                     {GENERATION_LANGUAGES.map(lang => (
                                         <button

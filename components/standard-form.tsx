@@ -202,7 +202,7 @@ export function StandardForm(props: CockpitFormProps) {
                                     initial={{ opacity: 0, y: -10 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -10 }}
-                                    className="absolute z-50 mt-2 w-full bg-slate-800 border border-white/10 rounded-xl overflow-hidden shadow-xl"
+                                    className="absolute z-50 mt-2 w-full bg-slate-800 border border-white/10 rounded-xl overflow-hidden shadow-xl max-h-60 overflow-y-auto"
                                 >
                                     {GENERATION_LANGUAGES.map(lang => (
                                         <button
