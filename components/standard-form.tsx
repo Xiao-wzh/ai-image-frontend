@@ -273,7 +273,7 @@ export function StandardForm(props: CockpitFormProps) {
                     </div>
                 </div>
                 <div className="mt-3">
-                    <ImageUploadZone files={files} previewUrls={previewUrls} onFilesChange={onFilesChange} maxFiles={8} />
+                    <ImageUploadZone files={files} previewUrls={previewUrls} onFilesChange={onFilesChange} maxFiles={5} />
                 </div>
             </motion.div>
 
