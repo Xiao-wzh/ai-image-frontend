@@ -58,7 +58,7 @@ export const DAILY_CHECKIN_REWARD = 200
 // ==================== 注册与邀请奖励配置 ====================
 
 // 新用户注册默认赠送积分
-export const REGISTRATION_BONUS = 600
+export const REGISTRATION_BONUS = 1000
 
 // 使用邀请码注册额外奖励积分（给被邀请人）
 export const INVITE_CODE_BONUS = 200
