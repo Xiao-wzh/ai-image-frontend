@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
     const todayStart = getUTC8DayStart(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
     const tomorrowStart = new Date(todayStart.getTime() + DAY_MS)
 
-    // 3. 并发查询 6 个指标
+    // 3. 并发查询
     const [
       newUsersCount,
       generationGroups,
@@ -83,6 +83,10 @@ export async function GET(req: NextRequest) {
       paidOrders,
       completedCount,
       approvedAppeals,
+      failedCount,
+      totalAppealCount,
+      taskTypeGroups,
+      platformGroups,
     ] = await Promise.all([
       // #1 今日新增注册用户数
       prisma.user.count({
@@ -113,10 +117,34 @@ export async function GET(req: NextRequest) {
         where: { status: "COMPLETED", createdAt: { gte: todayStart, lt: tomorrowStart } },
       }),
 
-      // #6 今日申诉退款
+      // #6 今日申诉退款（已通过）
       prisma.appeal.findMany({
         where: { status: "APPROVED", createdAt: { gte: todayStart, lt: tomorrowStart } },
         select: { refundAmount: true },
+      }),
+
+      // #7 今日失败生图次数
+      prisma.generation.count({
+        where: { status: "FAILED", createdAt: { gte: todayStart, lt: tomorrowStart } },
+      }),
+
+      // #8 今日全部申诉条数（不限状态）
+      prisma.appeal.count({
+        where: { createdAt: { gte: todayStart, lt: tomorrowStart } },
+      }),
+
+      // #9 按 taskType 分组的 COMPLETED 统计
+      prisma.generation.groupBy({
+        by: ["taskType"],
+        where: { status: "COMPLETED", createdAt: { gte: todayStart, lt: tomorrowStart } },
+        _count: { id: true },
+      }),
+
+      // #10 按 platformKey 分组的 COMPLETED 统计
+      prisma.generation.groupBy({
+        by: ["platformKey"],
+        where: { status: "COMPLETED", createdAt: { gte: todayStart, lt: tomorrowStart } },
+        _count: { id: true },
       }),
     ])
 
@@ -153,7 +181,7 @@ export async function GET(req: NextRequest) {
     const aiCost = completedCount * 0.3
 
     // 首次充值人数：当天充值用户中，之前从未充值过的
-    const paidUserIds = [...new Set(paidOrders.map(o => o.userId).filter(Boolean))]
+    const paidUserIds = Array.from(new Set(paidOrders.map(o => o.userId).filter(Boolean) as string[]))
     let firstTimePaidUsers = 0
     if (paidUserIds.length > 0) {
       const previousPaidUsers = await prisma.order.findMany({
@@ -168,6 +196,51 @@ export async function GET(req: NextRequest) {
       const previouslyPaidSet = new Set(previousPaidUsers.map(o => o.userId))
       firstTimePaidUsers = paidUserIds.filter(id => !previouslyPaidSet.has(id)).length
     }
+
+    // === 深度营运指标 ===
+
+    // 活跃深度：活跃用户平均生图次数
+    const totalGenerationRequests = generationGroups.reduce((sum, g) => sum + g._count.id, 0)
+    const avgGenerationsPerActiveUser = activeUserCount > 0
+      ? Math.round(totalGenerationRequests / activeUserCount * 10) / 10 : 0
+
+    // 产品摩擦力：新用户中零生图人数及占比
+    const newUsersWithGen = new Set(generationGroups.filter(g => newUserIds.has(g.userId)).map(g => g.userId))
+    const zeroGenNewUsers = newUsersCount - newUsersWithGen.size
+    const zeroGenNewUserRate = newUsersCount > 0 ? Math.round(zeroGenNewUsers / newUsersCount * 1000) / 1000 : 0
+
+    // 系统健康度：FAILED 失败率
+    const failedRate = totalGenerationRequests > 0
+      ? Math.round(failedCount / totalGenerationRequests * 1000) / 1000 : 0
+
+    // 客诉烈度：全部申诉条数 & 申诉率
+    const appealRate = completedCount > 0
+      ? Math.round(totalAppealCount / completedCount * 1000) / 1000 : 0
+
+    // 老客复购：今日付费老用户中，之前已有过付费的（第2次及以上购买）
+    const oldPaidUserIds = Array.from(new Set(
+      paidOrders.filter(o => o.userId && !newUserIds.has(o.userId)).map(o => o.userId!)
+    ))
+    const oldPaidUsers = oldPaidUserIds.length
+    let oldRepeatPaidUsers = 0
+    if (oldPaidUserIds.length > 0) {
+      const oldUserPreviousOrders = await prisma.order.groupBy({
+        by: ["userId"],
+        where: { userId: { in: oldPaidUserIds }, status: "PAID", paidAt: { lt: todayStart } },
+        _count: { id: true },
+      })
+      oldRepeatPaidUsers = new Set(oldUserPreviousOrders.map(o => o.userId)).size
+    }
+
+    // 核心功能偏好：Top3
+    const topTaskTypes = taskTypeGroups
+      .map(g => ({ type: g.taskType || "未知", count: g._count.id }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3)
+    const topPlatforms = platformGroups
+      .map(g => ({ type: g.platformKey || "未知", count: g._count.id }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 3)
 
     // 5. 组装数据
     const reportData: DailyReportData = {
@@ -187,6 +260,16 @@ export async function GET(req: NextRequest) {
       firstTimePaidUsers,
       refundAmount,
       aiCost,
+      avgGenerationsPerActiveUser,
+      zeroGenNewUsers,
+      zeroGenNewUserRate,
+      failedRate,
+      todayAppealCount: totalAppealCount,
+      appealRate,
+      oldPaidUsers,
+      oldRepeatPaidUsers,
+      topTaskTypes,
+      topPlatforms,
     }
 
     // 6. 发送邮件

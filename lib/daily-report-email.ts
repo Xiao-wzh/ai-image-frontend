@@ -44,6 +44,28 @@ export interface DailyReportData {
   refundAmount: number
   /** 算力成本估算（元），= completedGenerations × 0.3 */
   aiCost: number
+
+  // D. 深度营运指标
+  /** 活跃用户平均生图次数 */
+  avgGenerationsPerActiveUser: number
+  /** 零生图新用户数 */
+  zeroGenNewUsers: number
+  /** 零生图新用户占比（0-1） */
+  zeroGenNewUserRate: number
+  /** 任务失败率（0-1） */
+  failedRate: number
+  /** 今日申诉总条数（不限状态） */
+  todayAppealCount: number
+  /** 申诉率 = 申诉笔数 / COMPLETED生图总数（0-1） */
+  appealRate: number
+  /** 今日付费老用户总数 */
+  oldPaidUsers: number
+  /** 其中复购老用户数（第2次及以上购买） */
+  oldRepeatPaidUsers: number
+  /** 核心功能偏好 - 按 taskType 排名前3 */
+  topTaskTypes: { type: string; count: number }[]
+  /** 核心功能偏好 - 按 platformKey 排名前3 */
+  topPlatforms: { type: string; count: number }[]
 }
 
 /** 分 → 元，保留两位小数 */
@@ -170,6 +192,62 @@ export function buildDailyReportHtml(data: DailyReportData): string {
           <td style="padding:10px 12px;color:#333;">算力成本（估算）</td>
           <td style="padding:10px 12px;text-align:right;
             ${data.aiCost === 0 ? 'color:#999;' : 'color:#f59e0b;'}">¥${data.aiCost.toFixed(2)}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- D. 深度营运指标 -->
+  <div style="padding:12px 20px 24px;">
+    <h2 style="margin:0 0 12px;font-size:16px;color:#333;border-left:4px solid #ec4899;padding-left:10px;">
+      D. 深度营运指标
+    </h2>
+    <table style="width:100%;border-collapse:collapse;border-spacing:0;font-size:14px;">
+      <thead>
+        <tr style="background:#f7f8fa;">
+          <th style="padding:10px 12px;text-align:left;color:#666;font-weight:500;border-bottom:1px solid #eee;">指标</th>
+          <th style="padding:10px 12px;text-align:right;color:#666;font-weight:500;border-bottom:1px solid #eee;">数值</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #f5f5f5;color:#333;">活跃深度（人均生图次数）</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #f5f5f5;text-align:right;font-weight:600;color:#667eea;">
+            ${data.avgGenerationsPerActiveUser.toFixed(1)}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #f5f5f5;color:#333;">产品摩擦力（零生图新用户）</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #f5f5f5;text-align:right;
+            ${data.zeroGenNewUsers === 0 ? 'color:#999;' : 'color:#ef4444;'}">
+            ${data.zeroGenNewUsers} 人（${(data.zeroGenNewUserRate * 100).toFixed(1)}%）</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #f5f5f5;color:#333;">系统健康度（任务失败率）</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #f5f5f5;text-align:right;
+            ${data.failedRate > 0.05 ? 'color:#ef4444;' : data.failedRate === 0 ? 'color:#10b981;' : 'color:#f59e0b;'}">
+            ${(data.failedRate * 100).toFixed(1)}%</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #f5f5f5;color:#333;">客诉烈度（申诉 ${data.todayAppealCount} 笔）</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #f5f5f5;text-align:right;
+            ${data.appealRate === 0 ? 'color:#999;' : 'color:#ef4444;'}">
+            申诉率 ${(data.appealRate * 100).toFixed(1)}%</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #f5f5f5;color:#333;">老客复购（付费老用户 ${data.oldPaidUsers} 人）</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #f5f5f5;text-align:right;
+            ${data.oldRepeatPaidUsers === 0 ? 'color:#999;' : 'color:#764ba2;'}">
+            复购 ${data.oldRepeatPaidUsers} 人${data.oldPaidUsers > 0 ? `（${(data.oldRepeatPaidUsers / data.oldPaidUsers * 100).toFixed(1)}%）` : ''}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;border-bottom:1px solid #f5f5f5;color:#333;">功能偏好 · 任务类型 Top3</td>
+          <td style="padding:10px 12px;border-bottom:1px solid #f5f5f5;text-align:right;">
+            ${data.topTaskTypes.length > 0 ? data.topTaskTypes.map(t => `${t.type}(${t.count})`).join('、') : '<span style="color:#999;">暂无数据</span>'}</td>
+        </tr>
+        <tr>
+          <td style="padding:10px 12px;color:#333;">功能偏好 · 平台 Top3</td>
+          <td style="padding:10px 12px;text-align:right;">
+            ${data.topPlatforms.length > 0 ? data.topPlatforms.map(t => `${t.type}(${t.count})`).join('、') : '<span style="color:#999;">暂无数据</span>'}</td>
         </tr>
       </tbody>
     </table>
