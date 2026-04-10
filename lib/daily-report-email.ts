@@ -38,6 +38,8 @@ export interface DailyReportData {
   oldUserRevenue: number
   /** 今日已付订单数 */
   paidOrderCount: number
+  /** 今日首次充值人数（历史从未充值过的用户） */
+  firstTimePaidUsers: number
   /** 今日申诉退款总额（分） */
   refundAmount: number
   /** 算力成本估算（元），= completedGenerations × 0.3 */
@@ -103,6 +105,7 @@ export function buildDailyReportHtml(data: DailyReportData): string {
       <tr>
         ${metricCard('完成生成次数', String(data.completedGenerations), '#f59e0b', zeroClass(data.completedGenerations))}
         ${metricCard('已付订单数', String(data.paidOrderCount), '#10b981', zeroClass(data.paidOrderCount))}
+        ${metricCard('首次充值人数', String(data.firstTimePaidUsers), '#ec4899', zeroClass(data.firstTimePaidUsers))}
       </tr>
     </table>
   </div>

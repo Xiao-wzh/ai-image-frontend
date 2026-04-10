@@ -4,6 +4,7 @@
  * GET /api/cron/daily-report
  * - Vercel Cron 自动触发（通过 query ?secret=xxx 鉴权）
  * - 外部手动调用（通过 Authorization: Bearer xxx 鉴权）
+ * - 指定日期查询：?date=2026-04-09（仅返回数据，不发送邮件）
  */
 
 import { NextRequest, NextResponse } from "next/server"
@@ -49,13 +50,30 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    // 2. 时区计算
-    const utc8Now = getUTC8Now()
-    const todayStart = getUTC8DayStart(utc8Now.getFullYear(), utc8Now.getMonth(), utc8Now.getDate())
-    const tomorrowStart = new Date(todayStart.getTime() + DAY_MS)
+    // 2. 解析日期参数（格式：YYYY-MM-DD），不传则默认今天
+    const dateParam = req.nextUrl.searchParams.get("date")
+    let targetDate: Date
+    let dateStr: string
+    let weekday: string
 
-    const dateStr = `${utc8Now.getFullYear()}-${String(utc8Now.getMonth() + 1).padStart(2, "0")}-${String(utc8Now.getDate()).padStart(2, "0")}`
-    const weekday = WEEKDAYS[utc8Now.getDay()]
+    if (dateParam) {
+      const parsed = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateParam)
+      if (!parsed) {
+        return NextResponse.json({ error: "date 格式无效，应为 YYYY-MM-DD" }, { status: 400 })
+      }
+      const [, y, m, d] = parsed
+      targetDate = new Date(Number(y), Number(m) - 1, Number(d))
+      dateStr = `${y}-${m}-${d}`
+      weekday = WEEKDAYS[targetDate.getDay()]
+    } else {
+      const utc8Now = getUTC8Now()
+      targetDate = utc8Now
+      dateStr = `${utc8Now.getFullYear()}-${String(utc8Now.getMonth() + 1).padStart(2, "0")}-${String(utc8Now.getDate()).padStart(2, "0")}`
+      weekday = WEEKDAYS[utc8Now.getDay()]
+    }
+
+    const todayStart = getUTC8DayStart(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate())
+    const tomorrowStart = new Date(todayStart.getTime() + DAY_MS)
 
     // 3. 并发查询 6 个指标
     const [
@@ -134,6 +152,23 @@ export async function GET(req: NextRequest) {
     // 算力成本估算：完成次数 × 0.3 元
     const aiCost = completedCount * 0.3
 
+    // 首次充值人数：当天充值用户中，之前从未充值过的
+    const paidUserIds = [...new Set(paidOrders.map(o => o.userId).filter(Boolean))]
+    let firstTimePaidUsers = 0
+    if (paidUserIds.length > 0) {
+      const previousPaidUsers = await prisma.order.findMany({
+        where: {
+          status: "PAID",
+          userId: { in: paidUserIds },
+          paidAt: { lt: todayStart },
+        },
+        select: { userId: true },
+        distinct: ["userId"],
+      })
+      const previouslyPaidSet = new Set(previousPaidUsers.map(o => o.userId))
+      firstTimePaidUsers = paidUserIds.filter(id => !previouslyPaidSet.has(id)).length
+    }
+
     // 5. 组装数据
     const reportData: DailyReportData = {
       date: dateStr,
@@ -149,6 +184,7 @@ export async function GET(req: NextRequest) {
       newUserRevenue,
       oldUserRevenue,
       paidOrderCount: paidOrders.length,
+      firstTimePaidUsers,
       refundAmount,
       aiCost,
     }
