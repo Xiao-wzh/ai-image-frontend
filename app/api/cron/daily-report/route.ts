@@ -205,7 +205,7 @@ export async function GET(req: NextRequest) {
       ? Math.round(totalGenerationRequests / activeUserCount * 10) / 10 : 0
 
     // 产品摩擦力：新用户中零生图人数及占比
-    const newUsersWithGen = new Set(generationGroups.filter(g => newUserIds.has(g.userId)).map(g => g.userId))
+    const newUsersWithGen = new Set(generationGroups.filter(g => g.userId && newUserIds.has(g.userId)).map(g => g.userId!))
     const zeroGenNewUsers = newUsersCount - newUsersWithGen.size
     const zeroGenNewUserRate = newUsersCount > 0 ? Math.round(zeroGenNewUsers / newUsersCount * 1000) / 1000 : 0
 
