@@ -12,6 +12,8 @@ interface ImageUploadZoneProps {
   previewUrls: string[]
   onFilesChange: (files: File[]) => void
   maxFiles?: number
+  /** 单文件最大字节数，超出时 toast 提示 */
+  maxSize?: number
 }
 
 export function ImageUploadZone({
@@ -19,6 +21,7 @@ export function ImageUploadZone({
   previewUrls,
   onFilesChange,
   maxFiles = 8,
+  maxSize,
 }: ImageUploadZoneProps) {
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -33,7 +36,12 @@ export function ImageUploadZone({
 
   const onDropRejected = useCallback((fileRejections: FileRejection[]) => {
     if (fileRejections.length > 0) {
-      toast.error("不支持该格式文件，请上传 JPG、PNG 格式图片")
+      const err = fileRejections[0].errors[0]
+      if (err?.code === "file-too-large") {
+        toast.error("文件过大，请上传 4MB 以内的图片")
+      } else {
+        toast.error("不支持该格式文件，请上传 JPG、PNG、WebP 格式图片")
+      }
     }
   }, [])
 
@@ -43,7 +51,9 @@ export function ImageUploadZone({
     accept: {
       "image/png": [".png"],
       "image/jpeg": [".jpg", ".jpeg"],
+      "image/webp": [".webp"],
     },
+    maxSize,
     maxFiles: maxFiles - files.length,
     disabled: files.length >= maxFiles,
   })

@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useSession } from "next-auth/react"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
-import { AlertCircle, Crown, Eye, Loader2, RefreshCw, Pencil } from "lucide-react"
+import { AlertCircle, Crown, Eye, Loader2, RefreshCw, Pencil, AlertTriangle } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { zhCN } from "date-fns/locale"
 
@@ -31,6 +31,7 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
     const status = (item.status || "COMPLETED").toUpperCase()
     const isPending = status === "PENDING" || status === "PROCESSING"
     const isFailed = status === "FAILED"
+    const isPartialSuccess = status === "PARTIAL_SUCCESS"
     const isCompleted = status === "COMPLETED"
     const isEditing = (item.editingImageIndexes?.length || 0) > 0
     const isPro = item.qualityMode === "PRO"
@@ -58,7 +59,8 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
 
     // 使用缩略图减少 CDN 流量
     // 优先使用生成图片的第一张，没有时才用原图
-    const cover = isCompleted
+    // 部分成功也能看到已生成的图片
+    const cover = (isCompleted || isPartialSuccess)
         ? getThumbnailUrl(item.generatedImages?.[0] || item.originalImage?.[0], 200)
         : null
 
@@ -125,6 +127,10 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
             toast.error("生成失败", { description: "该任务未生成成功，积分已退回" })
             return
         }
+        if (isPartialSuccess) {
+            onViewDetails()
+            return
+        }
         onViewDetails()
     }
 
@@ -136,7 +142,8 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                 className={cn(
                     "flex items-center gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/40 hover:border-white/20 hover:bg-slate-900/60 transition-all",
                     isFailed && "border-red-500/20 bg-red-950/20 hover:border-red-400/30",
-                    isPro && !isFailed && "border-amber-500/15 hover:border-amber-400/25",
+                    isPartialSuccess && "border-amber-500/20 bg-amber-950/10 hover:border-amber-400/30",
+                    isPro && !isFailed && !isPartialSuccess && "border-amber-500/15 hover:border-amber-400/25",
                 )}
             >
                 {/* Left: Thumbnail */}
@@ -145,7 +152,7 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                         "relative w-20 h-20 rounded-xl overflow-hidden shrink-0 flex items-center justify-center",
                         isPending && "bg-gradient-to-br from-slate-800/80 to-slate-900/80",
                         isFailed && "bg-gradient-to-br from-slate-900/60 to-red-950/40",
-                        isCompleted && "bg-black/20"
+                        (isCompleted || isPartialSuccess) && "bg-black/20"
                     )}
                 >
                     {isPending ? (
@@ -157,6 +164,11 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                         <div className="flex flex-col items-center justify-center gap-1">
                             <AlertCircle className="w-6 h-6 text-red-400" />
                             <span className="text-[10px] text-red-400">失败</span>
+                        </div>
+                    ) : isPartialSuccess && !cover ? (
+                        <div className="flex flex-col items-center justify-center gap-1">
+                            <AlertTriangle className="w-6 h-6 text-amber-400" />
+                            <span className="text-[10px] text-amber-400">部分失败</span>
                         </div>
                     ) : cover ? (
                         // eslint-disable-next-line @next/next/no-img-element
@@ -176,7 +188,7 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                     )}
 
                     {/* PRO 角标 */}
-                    {isPro && !isPending && !isFailed && (
+                    {isPro && !isPending && !isFailed && !isPartialSuccess && (
                         <div className="absolute top-1 left-1 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-orange-500 shadow-sm">
                             <Crown className="w-2.5 h-2.5 text-white" />
                             <span className="text-[9px] text-white font-bold">PRO</span>
@@ -203,6 +215,11 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                         {isFailed && (
                             <Badge className="bg-red-500/20 text-red-400 border-red-500/30 text-[10px] px-1.5 py-0">
                                 失败
+                            </Badge>
+                        )}
+                        {isPartialSuccess && (
+                            <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-[10px] px-1.5 py-0">
+                                部分失败
                             </Badge>
                         )}
                         {isEditing && (
@@ -242,6 +259,24 @@ export function TaskItem({ item, onViewDetails, onRegenerateSuccess }: TaskItemP
                             {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: zhCN })}
                         </span>
                     </div>
+
+                    {/* 退款提示 */}
+                    {isFailed && (
+                        <div className="flex items-center gap-1 mt-1.5">
+                            <span className="text-[11px] text-emerald-400/80">积分已退还</span>
+                            {item.refundAmount != null && item.refundAmount > 0 && (
+                                <span className="text-[11px] text-emerald-400/60">（{item.refundAmount} 积分）</span>
+                            )}
+                        </div>
+                    )}
+                    {isPartialSuccess && (
+                        <div className="flex items-center gap-1 mt-1.5">
+                            <span className="text-[11px] text-amber-400/80">部分图片未生成，积分已退还差额</span>
+                            {item.refundAmount != null && item.refundAmount > 0 && (
+                                <span className="text-[11px] text-amber-400/60">（{item.refundAmount} 积分）</span>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Right: Actions */}

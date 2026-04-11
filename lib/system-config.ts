@@ -22,6 +22,7 @@ export const DEFAULT_COSTS: SystemCostConfig = {
     IMAGE_EDIT_COST: 45, // 图片编辑（重绘）消耗积分
     COPYWRITING_COST: 15, // 智能文案生成消耗积分
     PRO_COST_PER_IMAGE: 100, // PRO模式每张图消耗积分（与前端保持一致）
+    VIDEO_SORA2_COST_PER_SECOND: 50, // Sora-2 视频每秒积分
 }
 
 

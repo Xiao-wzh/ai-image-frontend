@@ -25,6 +25,9 @@ export type SystemCostConfig = {
 
     // PRO 模式
     PRO_COST_PER_IMAGE: number
+
+    // 视频生成
+    VIDEO_SORA2_COST_PER_SECOND: number   // Sora-2 每秒积分，默认 50
 }
 
 // All cost config keys
@@ -42,6 +45,7 @@ export const SYSTEM_COST_KEYS: SystemCostKey[] = [
     "IMAGE_EDIT_COST",
     "COPYWRITING_COST",
     "PRO_COST_PER_IMAGE",
+    "VIDEO_SORA2_COST_PER_SECOND",
 ]
 
 // Descriptions for admin UI
@@ -56,4 +60,5 @@ export const SYSTEM_COST_DESCRIPTIONS: Record<SystemCostKey, string> = {
     IMAGE_EDIT_COST: "图片编辑（重绘）消耗积分",
     COPYWRITING_COST: "智能文案生成消耗积分",
     PRO_COST_PER_IMAGE: "PRO模式每张图消耗积分",
+    VIDEO_SORA2_COST_PER_SECOND: "Sora-2 视频每秒积分（默认50）",
 }

@@ -2,19 +2,26 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ListTodo, RefreshCw, Search, ChevronLeft, ChevronRight, Filter } from "lucide-react"
+import { ListTodo, RefreshCw, Search, ChevronLeft, ChevronRight, Filter, Image as ImageIcon, Video } from "lucide-react"
 
 import { Sidebar } from "@/components/sidebar"
 import { TopBanner } from "@/components/top-banner"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { TaskItem } from "@/components/task-item"
+import { VideoTaskItem } from "@/components/video-task-item"
 import { HistoryDetailDialog } from "@/components/history-detail-dialog"
+import { VideoDetailDialog } from "@/components/video-detail-dialog"
 import type { HistoryItem } from "@/components/history-card"
+import type { VideoHistoryItem } from "@/components/video-history-card"
 
 type StatusFilter = "all" | "pending" | "completed" | "failed"
+type TabType = "image" | "video"
 
 export default function TasksPage() {
+    const [tab, setTab] = useState<TabType>("image")
+
+    // 图片状态
     const [items, setItems] = useState<HistoryItem[]>([])
     const [loading, setLoading] = useState(true)
     const [total, setTotal] = useState(0)
@@ -23,58 +30,100 @@ export default function TasksPage() {
     const [debouncedQuery, setDebouncedQuery] = useState("")
     const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
 
+    // 图片详情弹窗
     const [open, setOpen] = useState(false)
     const [activeIndex, setActiveIndex] = useState(0)
 
+    // 视频状态
+    const [videoItems, setVideoItems] = useState<VideoHistoryItem[]>([])
+    const [videoLoading, setVideoLoading] = useState(true)
+    const [videoTotal, setVideoTotal] = useState(0)
+    const [videoPage, setVideoPage] = useState(1)
+
+    // 视频详情弹窗
+    const [videoDetailOpen, setVideoDetailOpen] = useState(false)
+    const [activeVideoItem, setActiveVideoItem] = useState<VideoHistoryItem | null>(null)
+
     const limit = 10
-    const POLL_INTERVAL_MS = 6000 // 降频：原来 3000ms，改为 6000ms
+    const POLL_INTERVAL_MS = 6000
 
     // Debounce search query
     useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedQuery(searchQuery)
-            setPage(1) // Reset to first page on search
+            setPage(1)
         }, 300)
         return () => clearTimeout(timer)
     }, [searchQuery])
 
+    // Tab 切换时重置分页
+    useEffect(() => {
+        setPage(1)
+        setVideoPage(1)
+    }, [tab])
+
+    // ── 图片数据获取 ──
     const fetchPage = useCallback(async (pageNum: number, query: string) => {
         const params = new URLSearchParams()
+        params.set("type", "image")
         params.set("limit", String(limit))
         params.set("offset", String((pageNum - 1) * limit))
-        if (query) {
-            params.set("query", query)
-        }
+        if (query) params.set("query", query)
 
         const res = await fetch(`/api/history?${params.toString()}`)
-        if (!res.ok) {
-            throw new Error(`请求失败: ${res.status}`)
-        }
+        if (!res.ok) throw new Error(`请求失败: ${res.status}`)
         const data = await res.json()
-        const newItems = (data.items ?? []) as HistoryItem[]
-
-        setItems(newItems)
+        setItems((data.items ?? []) as HistoryItem[])
         setTotal(data?.page?.total ?? 0)
     }, [])
 
-    // Fetch when page or search changes
-    useEffect(() => {
-        let cancelled = false
-            ; (async () => {
-                setLoading(true)
-                try {
-                    await fetchPage(page, debouncedQuery)
-                } finally {
-                    if (!cancelled) setLoading(false)
-                }
-            })()
-        return () => {
-            cancelled = true
-        }
-    }, [page, debouncedQuery, fetchPage])
+    // ── 视频数据获取 ──
+    const fetchVideoPage = useCallback(async (pageNum: number) => {
+        const params = new URLSearchParams()
+        params.set("type", "video")
+        params.set("limit", String(limit))
+        params.set("offset", String((pageNum - 1) * limit))
 
-    // Auto-refresh when PENDING/PROCESSING items exist OR any item has editingImageIndexes
+        const res = await fetch(`/api/history?${params.toString()}`)
+        if (!res.ok) throw new Error(`请求失败: ${res.status}`)
+        const data = await res.json()
+        setVideoItems((data.items ?? []) as VideoHistoryItem[])
+        setVideoTotal(data?.page?.total ?? 0)
+    }, [])
+
+    // 图片数据获取
     useEffect(() => {
+        if (tab !== "image") return
+        let cancelled = false
+        ;(async () => {
+            setLoading(true)
+            try {
+                await fetchPage(page, debouncedQuery)
+            } finally {
+                if (!cancelled) setLoading(false)
+            }
+        })()
+        return () => { cancelled = true }
+    }, [tab, page, debouncedQuery, fetchPage])
+
+    // 视频数据获取
+    useEffect(() => {
+        if (tab !== "video") return
+        let cancelled = false
+        ;(async () => {
+            setVideoLoading(true)
+            try {
+                await fetchVideoPage(videoPage)
+            } finally {
+                if (!cancelled) setVideoLoading(false)
+            }
+        })()
+        return () => { cancelled = true }
+    }, [tab, videoPage, fetchVideoPage])
+
+    // 图片自动刷新
+    useEffect(() => {
+        if (tab !== "image") return
         const hasPendingOrProcessing = items.some((x) => {
             const s = String(x.status || "").toUpperCase()
             return s === "PENDING" || s === "PROCESSING"
@@ -87,7 +136,6 @@ export default function TasksPage() {
 
         const tick = async () => {
             if (cancelled) return
-            // tab 隐藏时跳过本次轮询，避免后台标签页持续消耗 DB 连接
             if (document.hidden) {
                 if (!cancelled) timer = setTimeout(tick, POLL_INTERVAL_MS)
                 return
@@ -106,37 +154,71 @@ export default function TasksPage() {
             cancelled = true
             if (timer) clearTimeout(timer)
         }
-    }, [items, page, debouncedQuery, fetchPage])
+    }, [tab, items, page, debouncedQuery, fetchPage])
+
+    // 视频自动刷新
+    useEffect(() => {
+        if (tab !== "video") return
+        const hasPendingOrProcessing = videoItems.some((x) => {
+            const s = String(x.status || "").toUpperCase()
+            return s === "PENDING" || s === "PROCESSING"
+        })
+        if (!hasPendingOrProcessing) return
+
+        let cancelled = false
+        let timer: any
+
+        const tick = async () => {
+            if (cancelled) return
+            if (document.hidden) {
+                if (!cancelled) timer = setTimeout(tick, POLL_INTERVAL_MS)
+                return
+            }
+            try {
+                await fetchVideoPage(videoPage)
+            } catch {
+                // ignore
+            } finally {
+                if (!cancelled) timer = setTimeout(tick, POLL_INTERVAL_MS)
+            }
+        }
+
+        timer = setTimeout(tick, POLL_INTERVAL_MS)
+        return () => {
+            cancelled = true
+            if (timer) clearTimeout(timer)
+        }
+    }, [tab, videoItems, videoPage, fetchVideoPage])
 
     const handleRefresh = () => {
-        fetchPage(page, debouncedQuery)
+        if (tab === "image") fetchPage(page, debouncedQuery)
+        else fetchVideoPage(videoPage)
     }
 
-    // Filter items by status (client-side for immediate feedback)
+    // 图片状态过滤
     const filteredItems = useMemo(() => {
         if (statusFilter === "all") return items
         return items.filter((item) => {
             const s = String(item.status || "").toUpperCase()
             if (statusFilter === "pending") return s === "PENDING" || s === "PROCESSING"
             if (statusFilter === "completed") return s === "COMPLETED"
-            if (statusFilter === "failed") return s === "FAILED"
+            if (statusFilter === "failed") return s === "FAILED" || s === "PARTIAL_SUCCESS"
             return true
         })
     }, [items, statusFilter])
 
-    const totalPages = Math.ceil(total / limit) || 1
-    const empty = !loading && items.length === 0
-    const pendingCount = items.filter((x) => {
+    const currentTotalPages = Math.ceil((tab === "image" ? total : videoTotal) / limit) || 1
+    const currentPage = tab === "image" ? page : videoPage
+    const setCurrentPage = tab === "image" ? setPage : setVideoPage
+    const currentTotal = tab === "image" ? total : videoTotal
+
+    const empty = !loading && tab === "image" && items.length === 0 ||
+                  !videoLoading && tab === "video" && videoItems.length === 0
+
+    const pendingCount = (tab === "image" ? items : videoItems).filter((x) => {
         const s = String(x.status || "").toUpperCase()
         return s === "PENDING" || s === "PROCESSING"
     }).length
-
-    const statusOptions: { value: StatusFilter; label: string }[] = [
-        { value: "all", label: "全部" },
-        { value: "pending", label: "进行中" },
-        { value: "completed", label: "已完成" },
-        { value: "failed", label: "失败" },
-    ]
 
     return (
         <div className="flex h-screen bg-slate-950">
@@ -181,174 +263,67 @@ export default function TasksPage() {
                                 </div>
                             </div>
 
-                            {/* Search and Filter Bar */}
-                            <div className="flex flex-col sm:flex-row gap-3 mb-6">
-                                {/* Search Input */}
-                                <div className="relative flex-1">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                                    <input
-                                        type="text"
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        placeholder="搜索产品名称..."
-                                        className="w-full h-10 pl-10 pr-4 rounded-xl bg-slate-900/60 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
-                                    />
+                            {/* Tab 切换 + 搜索 */}
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+                                {/* Tab 按钮 */}
+                                <div className="flex items-center bg-white/5 rounded-xl p-1 border border-white/10 shrink-0">
+                                    <button
+                                        onClick={() => setTab("image")}
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                                            tab === "image"
+                                                ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg"
+                                                : "text-slate-400 hover:text-white hover:bg-white/5"
+                                        }`}
+                                    >
+                                        <ImageIcon className="w-4 h-4" />
+                                        图片任务
+                                    </button>
+                                    <button
+                                        onClick={() => setTab("video")}
+                                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                                            tab === "video"
+                                                ? "bg-gradient-to-r from-purple-600 to-pink-600 text-white shadow-lg"
+                                                : "text-slate-400 hover:text-white hover:bg-white/5"
+                                        }`}
+                                    >
+                                        <Video className="w-4 h-4" />
+                                        视频任务
+                                    </button>
                                 </div>
 
-                                {/* Status Filter */}
-                                {/* <div className="flex items-center gap-2">
-                                    <Filter className="w-4 h-4 text-slate-400" />
-                                    <div className="flex rounded-xl overflow-hidden border border-white/10 bg-slate-900/60">
-                                        {statusOptions.map((opt) => (
-                                            <button
-                                                key={opt.value}
-                                                onClick={() => setStatusFilter(opt.value)}
-                                                className={`px-3 py-2 text-sm transition-all ${statusFilter === opt.value
-                                                        ? "bg-purple-600 text-white"
-                                                        : "text-slate-400 hover:text-white hover:bg-white/5"
-                                                    }`}
-                                            >
-                                                {opt.label}
-                                            </button>
-                                        ))}
+                                {/* 搜索（仅图片模式） */}
+                                {tab === "image" && (
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                        <input
+                                            type="text"
+                                            value={searchQuery}
+                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                            placeholder="搜索产品名称..."
+                                            className="w-full h-10 pl-10 pr-4 rounded-xl bg-slate-900/60 border border-white/10 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
+                                        />
                                     </div>
-                                </div> */}
+                                )}
                             </div>
 
-                            {/* Task List */}
-                            {loading ? (
-                                <div className="space-y-3">
-                                    {Array.from({ length: 5 }).map((_, i) => (
-                                        <div
-                                            key={i}
-                                            className="flex items-center gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/40"
-                                        >
-                                            <Skeleton className="w-20 h-20 rounded-xl bg-white/10" />
-                                            <div className="flex-1 space-y-2">
-                                                <Skeleton className="h-4 w-1/3 bg-white/10" />
-                                                <Skeleton className="h-3 w-1/4 bg-white/10" />
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <Skeleton className="h-8 w-20 bg-white/10 rounded-lg" />
-                                                <Skeleton className="h-8 w-24 bg-white/10 rounded-lg" />
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            ) : empty ? (
-                                <div className="glass rounded-3xl p-10 border border-white/10 text-center">
-                                    <div className="mx-auto w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
-                                        <ListTodo className="w-7 h-7 text-purple-300" />
-                                    </div>
-                                    <div className="text-white font-semibold text-lg">
-                                        {debouncedQuery ? "没有找到匹配的任务" : "暂无任务"}
-                                    </div>
-                                    <div className="text-slate-400 text-sm mt-2">
-                                        {debouncedQuery ? "尝试其他搜索关键词" : "去首页生成一张九宫格作品吧。"}
-                                    </div>
-                                    {!debouncedQuery && (
-                                        <div className="mt-6">
-                                            <Button
-                                                asChild
-                                                className="rounded-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white"
-                                            >
-                                                <a href="/">去生成</a>
-                                            </Button>
-                                        </div>
-                                    )}
-                                </div>
-                            ) : filteredItems.length === 0 ? (
-                                <div className="glass rounded-3xl p-10 border border-white/10 text-center">
-                                    <div className="mx-auto w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
-                                        <Filter className="w-7 h-7 text-purple-300" />
-                                    </div>
-                                    <div className="text-white font-semibold text-lg">没有符合筛选条件的任务</div>
-                                    <div className="text-slate-400 text-sm mt-2">
-                                        当前页面没有"{statusOptions.find((o) => o.value === statusFilter)?.label}"状态的任务
-                                    </div>
-                                </div>
-                            ) : (
-                                <>
-                                    <div className="space-y-3">
-                                        <AnimatePresence mode="popLayout">
-                                            {filteredItems.map((item, idx) => (
-                                                <TaskItem
-                                                    key={item.id}
-                                                    item={item}
-                                                    onViewDetails={() => {
-                                                        setActiveIndex(items.findIndex((i) => i.id === item.id))
-                                                        setOpen(true)
-                                                    }}
-                                                    onRegenerateSuccess={handleRefresh}
-                                                />
-                                            ))}
-                                        </AnimatePresence>
-                                    </div>
-
-                                    {/* Pagination */}
-                                    <div className="flex items-center justify-between mt-8">
-                                        <div className="text-sm text-slate-400">
-                                            共 {total} 条记录，第 {page}/{totalPages} 页
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Button
-                                                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                                                disabled={page <= 1}
-                                                variant="outline"
-                                                size="sm"
-                                                className="border-white/10 bg-white/5 hover:bg-white/10 text-white disabled:opacity-50"
-                                            >
-                                                <ChevronLeft className="w-4 h-4" />
-                                                上一页
-                                            </Button>
-
-                                            {/* Page numbers */}
-                                            <div className="flex items-center gap-1">
-                                                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                                    let pageNum: number
-                                                    if (totalPages <= 5) {
-                                                        pageNum = i + 1
-                                                    } else if (page <= 3) {
-                                                        pageNum = i + 1
-                                                    } else if (page >= totalPages - 2) {
-                                                        pageNum = totalPages - 4 + i
-                                                    } else {
-                                                        pageNum = page - 2 + i
-                                                    }
-                                                    return (
-                                                        <button
-                                                            key={pageNum}
-                                                            onClick={() => setPage(pageNum)}
-                                                            className={`w-8 h-8 rounded-lg text-sm transition-all ${page === pageNum
-                                                                ? "bg-purple-600 text-white"
-                                                                : "text-slate-400 hover:bg-white/10 hover:text-white"
-                                                                }`}
-                                                        >
-                                                            {pageNum}
-                                                        </button>
-                                                    )
-                                                })}
-                                            </div>
-
-                                            <Button
-                                                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                                                disabled={page >= totalPages}
-                                                variant="outline"
-                                                size="sm"
-                                                className="border-white/10 bg-white/5 hover:bg-white/10 text-white disabled:opacity-50"
-                                            >
-                                                下一页
-                                                <ChevronRight className="w-4 h-4" />
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </>
-                            )}
+                            {/* 内容区域 */}
+                            <AnimatePresence mode="wait">
+                                {tab === "image" ? (
+                                    <motion.div key="image-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                                        {renderImageTasks()}
+                                    </motion.div>
+                                ) : (
+                                    <motion.div key="video-tab" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                                        {renderVideoTasks()}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                     </div>
                 </main>
             </div>
 
+            {/* 图片详情弹窗 */}
             <HistoryDetailDialog
                 open={open}
                 onOpenChange={setOpen}
@@ -356,6 +331,200 @@ export default function TasksPage() {
                 initialIndex={activeIndex}
                 onGenerateSuccess={handleRefresh}
             />
+
+            {/* 视频详情弹窗 */}
+            <VideoDetailDialog
+                open={videoDetailOpen}
+                onOpenChange={setVideoDetailOpen}
+                item={activeVideoItem}
+            />
         </div>
     )
+
+    /** 图片任务列表 */
+    function renderImageTasks() {
+        if (loading) return renderSkeleton()
+
+        if (items.length === 0) {
+            return (
+                <div className="glass rounded-3xl p-10 border border-white/10 text-center">
+                    <div className="mx-auto w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
+                        <ListTodo className="w-7 h-7 text-purple-300" />
+                    </div>
+                    <div className="text-white font-semibold text-lg">
+                        {debouncedQuery ? "没有找到匹配的任务" : "暂无图片任务"}
+                    </div>
+                    <div className="text-slate-400 text-sm mt-2">
+                        {debouncedQuery ? "尝试其他搜索关键词" : "去首页生成一张九宫格作品吧。"}
+                    </div>
+                    {!debouncedQuery && (
+                        <div className="mt-6">
+                            <Button asChild className="rounded-xl bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 text-white">
+                                <a href="/">去生成</a>
+                            </Button>
+                        </div>
+                    )}
+                </div>
+            )
+        }
+
+        if (filteredItems.length === 0) {
+            return (
+                <div className="glass rounded-3xl p-10 border border-white/10 text-center">
+                    <div className="mx-auto w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
+                        <Filter className="w-7 h-7 text-purple-300" />
+                    </div>
+                    <div className="text-white font-semibold text-lg">没有符合筛选条件的任务</div>
+                </div>
+            )
+        }
+
+        return (
+            <>
+                <div className="space-y-3">
+                    <AnimatePresence mode="popLayout">
+                        {filteredItems.map((item) => (
+                            <TaskItem
+                                key={item.id}
+                                item={item}
+                                onViewDetails={() => {
+                                    setActiveIndex(items.findIndex((i) => i.id === item.id))
+                                    setOpen(true)
+                                }}
+                                onRegenerateSuccess={handleRefresh}
+                            />
+                        ))}
+                    </AnimatePresence>
+                </div>
+                {renderPagination()}
+            </>
+        )
+    }
+
+    /** 视频任务列表 */
+    function renderVideoTasks() {
+        if (videoLoading) return renderSkeleton()
+
+        if (videoItems.length === 0) {
+            return (
+                <div className="glass rounded-3xl p-10 border border-white/10 text-center">
+                    <div className="mx-auto w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center mb-4">
+                        <Video className="w-7 h-7 text-violet-300" />
+                    </div>
+                    <div className="text-white font-semibold text-lg">暂无视频任务</div>
+                    <div className="text-slate-400 text-sm mt-2">去生成一个视频吧</div>
+                    <div className="mt-6">
+                        <Button asChild className="rounded-xl bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white">
+                            <a href="/video/sora2">去生成</a>
+                        </Button>
+                    </div>
+                </div>
+            )
+        }
+
+        return (
+            <>
+                <div className="space-y-3">
+                    <AnimatePresence mode="popLayout">
+                        {videoItems.map((item) => (
+                            <VideoTaskItem
+                                key={item.id}
+                                item={item}
+                                onViewDetails={() => {
+                                    setActiveVideoItem(item)
+                                    setVideoDetailOpen(true)
+                                }}
+                                onRefreshSuccess={handleRefresh}
+                            />
+                        ))}
+                    </AnimatePresence>
+                </div>
+                {renderPagination()}
+            </>
+        )
+    }
+
+    /** 骨架屏 */
+    function renderSkeleton() {
+        return (
+            <div className="space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/40">
+                        <Skeleton className="w-20 h-20 rounded-xl bg-white/10" />
+                        <div className="flex-1 space-y-2">
+                            <Skeleton className="h-4 w-1/3 bg-white/10" />
+                            <Skeleton className="h-3 w-1/4 bg-white/10" />
+                        </div>
+                        <div className="flex gap-2">
+                            <Skeleton className="h-8 w-20 bg-white/10 rounded-lg" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        )
+    }
+
+    /** 分页 */
+    function renderPagination() {
+        if (currentTotalPages <= 1) return null
+
+        return (
+            <div className="flex items-center justify-between mt-8">
+                <div className="text-sm text-slate-400">
+                    共 {currentTotal} 条记录，第 {currentPage}/{currentTotalPages} 页
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button
+                        onClick={() => setCurrentPage((p: number) => Math.max(1, p - 1))}
+                        disabled={currentPage <= 1}
+                        variant="outline"
+                        size="sm"
+                        className="border-white/10 bg-white/5 hover:bg-white/10 text-white disabled:opacity-50"
+                    >
+                        <ChevronLeft className="w-4 h-4" />
+                        上一页
+                    </Button>
+
+                    <div className="flex items-center gap-1">
+                        {Array.from({ length: Math.min(5, currentTotalPages) }, (_, i) => {
+                            let pageNum: number
+                            if (currentTotalPages <= 5) {
+                                pageNum = i + 1
+                            } else if (currentPage <= 3) {
+                                pageNum = i + 1
+                            } else if (currentPage >= currentTotalPages - 2) {
+                                pageNum = currentTotalPages - 4 + i
+                            } else {
+                                pageNum = currentPage - 2 + i
+                            }
+                            return (
+                                <button
+                                    key={pageNum}
+                                    onClick={() => setCurrentPage(pageNum)}
+                                    className={`w-8 h-8 rounded-lg text-sm transition-all ${
+                                        currentPage === pageNum
+                                            ? "bg-purple-600 text-white"
+                                            : "text-slate-400 hover:bg-white/10 hover:text-white"
+                                    }`}
+                                >
+                                    {pageNum}
+                                </button>
+                            )
+                        })}
+                    </div>
+
+                    <Button
+                        onClick={() => setCurrentPage((p: number) => Math.min(currentTotalPages, p + 1))}
+                        disabled={currentPage >= currentTotalPages}
+                        variant="outline"
+                        size="sm"
+                        className="border-white/10 bg-white/5 hover:bg-white/10 text-white disabled:opacity-50"
+                    >
+                        下一页
+                        <ChevronRight className="w-4 h-4" />
+                    </Button>
+                </div>
+            </div>
+        )
+    }
 }

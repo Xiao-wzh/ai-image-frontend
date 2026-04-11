@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
 import useSWR from "swr"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser, BarChart3, FileText, Users, Receipt, Video, Zap, BookOpen, ExternalLink, Copy } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser, BarChart3, FileText, Users, Receipt, Video, Zap, BookOpen, ExternalLink, Copy, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -23,7 +24,7 @@ type NavItem = {
 const navItems: NavItem[] = [
   { icon: Sparkles, label: "AI 生图", href: "/" },
   { icon: Copy, label: "AI 克隆图片", href: "/clone", badge: "new" },
-  // { icon: Video, label: "AI 视频", href: "/video" },
+  { icon: Video, label: "AI 视频", href: "/video/sora2" },
   { icon: FileText, label: "智能商品描述", href: "/copywriting" },
   { icon: Droplets, label: "水印模板", href: "/settings/watermark" },
   { icon: Eraser, label: "智能去水印", href: "/watermark", badge: "limited_free" },
@@ -70,18 +71,58 @@ export function Sidebar() {
   const [isPricingModalOpen, setIsPricingModalOpen] = useState(false)
   const loginModal = useLoginModal()
 
-  // 用 SWR 轮询轻量级 pending-count 接口
-  // count > 0 时每 5 秒刷新；count = 0 时停止轮询（refreshInterval 返回 0 = 不轮询）
+  // 视频任务 sync 节流：避免并发调用
+  const syncingRef = useRef(false)
+  const notifiedIdsRef = useRef<Set<string>>(new Set())
+
+  // 用 SWR 轮询轻量级 pending-count 接口（纯计数）
   const { data: pendingData } = useSWR(
-    session?.user ? "/api/tasks/pending-count" : null, // 未登录不发请求
+    session?.user ? "/api/tasks/pending-count" : null,
     (url: string) => fetch(url).then((r) => r.json()),
     {
-      refreshInterval: (data) => ((data?.count ?? 0) > 0 ? 5000 : 0),
-      revalidateOnFocus: true,   // tab 重新激活时立即刷新
-      dedupingInterval: 4000,
+      // 有任务 10 秒，没任务 30 秒
+      refreshInterval: (data) => {
+        const count = data?.count ?? 0
+        return count > 0 ? 10000 : 30000
+      },
+      revalidateOnFocus: true,
+      dedupingInterval: 8000,
+      // 每次 SWR 拿到新数据后，如果有进行中视频任务 → 调 sync
+      onSuccess: async (data) => {
+        if ((data?.pendingVideoCount ?? 0) <= 0) return
+        if (syncingRef.current) return
+        syncingRef.current = true
+        try {
+          const res = await fetch("/api/video/sora2/sync", { method: "POST" })
+          if (!res.ok) return
+          const syncData = await res.json()
+
+          // sync 返回刚完成的任务 → 弹 toast
+          for (const item of (syncData.completed ?? []) as { id: string; prompt: string }[]) {
+            if (notifiedIdsRef.current.has(item.id)) continue
+            notifiedIdsRef.current.add(item.id)
+            const shortPrompt = item.prompt.length > 30
+              ? item.prompt.slice(0, 30) + "..."
+              : item.prompt
+            toast.success("视频生成完成", {
+              description: shortPrompt,
+              action: {
+                label: "查看",
+                onClick: () => router.push("/video/sora2"),
+              },
+              duration: 8000,
+            })
+          }
+        } catch {
+          // 静默失败
+        } finally {
+          syncingRef.current = false
+        }
+      },
     }
   )
   const pendingCount = pendingData?.count ?? 0
+  const pendingVideoCount = pendingData?.pendingVideoCount ?? 0
 
   // 获取头像 fallback 文字
   const getFallbackText = () => {
@@ -122,6 +163,8 @@ export function Sidebar() {
                 : pathname?.startsWith(item.href)
 
             const showPendingBadge = item.badge === "pending" && pendingCount > 0
+            // "AI 视频" 入口有进行中任务时显示专属角标
+            const showVideoBadge = item.href === "/video/sora2" && pendingVideoCount > 0
 
             return (
               <button
@@ -131,11 +174,19 @@ export function Sidebar() {
                   "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium relative",
                   isActive
                     ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg glow-blue"
-                    : "text-slate-400 hover:text-white hover:bg-white/5",
+                    : showVideoBadge
+                      ? "text-violet-300 hover:text-white hover:bg-violet-500/10"
+                      : "text-slate-400 hover:text-white hover:bg-white/5",
                 )}
               >
                 <item.icon className="w-4 h-4" />
                 <span className="truncate">{item.label}</span>
+                {showVideoBadge && (
+                  <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-violet-500/20 text-violet-300 px-2 py-0.5 text-[10px] font-semibold shrink-0 animate-pulse border border-violet-500/30">
+                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                    生成中
+                  </span>
+                )}
                 {showPendingBadge && (
                   <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 animate-pulse shrink-0">
                     {pendingCount > 9 ? "9+" : pendingCount}

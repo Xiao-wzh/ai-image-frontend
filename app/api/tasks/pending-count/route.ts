@@ -5,8 +5,8 @@ import prisma from "@/lib/prisma"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-// GET /api/tasks/pending-count → { count: number }
-// 轻量级接口，仅返回 PENDING/PROCESSING 任务数量（约 30B），替代原来拉取 50 条完整记录（约 89KB）
+// GET /api/tasks/pending-count
+// 纯计数接口，只返回待处理任务数量，不做状态同步
 export async function GET() {
   const session = await auth()
   const userId = session?.user?.id || null
@@ -15,13 +15,17 @@ export async function GET() {
   }
 
   try {
-    const count = await prisma.generation.count({
-      where: {
-        userId,
-        status: { in: ["PENDING", "PROCESSING"] },
-      },
+    const pendingStatuses = { in: ["PENDING", "PROCESSING"] as string[] }
+
+    const [imageCount, videoCount] = await Promise.all([
+      prisma.generation.count({ where: { userId, status: pendingStatuses } }),
+      prisma.videoGeneration.count({ where: { userId, status: pendingStatuses } }),
+    ])
+
+    return NextResponse.json({
+      count: imageCount + videoCount,
+      pendingVideoCount: videoCount,
     })
-    return NextResponse.json({ count })
   } catch (err: any) {
     const message = err?.message || String(err)
     console.error("❌ pending-count API 错误:", message)

@@ -64,7 +64,13 @@
       "Bash(jq \".nodes[] | select\\(.name | contains\\(\"\"AI\"\"\\) or contains\\(\"\"图片\"\"\\) or contains\\(\"\"构建\"\"\\) or contains\\(\"\"Prompt\"\"\\)\\) | {name, type, parameters: .parameters}\")",
       "mcp__zai-mcp-server__analyze_image",
       "Bash(bash)",
-      "Bash(skillhub install:*)"
+      "Bash(skillhub install:*)",
+      "Bash(python:*)",
+      "Read(//c/Users/Administrator/.claude/skills/**)",
+      "Bash(powershell Compress-Archive -Path \"n8n-operator\\\\*\" -DestinationPath \"n8n-operator.skill\" -Force)",
+      "Bash(powershell Compress-Archive -Path \"n8n-operator\\\\*\" -DestinationPath \"n8n-operator.zip\" -Force)",
+      "Bash(mv n8n-operator.zip n8n-operator.skill)",
+      "WebSearch"
     ]
   }
 }

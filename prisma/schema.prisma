@@ -37,6 +37,7 @@ model User {
   redemptionCodes RedemptionCode[] @relation("UserRedemptionCodes")
   appeals         Appeal[]
   watermarkTemplates WatermarkTemplate[]
+  videoGenerations  VideoGeneration[]
   
   // 推广佣金记录
   referralRewardsGiven    ReferralRecord[] @relation("InviterRewards") /// 作为邀请人获得的佣金
@@ -584,4 +585,34 @@ model Order {
   snapshot    Json?                         /// 下单时的商品快照
 
   @@index([planId])
+}
+
+/// 视频生成任务表
+model VideoGeneration {
+  id              String    @id @default(cuid())
+  userId          String                          /// 用户ID
+  taskId          String    @unique               /// 远程任务ID（云雾API返回）
+  model           String                          /// 模型名称: sora-2, veo3, ...
+  prompt          String    @db.Text              /// 视频描述
+  seconds         Int       @default(10)          /// 视频时长（秒）
+  size            String    @default("720x1280")  /// 分辨率
+  referenceImage  String?   @db.Text              /// 参考图URL（可选，Sora-2 用）
+  modelParams     Json?                           /// 模型特定参数（首尾帧、多图等，不同模型存不同结构）
+  status          String    @default("PENDING")   /// 状态: PENDING / PROCESSING / COMPLETED / FAILED
+  progress        Int       @default(0)           /// 进度百分比 0-100
+  videoUrl        String?   @db.Text              /// 生成的视频URL
+  errorMsg        String?                         /// 错误信息
+  cost            Int       @default(0)           /// 实际消耗积分（seconds × costPerSecond）
+  costPerSecond   Int       @default(0)           /// 快照：创建时的每秒单价
+  hasRefunded     Boolean   @default(false)       /// 是否已退款（防重复退款）
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  completedAt     DateTime?                       /// 完成时间
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([taskId])
+  @@index([createdAt])
 }
