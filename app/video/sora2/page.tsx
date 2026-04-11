@@ -38,8 +38,8 @@ type VideoOrientation = "portrait" | "landscape"
 
 // 示例提示词
 const EXAMPLE_PROMPTS = [
-  "一杯热咖啡放在木质桌面，蒸汽缓缓升起，背景是模糊的窗景",
-  "化妆品瓶身特写，金色光线下缓缓旋转，水滴在瓶身上滑落",
+  "做一个产品宣发视频，要求顶级运镜和质感，出现的营销文字不允许发生任何变形和乱码，每个笔画必须清晰可见，风格参照赫莲娜品牌的产品宣发，中文",
+  "帮我做一个抖音产品宣传视频，这款三合一剃须刀，随时替换刀头",
   "运动鞋在空中翻转，背景是纯色渐变，光影动态变化",
 ]
 
@@ -198,6 +198,12 @@ export default function Sora2VideoPage() {
               <motion.p variants={fadeUp} custom={2} className="text-sm sm:text-base text-slate-400 max-w-xl">
                 上传参考图并描述你想要的视频画面，Sora 2 将为你生成高质量 720p 视频
               </motion.p>
+              <motion.div variants={fadeUp} custom={3} className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-2.5 max-w-xl">
+                <Zap className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-200/80 leading-relaxed">
+                  <span className="font-medium text-amber-300">提示：</span>视频质量完全取决于你的提示词。平台不预设任何提示词。
+                </p>
+              </motion.div>
             </motion.div>
 
             {/* ── 主控制台 ── */}
@@ -205,7 +211,7 @@ export default function Sora2VideoPage() {
               variants={fadeUp}
               initial="hidden"
               animate="visible"
-              custom={3}
+              custom={4}
               className={[
                 "relative rounded-[20px] sm:rounded-[28px] border backdrop-blur-xl shadow-2xl overflow-hidden",
                 "transition-all duration-500",
@@ -464,7 +470,7 @@ export default function Sora2VideoPage() {
               variants={fadeUp}
               initial="hidden"
               animate="visible"
-              custom={4}
+              custom={5}
               className="mt-10 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4"
             >
               {[

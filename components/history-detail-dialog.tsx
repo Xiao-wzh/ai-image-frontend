@@ -46,6 +46,8 @@ import { getThumbnailUrl } from "@/lib/cdnUrl"
 import { useCosts } from "@/hooks/use-costs"
 import type { HistoryItem } from "@/components/history-card"
 import { ImageEditorModal } from "@/components/image-editor-modal"
+import { ImageViewerModal } from "@/components/image-viewer-modal"
+import { ImageWithLoader } from "@/components/ui/image-with-loader"
 
 
 
@@ -108,12 +110,10 @@ export function HistoryDetailDialog({
   // Detail Page specific view mode (SCROLL = mobile preview, SLICES = grid of slices)
   const [detailViewMode, setDetailViewMode] = useState<"SCROLL" | "SLICES">("SCROLL")
 
-  // Preview modal for zooming into a single slice
-  const [previewImage, setPreviewImage] = useState<string | null>(null)
-
-  // Image editor modal state
+  // Image viewer/editor modal state
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null)
+  const [isEditing, setIsEditing] = useState(false)
 
   // In-place editing state
   const [editingIndex, setEditingIndex] = useState<number | null>(null)
@@ -192,6 +192,28 @@ export function HistoryDetailDialog({
 
   const canPrev = index > 0
   const canNext = index < items.length - 1
+
+  // 键盘快捷键：左右方向键切换历史记录项
+  useEffect(() => {
+    if (!open) return
+    // 如果 ImageViewerModal 或 ImageEditorModal 打开，不响应
+    if (selectedImage) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return
+
+      if (e.key === "ArrowLeft" && canPrev) {
+        e.preventDefault()
+        setIndex((v) => Math.max(0, v - 1))
+      } else if (e.key === "ArrowRight" && canNext) {
+        e.preventDefault()
+        setIndex((v) => Math.min(items.length - 1, v + 1))
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [open, canPrev, canNext, selectedImage, items.length])
 
   const title = useMemo(() => item?.productName || "作品详情", [item])
 
@@ -757,8 +779,7 @@ export function HistoryDetailDialog({
                           transition={{ duration: 0.2, delay: i * 0.02 }}
                           className="w-full"
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
+                          <ImageWithLoader
                             src={getThumbnailUrl(img, 800) || img}
                             alt={`Slice ${i + 1}`}
                             className="w-full h-auto block"
@@ -770,7 +791,7 @@ export function HistoryDetailDialog({
                   </div>
                 ) : item?.taskType === "DETAIL_PAGE" && detailViewMode === "SLICES" ? (
                   /* Detail Page: SLICES Mode (Grid) - with edit functionality */
-                  <div className={`grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/40 ${previewImage || selectedImage ? "pointer-events-none" : ""}`}>
+                  <div className={`grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4 p-4 rounded-2xl border border-white/10 bg-slate-900/40 ${selectedImage ? "pointer-events-none" : ""}`}>
                     {displayImages.map((img, i) => {
                       const isSelected = isAppealMode && selectedAppealImages.includes(img)
                       return (
@@ -796,9 +817,10 @@ export function HistoryDetailDialog({
                                   : [...prev, img]
                               )
                             } else {
-                              // 正常模式：打开编辑
+                              // 正常模式：打开查看器
                               setSelectedImage(img)
                               setSelectedImageIndex(i)
+                              setIsEditing(false)
                             }
                           }}
                           disabled={!!item?.editingImageIndexes?.length}
@@ -807,11 +829,10 @@ export function HistoryDetailDialog({
                               ? "重绘中..."
                               : isAppealMode
                               ? isSelected ? "点击取消选择" : "点击选择"
-                              : "点击查看/编辑"
+                              : "点击查看"
                           }
                         >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={getThumbnailUrl(img, 400) || img} alt={`Slice ${i + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                          <ImageWithLoader src={getThumbnailUrl(img, 400) || img} alt={`Slice ${i + 1}`} className="w-full h-full object-cover" />
 
                           {/* 申诉选择模式：选中标记 */}
                           {isAppealMode && isSelected && (
@@ -835,8 +856,8 @@ export function HistoryDetailDialog({
                             </div>
                           ) : !isAppealMode ? (
                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2">
-                              <Pencil className="w-6 h-6 text-white mb-1" />
-                              <span className="text-xs text-white/80">点击编辑</span>
+                              <Eye className="w-6 h-6 text-white mb-1" />
+                              <span className="text-xs text-white/80">点击查看</span>
                             </div>
                           ) : null}
 
@@ -849,23 +870,28 @@ export function HistoryDetailDialog({
                   </div>
 
                 ) : (
-                  /* Main Image: 同时渲染 Grid 和 Full 视图，用 CSS 控制显示，实现图片缓存 */
-                  <>
+                  /* Main Image: 条件渲染 Grid 或 Full 视图 */
+                  <AnimatePresence mode="wait">
                     {/* Grid Mode */}
-                    <div className={cn(
-                      (() => {
-                        const isPro = item?.qualityMode === "PRO"
-                        const count = displayImages.length
-                        // PRO 模式：1-2 张用 2 列，3+ 张用 3 列（避免单张图片太大）
-                        // 标准模式：3-5 列
-                        return isPro
-                          ? count <= 2 ? "grid-cols-2" : "grid-cols-3"
-                          : "grid-cols-3 sm:grid-cols-4 lg:grid-cols-5"
-                      })(),
-                      "grid gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2",
-                      previewImage || selectedImage ? "pointer-events-none" : "",
-                      viewMode === "grid" ? "" : "hidden"
-                    )}>
+                    {viewMode === "grid" && (
+                      <motion.div
+                        key="grid"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className={cn(
+                          (() => {
+                            const isPro = item?.qualityMode === "PRO"
+                            const count = displayImages.length
+                            return isPro
+                              ? count <= 2 ? "grid-cols-2" : "grid-cols-3"
+                              : "grid-cols-3 sm:grid-cols-4 lg:grid-cols-5"
+                          })(),
+                          "grid gap-2 rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 p-2",
+                          selectedImage ? "pointer-events-none" : ""
+                        )}
+                      >
                       {displayImages.map((img, i) => {
                         const isPro = item?.qualityMode === "PRO"
                         const isSelected = isAppealMode && selectedAppealImages.includes(img)
@@ -893,6 +919,7 @@ export function HistoryDetailDialog({
                               } else {
                                 setSelectedImage(img)
                                 setSelectedImageIndex(i)
+                                setIsEditing(false)
                               }
                             }}
                             disabled={!!item?.editingImageIndexes?.length}
@@ -901,14 +928,13 @@ export function HistoryDetailDialog({
                                 ? "重绘中..."
                                 : isAppealMode
                                 ? isSelected ? "点击取消选择" : "点击选择"
-                                : "点击查看/编辑"
+                                : "点击查看"
                             }
                           >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
+                            <ImageWithLoader
                               src={getThumbnailUrl(img, 400) || img}
                               alt={`Generated ${i + 1}`}
-                              className={`w-full h-full ${isPro ? "object-contain" : "object-cover"}`}
+                              className={isPro ? "object-contain" : "object-cover"}
                             />
 
                             {isAppealMode && isSelected && (
@@ -930,28 +956,34 @@ export function HistoryDetailDialog({
                               </div>
                             ) : !isAppealMode ? (
                               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1">
-                                <Pencil className="w-6 h-6 text-white drop-shadow-md" />
-                                <span className="text-xs text-white/80">点击编辑</span>
+                                <Eye className="w-6 h-6 text-white drop-shadow-md" />
+                                <span className="text-xs text-white/80">点击查看</span>
                               </div>
                             ) : null}
                           </motion.button>
                         )
                       })}
-                    </div>
+                    </motion.div>
+                    )}
 
                     {/* Full Mode */}
-                    <div className={cn(
-                      "relative rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 flex items-center justify-center p-4",
-                      viewMode === "full" ? "" : "hidden"
-                    )}>
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={getThumbnailUrl(fullImageUrl, 1200) || fullImageUrl || ""}
-                        alt="Generated Full"
-                        className="max-w-full max-h-[70vh] object-contain"
-                      />
-                    </div>
-                  </>
+                    {viewMode === "full" && (
+                      <motion.div
+                        key="full"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="relative rounded-2xl overflow-hidden border border-white/10 bg-slate-900/40 flex items-center justify-center p-4"
+                      >
+                        <ImageWithLoader
+                          src={getThumbnailUrl(fullImageUrl, 1200) || fullImageUrl || ""}
+                          alt="Generated Full"
+                          className="max-w-full max-h-[70vh] object-contain"
+                        />
+                    </motion.div>
+                    )}
+                  </AnimatePresence>
                 )}
               </motion.div>
             </AnimatePresence>
@@ -1302,17 +1334,29 @@ export function HistoryDetailDialog({
         document.body
       )}
 
-      {/* Preview Image Modal */}
-      {previewImage && (
-        <PreviewImageModal
-          src={previewImage}
-          onClose={() => setPreviewImage(null)}
+      {/* 图片查看器 Modal */}
+      {selectedImage && selectedImageIndex !== null && !isEditing && (
+        <ImageViewerModal
+          images={displayImages}
+          currentIndex={selectedImageIndex}
+          productName={productName}
+          onClose={() => {
+            setSelectedImage(null)
+            setSelectedImageIndex(null)
+            setIsEditing(false)
+          }}
+          onIndexChange={(newIndex) => {
+            setSelectedImageIndex(newIndex)
+            setSelectedImage(displayImages[newIndex])
+          }}
+          onEdit={(imageUrl, idx) => {
+            setIsEditing(true)
+          }}
         />
       )}
 
-      {/* Image Editor Modal */}
-      {/* Image Editor Modal */}
-      {selectedImage && selectedImageIndex !== null && (
+      {/* 图片编辑器 Modal */}
+      {selectedImage && selectedImageIndex !== null && isEditing && (
         <ImageEditorModal
           imageUrl={selectedImage}
           productName={productName}
@@ -1370,64 +1414,6 @@ export function HistoryDetailDialog({
         />
       )}
     </>
-  )
-}
-
-// Preview Image Modal component - rendered within the parent
-function PreviewImageModal({ src, onClose }: { src: string; onClose: () => void }) {
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 pointer-events-auto"
-      onPointerDownCapture={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-      }}
-      onPointerUpCapture={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-      }}
-      onClick={(e) => {
-        e.preventDefault()
-        e.stopPropagation()
-        onClose()
-      }}
-    >
-      <div
-        onPointerDownCapture={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-        }}
-        onPointerUpCapture={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-        }}
-        onClick={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-        }}
-        className="relative max-w-[92vw] max-h-[92vh]"
-      >
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            onClose()
-          }}
-          className="absolute top-2 right-2 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full"
-        >
-          <X className="w-5 h-5" />
-        </Button>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={getThumbnailUrl(src, 1500) || src}
-          alt="Preview"
-          className="max-w-full max-h-[92vh] object-contain rounded-xl shadow-2xl"
-        />
-      </div>
-    </div>,
-    document.body
   )
 }
 

@@ -5,9 +5,11 @@ import { createPortal } from "react-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 import { X, Pencil, Download, Loader2, Sparkles, ArrowLeft } from "lucide-react"
+import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { downloadImage } from "@/lib/utils"
+import { getThumbnailUrl } from "@/lib/cdnUrl"
 import { useCosts } from "@/hooks/use-costs"
 
 type EditorMode = "VIEW" | "EDIT"
@@ -28,7 +30,7 @@ export function ImageEditorModal({
     const { costs } = useCosts()
     const [mode, setMode] = useState<EditorMode>("VIEW")
     const [prompt, setPrompt] = useState("")
-
+    const thumbnailUrl = getThumbnailUrl(imageUrl, 1200) || imageUrl
 
     // Handle save/download current image
     const handleSaveImage = () => {
@@ -43,7 +45,6 @@ export function ImageEditorModal({
         }
         // Close modal and delegate to parent
         onEdit(prompt.trim())
-        toast.success("提交成功，请点击详情页查看")
     }
 
     if (typeof document === "undefined") return null
@@ -68,7 +69,7 @@ export function ImageEditorModal({
             {/* Main content area - image fills most space */}
             <div className="flex-1 flex items-center justify-center p-2 overflow-hidden">
                 <AnimatePresence mode="wait">
-                    {/* VIEW Mode */}
+                    {/* VIEW Mode - 支持缩放 */}
                     {mode === "VIEW" && (
                         <motion.div
                             key="view"
@@ -77,16 +78,31 @@ export function ImageEditorModal({
                             exit={{ opacity: 0 }}
                             className="w-full h-full flex items-center justify-center"
                         >
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img
-                                src={imageUrl}
-                                alt="Preview"
-                                className="max-w-full max-h-full object-contain"
-                            />
+                            <TransformWrapper
+                                initialScale={1}
+                                minScale={0.5}
+                                maxScale={5}
+                                doubleClick={{ mode: "toggle", step: 2 }}
+                                wheel={{ step: 0.2 }}
+                                pinch={{ step: 0.5 }}
+                            >
+                                <TransformComponent
+                                    wrapperClass="!w-full !h-full"
+                                    contentClass="!w-full !h-full flex items-center justify-center"
+                                >
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                        src={thumbnailUrl}
+                                        alt="Preview"
+                                        className="max-w-full max-h-full object-contain select-none"
+                                        draggable={false}
+                                    />
+                                </TransformComponent>
+                            </TransformWrapper>
                         </motion.div>
                     )}
 
-                    {/* EDIT Mode */}
+                    {/* EDIT Mode - 禁用手势 */}
                     {mode === "EDIT" && (
                         <motion.div
                             key="edit"
@@ -99,7 +115,7 @@ export function ImageEditorModal({
                             <div className="flex-1 flex items-center justify-center min-h-0">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
                                 <img
-                                    src={imageUrl}
+                                    src={thumbnailUrl}
                                     alt="Edit base"
                                     className="max-w-full max-h-full object-contain rounded-lg"
                                 />

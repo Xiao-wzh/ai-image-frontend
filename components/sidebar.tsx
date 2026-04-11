@@ -21,20 +21,44 @@ type NavItem = {
   badge?: "pending" | "limited_free" | "new" // Special badge type
 }
 
-const navItems: NavItem[] = [
-  { icon: Sparkles, label: "AI 生图", href: "/" },
-  { icon: Copy, label: "AI 克隆图片", href: "/clone", badge: "new" },
-  { icon: Video, label: "AI 视频", href: "/video/sora2" },
-  { icon: FileText, label: "智能商品描述", href: "/copywriting" },
-  { icon: Droplets, label: "水印模板", href: "/settings/watermark" },
-  { icon: Eraser, label: "智能去水印", href: "/watermark", badge: "limited_free" },
-  { icon: Images, label: "我的作品", href: "/history" },
-  { icon: ListTodo, label: "任务队列", href: "/tasks", badge: "pending" },
-  { icon: Wallet, label: "积分流水", href: "/credits" },
-  { icon: Receipt, label: "充值记录", href: "/orders" },
-  { icon: ShieldCheck, label: "售后记录", href: "/appeals" },
-  { icon: Gift, label: "邀请赚积分", href: "/referral" },
+type NavGroup = {
+  label: string
+  items: NavItem[]
+}
 
+const navGroups: NavGroup[] = [
+  {
+    label: "AI 创作",
+    items: [
+      { icon: Sparkles, label: "AI 生图", href: "/" },
+      { icon: Copy, label: "AI 克隆图片", href: "/clone" },
+      { icon: Video, label: "AI 视频", href: "/video/sora2", badge: "new" },
+      { icon: FileText, label: "智能商品描述", href: "/copywriting" },
+    ],
+  },
+  {
+    label: "图片工具",
+    items: [
+      { icon: Droplets, label: "水印模板", href: "/settings/watermark" },
+      { icon: Eraser, label: "智能去水印", href: "/watermark", badge: "limited_free" },
+    ],
+  },
+  {
+    label: "我的",
+    items: [
+      { icon: Images, label: "我的作品", href: "/history" },
+      { icon: ListTodo, label: "任务队列", href: "/tasks", badge: "pending" },
+    ],
+  },
+  {
+    label: "账户",
+    items: [
+      { icon: Wallet, label: "积分流水", href: "/credits" },
+      { icon: Receipt, label: "充值记录", href: "/orders" },
+      { icon: ShieldCheck, label: "售后记录", href: "/appeals" },
+      { icon: Gift, label: "邀请赚积分", href: "/referral" },
+    ],
+  },
 ]
 
 
@@ -154,52 +178,66 @@ export function Sidebar() {
         </div>
 
         {/* Navigation - scrollable */}
-        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => {
-            // 对于 "/" 和 "/clone" 需要精确匹配，其他路径使用 startsWith
-            const isActive =
-              item.href === "/" || item.href === "/clone"
-                ? pathname === item.href
-                : pathname?.startsWith(item.href)
+        <nav className="flex-1 px-4 py-2 overflow-y-auto">
+          {navGroups.map((group, gi) => (
+            <div key={group.label}>
+              {/* 分组标题 */}
+              <div className="text-[11px] text-slate-500 px-4 py-2 font-medium tracking-wider">
+                {group.label}
+              </div>
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  // 对于 "/" 和 "/clone" 需要精确匹配，其他路径使用 startsWith
+                  const isActive =
+                    item.href === "/" || item.href === "/clone"
+                      ? pathname === item.href
+                      : pathname?.startsWith(item.href)
 
-            const showPendingBadge = item.badge === "pending" && pendingCount > 0
-            // "AI 视频" 入口有进行中任务时显示专属角标
-            const showVideoBadge = item.href === "/video/sora2" && pendingVideoCount > 0
+                  const showPendingBadge = item.badge === "pending" && pendingCount > 0
+                  // "AI 视频" 入口有进行中任务时显示专属角标
+                  const showVideoBadge = item.href === "/video/sora2" && pendingVideoCount > 0
 
-            return (
-              <button
-                key={item.label}
-                onClick={() => router.push(item.href)}
-                className={cn(
-                  "w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 text-sm font-medium relative",
-                  isActive
-                    ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg glow-blue"
-                    : showVideoBadge
-                      ? "text-violet-300 hover:text-white hover:bg-violet-500/10"
-                      : "text-slate-400 hover:text-white hover:bg-white/5",
-                )}
-              >
-                <item.icon className="w-4 h-4" />
-                <span className="truncate">{item.label}</span>
-                {showVideoBadge && (
-                  <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-violet-500/20 text-violet-300 px-2 py-0.5 text-[10px] font-semibold shrink-0 animate-pulse border border-violet-500/30">
-                    <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                    生成中
-                  </span>
-                )}
-                {showPendingBadge && (
-                  <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 animate-pulse shrink-0">
-                    {pendingCount > 9 ? "9+" : pendingCount}
-                  </span>
-                )}
-                {item.badge === "new" && (
-                  <span className="ml-auto inline-flex items-center rounded-full bg-gradient-to-r from-blue-500 to-purple-500 px-2 py-0.5 text-[10px] font-semibold text-white shrink-0 animate-pulse">
-                    NEW
-                  </span>
-                )}
-              </button>
-            )
-          })}
+                  return (
+                    <button
+                      key={item.label}
+                      onClick={() => router.push(item.href)}
+                      className={cn(
+                        "w-full flex items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 text-sm font-medium relative",
+                        isActive
+                          ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg glow-blue"
+                          : showVideoBadge
+                            ? "text-violet-300 hover:text-white hover:bg-violet-500/10"
+                            : "text-slate-400 hover:text-white hover:bg-white/5",
+                      )}
+                    >
+                      <item.icon className="w-4 h-4" />
+                      <span className="truncate">{item.label}</span>
+                      {showVideoBadge && (
+                        <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-violet-500/20 text-violet-300 px-2 py-0.5 text-[10px] font-semibold shrink-0 animate-pulse border border-violet-500/30">
+                          <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                          生成中
+                        </span>
+                      )}
+                      {showPendingBadge && (
+                        <span className="ml-auto min-w-[18px] h-[18px] flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold px-1 animate-pulse shrink-0">
+                          {pendingCount > 9 ? "9+" : pendingCount}
+                        </span>
+                      )}
+                      {item.badge === "new" && (
+                        <span className="ml-auto inline-flex items-center rounded-full bg-gradient-to-r from-blue-500 to-purple-500 px-2 py-0.5 text-[10px] font-semibold text-white shrink-0 animate-pulse">
+                          NEW
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+              {/* 分组之间的分隔线（最后一组不加） */}
+              {gi < navGroups.length - 1 && (
+                <div className="my-2 mx-4 border-t border-white/5" />
+              )}
+            </div>
+          ))}
 
           {/* 合伙人中心 - 仅 agentLevel > 0 可见 */}
           {session?.user?.agentLevel && session.user.agentLevel > 0 && (() => {
