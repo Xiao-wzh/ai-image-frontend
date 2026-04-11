@@ -1,55 +1,37 @@
 import { NextRequest, NextResponse } from "next/server"
-import { tosClient, TOS_BUCKET } from "@/lib/tos"
 import { extractObjectKey } from "@/lib/cdnUrl"
 
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
+
+// CDN 域名（利用 CDN 缓存，减少 TOS 回源流出）
+const CDN_HOST = process.env.NEXT_PUBLIC_CDN_HOST || "img.wzhdjy.xin"
 
 function sanitizeFilename(name: string) {
   return name.replace(/[\\/:*?"<>|]/g, "-")
 }
 
 /**
- * 生成 TOS 预签名下载 URL
- * 浏览器可直接从 TOS 下载，完全绕过服务器带宽
+ * 从图片 URL 提取 CDN 下载地址
+ * 走 CDN 缓存，同一图片重复下载命中缓存，减少 TOS 回源
  */
-function getPresignedDownloadUrl(imageUrl: string, filename: string): string {
+function getCdnDownloadUrl(imageUrl: string): string {
   const rawKey = extractObjectKey(imageUrl)
   if (!rawKey) throw new Error("无法提取对象 Key")
 
   // 分离路径和查询参数
   const [objectKey, queryString] = rawKey.split("?")
 
-  // 解析所有查询参数为对象
-  const queryParams: Record<string, string> = {}
   if (queryString) {
-    queryString.split("&").forEach(param => {
-      const [key, value] = param.split("=")
-      if (key && value) {
-        queryParams[key] = decodeURIComponent(value)
-      }
-    })
+    return `https://${CDN_HOST}/${objectKey}?${queryString}`
   }
-
-  // 生成预签名 URL，通过 query 参数传入 x-tos-process（会包含在签名中）
-  const signedUrl = tosClient.getPreSignedUrl({
-    method: "GET",
-    bucket: TOS_BUCKET,
-    key: objectKey,
-    expires: 600, // 10分钟有效
-    query: queryParams, // 包含 x-tos-process 等参数
-    response: {
-      contentDisposition: `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
-    },
-  })
-
-  return signedUrl
+  return `https://${CDN_HOST}/${objectKey}`
 }
 
 /**
  * GET /api/download-images?url=...&filename=...
- * 单张图片下载：302 重定向到 TOS 预签名 URL
- * 浏览器直接从 TOS 下载，服务器带宽消耗 ≈ 0
+ * 单张图片下载：服务端从 CDN 代理下载，附带 Content-Disposition 头
+ * 流量走 CDN 缓存（服务端→CDN），浏览器得到正确的下载响应
  */
 export async function GET(req: NextRequest) {
   try {
@@ -61,14 +43,31 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "缺少 url 参数" }, { status: 400 })
     }
 
-    const signedUrl = getPresignedDownloadUrl(url, filename)
+    const cdnUrl = getCdnDownloadUrl(url)
 
-    // 302 重定向，浏览器直接去 TOS 下载
-    return NextResponse.redirect(signedUrl, { status: 302 })
+    // 从 CDN 拉取图片（命中 CDN 缓存则不回源 TOS）
+    const imageResponse = await fetch(cdnUrl)
+
+    if (!imageResponse.ok) {
+      throw new Error(`CDN 请求失败: ${imageResponse.status}`)
+    }
+
+    const contentType = imageResponse.headers.get("content-type") || "image/png"
+    const imageBuffer = await imageResponse.arrayBuffer()
+
+    // 返回图片数据，带 Content-Disposition 触发浏览器下载
+    return new NextResponse(imageBuffer, {
+      status: 200,
+      headers: {
+        "Content-Type": contentType,
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`,
+        "Cache-Control": "private, max-age=3600",
+      },
+    })
   } catch (error: any) {
-    console.error("单张下载预签名错误:", error)
+    console.error("单张下载错误:", error)
     return NextResponse.json(
-      { error: "生成下载链接失败", message: error?.message || String(error) },
+      { error: "下载失败", message: error?.message || String(error) },
       { status: 500 }
     )
   }
@@ -76,8 +75,8 @@ export async function GET(req: NextRequest) {
 
 /**
  * POST /api/download-images
- * 批量下载：返回预签名 URL 数组，由前端直接从 TOS 拉取并打包 ZIP
- * 服务器带宽消耗 ≈ 0（只返回一个小 JSON）
+ * 批量下载：返回 CDN URL 数组，由前端直接从 CDN 拉取并打包 ZIP
+ * 流量走 CDN 缓存，减少 TOS 直出
  */
 export async function POST(req: NextRequest) {
   try {
@@ -87,23 +86,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "无效的图片URL数组" }, { status: 400 })
     }
 
-    // 并发生成所有预签名 URL（纯本地计算，无网络请求，极快）
-    const results = await Promise.all(
-      imageUrls.map(async (url: string, index: number) => {
-        try {
-          const filename = `image-${index + 1}.png`
-          const signedUrl = getPresignedDownloadUrl(url, filename)
-          return { success: true, signedUrl }
-        } catch (error) {
-          console.error(`生成第 ${index + 1} 张预签名 URL 失败:`, error)
-          return { success: false, error: error instanceof Error ? error.message : "生成失败" }
-        }
-      })
-    )
+    // 生成 CDN 下载 URL（纯本地计算，无网络请求）
+    const results = imageUrls.map((url: string, index: number) => {
+      try {
+        const downloadUrl = getCdnDownloadUrl(url)
+        return { success: true, signedUrl: downloadUrl }
+      } catch (error) {
+        console.error(`生成第 ${index + 1} 张 CDN URL 失败:`, error)
+        return { success: false, error: error instanceof Error ? error.message : "生成失败" }
+      }
+    })
 
     return NextResponse.json({ success: true, images: results })
   } catch (error: any) {
-    console.error("批量下载预签名错误:", error)
+    console.error("批量下载链接生成错误:", error)
     return NextResponse.json(
       { error: "服务器错误", message: error instanceof Error ? error.message : "未知错误" },
       { status: 500 }

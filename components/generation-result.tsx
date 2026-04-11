@@ -230,7 +230,7 @@ export function GenerationResult({
                   <div
                     className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer"
                     // onClick={() => onPreview(img)}
-                    onClick={() => onPreview(getThumbnailUrl(img, 1500) || img)}
+                    onClick={() => onPreview(getThumbnailUrl(img, 800) || img)}
                   >
                     <ZoomIn className="w-8 h-8 text-white" />
                   </div>
@@ -263,7 +263,7 @@ export function GenerationResult({
               /> */}
               {/* 将原来的 <img src={fullImageUrl || ""} ... /> 修改为： */}
               <img
-                src={getThumbnailUrl(fullImageUrl, 1500) || fullImageUrl || ""}
+                src={getThumbnailUrl(fullImageUrl, 800) || fullImageUrl || ""}
                 alt="Generated Full Image"
                 className="max-w-full max-h-[70vh] object-contain"
               />

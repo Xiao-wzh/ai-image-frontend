@@ -1022,6 +1022,9 @@ async function handleSingleGeneration(
       imagesArray = [...imagesArray, ...referenceLayoutImages]
     }
 
+    // 将图片 URL 转为 CDN URL，让 n8n 走 CDN 下载（减少 TOS 直出）
+    imagesArray = imagesArray.map((url: string) => keyToCdnUrl(url) || url)
+
     const n8nPayload: Record<string, any> = {
       username: (session?.user as any)?.username ?? (session?.user as any)?.name ?? null,
       generation_id: generationId,

@@ -637,7 +637,7 @@ export default function AdminAppealsPage() {
                                                                         }}
                                                                     >
                                                                         <LazyImage
-                                                                            src={getThumbnailUrl(url, 100) ?? url}
+                                                                            src={getThumbnailUrl(url, 200) ?? url}
                                                                             alt={`原图 ${idx + 1}`}
                                                                             className="object-cover w-full h-full"
                                                                         />
@@ -662,7 +662,7 @@ export default function AdminAppealsPage() {
                                                                         }}
                                                                     >
                                                                         <LazyImage
-                                                                            src={getThumbnailUrl(appeal.generation.refImages[0], 100) ?? appeal.generation.refImages[0]}
+                                                                            src={getThumbnailUrl(appeal.generation.refImages[0], 200) ?? appeal.generation.refImages[0]}
                                                                             alt="参考图"
                                                                             className="object-cover w-full h-full"
                                                                         />
@@ -697,7 +697,7 @@ export default function AdminAppealsPage() {
                                                                             }}
                                                                         >
                                                                             <LazyImage
-                                                                                src={getThumbnailUrl(url, 100) ?? url}
+                                                                                src={getThumbnailUrl(url, 200) ?? url}
                                                                                 alt={`生成 ${idx + 1}`}
                                                                                 className="object-cover w-full h-full"
                                                                             />
@@ -968,7 +968,7 @@ export default function AdminAppealsPage() {
                         <div className="grid grid-cols-3 gap-2 mt-4">
                             {previewImages.map((img, i) => (
                                 <div key={i} className="aspect-square rounded-lg overflow-hidden bg-slate-800">
-                                    <LazyImage src={getThumbnailUrl(img, 300) ?? img} alt="" className="object-cover" />
+                                    <LazyImage src={getThumbnailUrl(img, 400) ?? img} alt="" className="object-cover" />
                                 </div>
                             ))}
                         </div>

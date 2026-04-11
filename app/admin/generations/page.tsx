@@ -765,7 +765,7 @@ export default function AdminGenerationsPage() {
                                                             openPreview(imgs, 0)
                                                         }}>
                                                             <LazyImage
-                                                                src={getThumbnailUrl(item.generatedImage || item.generatedImages?.[0], 150) ?? (item.generatedImage || item.generatedImages?.[0])}
+                                                                src={getThumbnailUrl(item.generatedImage || item.generatedImages?.[0], 200) ?? (item.generatedImage || item.generatedImages?.[0])}
                                                                 alt=""
                                                                 className={item.qualityMode === "PRO" ? "object-contain bg-black/50" : "object-cover"}
                                                             />
@@ -873,7 +873,7 @@ export default function AdminGenerationsPage() {
                                                             <div className="flex gap-1.5 flex-wrap">
                                                                 {item.originalImage?.map((img, idx) => (
                                                                     <div key={idx} className="relative w-10 h-10 rounded-lg border border-white/10 overflow-hidden cursor-pointer hover:scale-105 transition-transform" onClick={() => openPreview(item.originalImage, idx)}>
-                                                                        <LazyImage src={getThumbnailUrl(img, 100) ?? img} alt="" className="object-cover" />
+                                                                        <LazyImage src={getThumbnailUrl(img, 200) ?? img} alt="" className="object-cover" />
                                                                     </div>
                                                                 ))}
                                                             </div>
@@ -886,7 +886,7 @@ export default function AdminGenerationsPage() {
                                                                 <div className="flex gap-1.5 flex-wrap">
                                                                     {item.refImages.map((img, idx) => (
                                                                         <div key={idx} className="relative w-10 h-10 rounded-lg border border-cyan-500/30 overflow-hidden cursor-pointer hover:scale-105 transition-transform" onClick={() => openPreview(item.refImages, idx)}>
-                                                                            <LazyImage src={getThumbnailUrl(img, 100) ?? img} alt="" className="object-cover" />
+                                                                            <LazyImage src={getThumbnailUrl(img, 200) ?? img} alt="" className="object-cover" />
                                                                         </div>
                                                                     ))}
                                                                 </div>
