@@ -3,8 +3,6 @@ import { auth } from "@/auth"
 import prisma from "@/lib/prisma"
 import { getSystemCost } from "@/lib/system-config"
 import { refundCredits } from "@/lib/credit-service"
-import { tosClient, TOS_BUCKET } from "@/lib/tos"
-import { v4 as uuidv4 } from "uuid"
 import {
     YUNWU_BASE_URL,
     ALLOWED_IMAGE_TYPES,
@@ -22,30 +20,13 @@ export const dynamic = "force-dynamic"
  *
  * 流程：
  * 1. 接收前端请求（FormData 或 JSON），校验参数和参考图
- * 2. 参考图上传 TOS 存档，DB 只存 URL
- * 3. 调用云雾 API 提交任务（multipart/form-data 格式），拿到真实 taskId
- * 4. 原子性扣除积分 + 创建 VideoGeneration 记录
- * 5. 前端轮询 /api/video/sora2/{id} 获取结果
+ * 2. 调用云雾 API 提交任务（multipart/form-data 格式，参考图直传云雾，不经 TOS）
+ * 3. 原子性扣除积分 + 创建 VideoGeneration 记录
+ * 4. 前端轮询 /api/video/sora2/{id} 获取结果
  */
 
 // Sora-2 支持的合法分辨率（仅 720p）
 const VALID_SIZES = ["720x1280", "1280x720"]
-
-/** 将文件上传到 TOS，返回公开 URL */
-async function uploadReferenceToTos(buffer: Buffer, contentType: string): Promise<string> {
-    const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg"
-    const objectKey = `video-ref/${new Date().toISOString().slice(0, 10).replace(/-/g, "")}/${uuidv4()}.${ext}`
-
-    await tosClient.putObject({
-        bucket: TOS_BUCKET,
-        key: objectKey,
-        body: buffer,
-        headers: { "Content-Type": contentType },
-    })
-
-    const cdnHost = process.env.NEXT_PUBLIC_CDN_HOST || "img.wzhdjy.xin"
-    return `https://${cdnHost}/${objectKey}`
-}
 
 /** 云雾 API 错误码映射 */
 function mapYunwuError(status: number, errorText: string): { error: string; status: number } {
@@ -63,8 +44,6 @@ function mapYunwuError(status: number, errorText: string): { error: string; stat
 }
 
 export async function POST(req: NextRequest) {
-    console.log("[SORA2] 收到请求, Content-Type:", req.headers.get("content-type"))
-
     try {
         const session = await auth()
         if (!session?.user?.id) {
@@ -89,6 +68,7 @@ export async function POST(req: NextRequest) {
                 model = formData.get("model") as string || "sora-2"
                 seconds = parseInt(formData.get("seconds") as string || "10", 10)
                 size = formData.get("size") as string || "720x1280"
+                referenceImage = (formData.get("referenceImageUrl") as string) || null
 
                 const inputFile = formData.get("input_reference") as File | null
                 if (inputFile && inputFile.size > 0) {
@@ -111,7 +91,6 @@ export async function POST(req: NextRequest) {
                     refFileContentType = fileType
                 }
 
-                console.log("[SORA2] FormData 解析成功, model:", model, ", size:", size, ", 参考图:", refFileBuffer ? "有" : "无")
             } catch (parseErr: any) {
                 console.error("[SORA2] FormData 解析失败:", parseErr?.message)
                 return NextResponse.json(
@@ -127,7 +106,6 @@ export async function POST(req: NextRequest) {
                 seconds = jsonBody.seconds || 10
                 size = jsonBody.size || "720x1280"
                 referenceImage = jsonBody.referenceImage || null
-                console.log("[SORA2] JSON 解析成功, model:", model, ", size:", size)
             } catch (parseErr: any) {
                 console.error("[SORA2] JSON 解析失败:", parseErr?.message)
                 return NextResponse.json(
@@ -173,28 +151,12 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: `积分不足（需要 ${totalCost}，当前 ${userTotalCredits}）` }, { status: 400 })
         }
 
-        // ── 参考图处理：上传 TOS 存档 ──
-        if (refFileBuffer && refFileContentType) {
-            try {
-                referenceImage = await uploadReferenceToTos(refFileBuffer, refFileContentType)
-                console.log("[SORA2] 参考图已上传 TOS:", referenceImage)
-            } catch (tosErr: any) {
-                console.error("[SORA2] 参考图上传 TOS 失败:", tosErr?.message)
-                return NextResponse.json(
-                    { error: "参考图上传失败，请重试" },
-                    { status: 500 }
-                )
-            }
-        }
-
         // ── 调用云雾 API 提交任务 ──
         const apiKey = process.env.YUNWU_API_KEY
         if (!apiKey) {
             console.error("[SORA2] YUNWU_API_KEY 未配置")
             return NextResponse.json({ error: "视频生成服务未配置" }, { status: 500 })
         }
-
-        console.log("[SORA2] 调用云雾 API 提交任务...")
 
         let realTaskId: string
         try {
@@ -212,6 +174,8 @@ export async function POST(req: NextRequest) {
                     fileBlob,
                     "reference.jpg"
                 )
+                // FormData 已持有数据，释放原始 buffer
+                refFileBuffer = null
             }
 
             const submitRes = await fetch(`${YUNWU_BASE_URL}/videos`, {
@@ -241,7 +205,6 @@ export async function POST(req: NextRequest) {
                 )
             }
 
-            console.log(`[SORA2] 云雾 API 提交成功, taskId: ${realTaskId}`)
         } catch (submitErr: any) {
             console.error("[SORA2] 云雾 API 提交异常:", submitErr?.message)
             // 区分超时和其他错误
@@ -329,7 +292,6 @@ export async function POST(req: NextRequest) {
         }
 
         const videoGen = deductResult.videoGen
-        console.log(`[SORA2] 任务创建成功: ${videoGen.id}, taskId: ${realTaskId}, 扣费: ${totalCost} 积分`)
 
         return NextResponse.json({
             success: true,

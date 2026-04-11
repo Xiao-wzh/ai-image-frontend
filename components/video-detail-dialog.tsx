@@ -18,7 +18,7 @@ type VideoDetailDialogProps = {
 
 export function VideoDetailDialog({ open, onOpenChange, item }: VideoDetailDialogProps) {
   // Hooks 必须在条件返回之前调用（React Hooks 规则）
-  const { isExpired, isExpiringSoon } = useVideoExpiration(item?.completedAt ?? null, item?.status ?? null)
+  const { isExpired, isExpiringSoon, remainingHours } = useVideoExpiration(item?.completedAt ?? null, item?.status ?? null)
 
   if (!item) return null
 
@@ -68,6 +68,13 @@ export function VideoDetailDialog({ open, onOpenChange, item }: VideoDetailDialo
               <p className="text-xs text-red-300">视频已过期，资源可能已被删除无法播放。建议后续视频生成后尽快下载保存。</p>
             </div>
           )}
+          {/* 未过期时始终显示剩余时间 */}
+          {isCompleted && !isExpired && !isExpiringSoon && remainingHours > 0 && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-500/10 border border-slate-500/20">
+              <Timer className="w-4 h-4 text-slate-400 shrink-0" />
+              <p className="text-xs text-slate-400">视频约 {remainingHours} 小时后过期，建议及时下载保存</p>
+            </div>
+          )}
           {isExpiringSoon && !isExpired && (
             <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
               <Timer className="w-4 h-4 text-amber-400 shrink-0" />
@@ -98,6 +105,9 @@ export function VideoDetailDialog({ open, onOpenChange, item }: VideoDetailDialo
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 text-xs text-slate-300">
               <Zap className="w-3.5 h-3.5 text-amber-400" />
               <span>{item.cost} 积分</span>
+              {item.status === "FAILED" && item.hasRefunded && (
+                <span className="text-emerald-400">已返还</span>
+              )}
             </div>
           </div>
 

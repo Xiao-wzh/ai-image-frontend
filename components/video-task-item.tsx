@@ -26,7 +26,7 @@ export function VideoTaskItem({ item, onViewDetails, onRefreshSuccess }: VideoTa
   const isPortrait = item.size === "720x1280"
 
   // 视频过期判断（统一 Hook）
-  const { isExpired, isExpiringSoon } = useVideoExpiration(item.completedAt, status)
+  const { isExpired, isExpiringSoon, remainingHours } = useVideoExpiration(item.completedAt, status)
 
   const [refreshing, setRefreshing] = useState(false)
 
@@ -91,7 +91,7 @@ export function VideoTaskItem({ item, onViewDetails, onRefreshSuccess }: VideoTa
           </div>
         ) : item.videoUrl ? (
           <video
-            src={item.videoUrl}
+            src={`${item.videoUrl}#t=0.5`}
             className="w-full h-full object-cover"
             preload="metadata"
             muted
@@ -144,6 +144,9 @@ export function VideoTaskItem({ item, onViewDetails, onRefreshSuccess }: VideoTa
           <span className="flex items-center gap-0.5">
             <Zap className="w-3 h-3 text-amber-400" />
             {item.cost} 积分
+            {isFailed && item.hasRefunded && (
+              <span className="text-emerald-400 ml-1">已返还</span>
+            )}
           </span>
           <span>
             {formatDistanceToNow(new Date(item.createdAt), { addSuffix: true, locale: zhCN })}
@@ -165,6 +168,12 @@ export function VideoTaskItem({ item, onViewDetails, onRefreshSuccess }: VideoTa
           <p className="text-[11px] text-amber-400 mt-1 flex items-center gap-1">
             <Timer className="w-3 h-3" />
             视频即将过期，请尽快下载保存
+          </p>
+        )}
+        {!isExpired && !isExpiringSoon && isCompleted && remainingHours > 0 && (
+          <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+            <Timer className="w-3 h-3" />
+            约 {remainingHours}h 后过期
           </p>
         )}
       </div>

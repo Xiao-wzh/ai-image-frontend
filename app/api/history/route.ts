@@ -176,6 +176,7 @@ async function handleVideoHistory(userId: string, searchParams: URLSearchParams)
         progress: true,
         cost: true,
         errorMsg: true,
+        hasRefunded: true,
         createdAt: true,
         completedAt: true,
       },

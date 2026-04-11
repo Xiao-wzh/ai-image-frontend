@@ -1,6 +1,6 @@
 "use client"
 
-import { Play, Film, Clock, Loader2, CheckCircle2, AlertCircle, Zap, Timer } from "lucide-react"
+import { Play, Film, Clock, Loader2, CheckCircle2, AlertCircle, Zap, Timer, Download } from "lucide-react"
 import { motion } from "framer-motion"
 import { useVideoExpiration } from "@/hooks/use-video-expiration"
 
@@ -15,6 +15,7 @@ export type VideoHistoryItem = {
   progress: number
   cost: number
   errorMsg?: string | null
+  hasRefunded?: boolean
   refreshable?: boolean
   createdAt: string
   completedAt?: string | null
@@ -70,7 +71,7 @@ export function VideoHistoryCard({ item, onClick }: VideoHistoryCardProps) {
   const isCompleted = item.status === "COMPLETED"
 
   // 视频过期判断（统一 Hook）
-  const { isExpired, isExpiringSoon } = useVideoExpiration(item.completedAt, item.status)
+  const { isExpired, isExpiringSoon, remainingHours } = useVideoExpiration(item.completedAt, item.status)
 
   return (
     <motion.div
@@ -86,7 +87,7 @@ export function VideoHistoryCard({ item, onClick }: VideoHistoryCardProps) {
           </div>
         ) : isCompleted && item.videoUrl ? (
           <video
-            src={item.videoUrl}
+            src={`${item.videoUrl}#t=0.5`}
             className="w-full h-full object-cover"
             preload="metadata"
             muted
@@ -97,12 +98,25 @@ export function VideoHistoryCard({ item, onClick }: VideoHistoryCardProps) {
           </div>
         )}
 
-        {/* 播放按钮覆盖层 */}
+        {/* 播放按钮覆盖层 + 快捷下载 */}
         {isCompleted && (
-          <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          <div className="absolute inset-0 bg-black/30 flex items-center justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
             <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
               <Play className="w-6 h-6 text-white fill-white" />
             </div>
+            {item.videoUrl && !isExpired && (
+              <a
+                href={item.videoUrl}
+                download
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-black/60 backdrop-blur-sm text-white hover:bg-violet-500/80 transition-colors"
+                title="下载视频"
+              >
+                <Download className="w-3.5 h-3.5" />
+              </a>
+            )}
           </div>
         )}
 
@@ -153,6 +167,12 @@ export function VideoHistoryCard({ item, onClick }: VideoHistoryCardProps) {
             视频即将过期，请尽快下载保存
           </p>
         )}
+        {!isExpired && !isExpiringSoon && isCompleted && remainingHours > 0 && (
+          <p className="text-[10px] text-slate-500 flex items-center gap-1">
+            <Timer className="w-3 h-3" />
+            约 {remainingHours}h 后过期
+          </p>
+        )}
         <div className="flex items-center justify-between">
           <span className="text-xs text-slate-500">
             {new Date(item.createdAt).toLocaleDateString("zh-CN", {
@@ -165,6 +185,9 @@ export function VideoHistoryCard({ item, onClick }: VideoHistoryCardProps) {
           <div className="flex items-center gap-1 text-xs text-violet-400">
             <Zap className="w-3 h-3" />
             <span>{item.cost} 积分</span>
+            {item.status === "FAILED" && item.hasRefunded && (
+              <span className="text-emerald-400 ml-1">已返还</span>
+            )}
           </div>
         </div>
       </div>

@@ -68,6 +68,7 @@ export async function GET(
                 model: updated.model,
                 cost: updated.cost,
                 errorMsg: updated.errorMsg,
+                hasRefunded: updated.hasRefunded,
                 refreshable: !(TERMINAL_STATUSES as readonly string[]).includes(updated.status),
                 message: updated.status === "COMPLETED" ? "视频生成完成" :
                          updated.status === "FAILED" ? updated.errorMsg || "视频生成失败" :
