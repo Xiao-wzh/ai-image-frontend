@@ -341,7 +341,7 @@ export default function Sora2VideoPage() {
                       </motion.div>
 
                       {/* 水印开关 */}
-                      <motion.div {...pillSpring}>
+                      {/* <motion.div {...pillSpring}>
                         <button
                           onClick={() => setVideoParams((p) => ({ ...p, watermark: !p.watermark }))}
                           className={`h-8 rounded-full border px-3 text-xs font-medium transition-all ${videoParams.watermark
@@ -351,7 +351,7 @@ export default function Sora2VideoPage() {
                         >
                           {videoParams.watermark ? "去水印" : "带水印"}
                         </button>
-                      </motion.div>
+                      </motion.div> */}
                     </div>
                   </div>
 
