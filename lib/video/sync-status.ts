@@ -99,7 +99,10 @@ export async function syncVideoTaskStatus(taskId: string): Promise<string | null
         }
 
         if (remoteStatus === "FAILED") {
-            const errorMsg = data.error || "云雾 API 返回失败"
+            // data.error 可能是对象 {code, message}，需要序列化为字符串
+            const errorMsg = typeof data.error === "string"
+                ? data.error
+                : data.error?.message || data.error?.code || JSON.stringify(data.error) || "云雾 API 返回失败"
             await prisma.$transaction(async (tx) => {
                 // 事务内重新读取，加行锁防止并发双重退款
                 const locked = await tx.videoGeneration.findUnique({
