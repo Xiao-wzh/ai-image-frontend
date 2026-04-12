@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useSession } from "next-auth/react"
 import useSWR from "swr"
 import { usePathname, useRouter } from "next/navigation"
-import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser, BarChart3, FileText, Users, Receipt, Video, Zap, BookOpen, ExternalLink, Copy, Loader2 } from "lucide-react"
+import { Sparkles, User, Plus, Images, Wallet, ListTodo, ShieldCheck, LogOut, Gift, LayoutGrid, Settings, Droplets, Megaphone, Crown, Eraser, BarChart3, FileText, Users, Receipt, Video, Zap, BookOpen, ExternalLink, Copy, Loader2, TrendingUp } from "lucide-react"
 import { toast } from "sonner"
 import { cn } from "@/lib/utils"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -65,6 +65,7 @@ const navGroups: NavGroup[] = [
 // 管理员专属导航
 const adminItems: NavItem[] = [
   { icon: BarChart3, label: "收入仪表盘", href: "/admin/dashboard" },
+  { icon: TrendingUp, label: "运营分析", href: "/admin/analytics" },
   { icon: Receipt, label: "订单管理", href: "/admin/orders" },
   { icon: Users, label: "用户管理", href: "/admin/users" },
   { icon: LayoutGrid, label: "生成记录管理", href: "/admin/generations" },

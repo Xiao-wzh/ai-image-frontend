@@ -2,13 +2,13 @@
 
 import { useEffect, useState, useCallback, useRef } from "react"
 import { motion } from "framer-motion"
+import * as echarts from "echarts"
 import {
     Receipt, RefreshCw, CheckCircle, Clock, XCircle,
     User, Filter, Calendar, TrendingUp, ShoppingCart,
     ChevronDown, ChevronRight, Loader2, CalendarRange, X
 } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts"
 
 import { Sidebar } from "@/components/sidebar"
 import { TopBanner } from "@/components/top-banner"
@@ -162,6 +162,10 @@ export default function AdminOrdersPage() {
     // --- 展开/折叠状态 ---
     const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set())
 
+    // --- 图表日期范围 ---
+    const [chartStart, setChartStart] = useState('')
+    const [chartEnd, setChartEnd] = useState('')
+
     // --- 防抖 ---
     const fetchingRef = useRef(false)
 
@@ -204,7 +208,7 @@ export default function AdminOrdersPage() {
                     if (data.monthlyRevenue !== undefined) setMonthlyRevenue(data.monthlyRevenue)
                     if (data.monthlyPlanBreakdown) setMonthlyPlanBreakdown(data.monthlyPlanBreakdown)
                     if (data.todayPlanBreakdown) setTodayPlanBreakdown(data.todayPlanBreakdown)
-                    if (data.chartData) setChartData(data.chartData)
+                    if (data.chartData && !chartStart && !chartEnd) setChartData(data.chartData)
                     if (data.todayOrderCount !== undefined) setTodayOrderCount(data.todayOrderCount)
 
                     // 默认展开第一条（最新一天）的数据
@@ -261,6 +265,40 @@ export default function AdminOrdersPage() {
         setWindowEnd(null)
         setManualStart('')
         setManualEnd('')
+        setChartStart('')
+        setChartEnd('')
+        fetchOrders(null, null, false)
+    }, [fetchOrders])
+
+    // ========== 图表日期变更：独立获取图表数据 ==========
+    const chartRef = useRef<HTMLDivElement>(null)
+    const chartInstanceRef = useRef<echarts.ECharts | null>(null)
+
+    const fetchChartData = useCallback(async (start: string, end: string) => {
+        try {
+            const params = new URLSearchParams()
+            params.set('chartStart', start)
+            params.set('chartEnd', end)
+            const res = await fetch(`/api/admin/orders?${params.toString()}`)
+            const data = await res.json()
+            if (data.success && data.chartData) {
+                setChartData(data.chartData)
+            }
+        } catch (e) {
+            console.error("获取图表数据失败", e)
+        }
+    }, [])
+
+    const handleChartDateApply = useCallback(() => {
+        if (chartStart && chartEnd) {
+            fetchChartData(chartStart, chartEnd)
+        }
+    }, [chartStart, chartEnd, fetchChartData])
+
+    const handleChartDateClear = useCallback(() => {
+        setChartStart('')
+        setChartEnd('')
+        // 重新获取默认7天数据
         fetchOrders(null, null, false)
     }, [fetchOrders])
 
@@ -310,6 +348,73 @@ export default function AdminOrdersPage() {
 
     const totalOrders = dayGroups.reduce((sum, g) => sum + g.orderCount, 0)
     const empty = !loading && dayGroups.length === 0
+
+    // ========== ECharts 收入趋势图 ==========
+    useEffect(() => {
+        if (!chartRef.current) return
+        if (!chartInstanceRef.current) {
+            chartInstanceRef.current = echarts.init(chartRef.current, "dark")
+        }
+        const chart = chartInstanceRef.current
+
+        chart.setOption({
+            backgroundColor: "transparent",
+            tooltip: {
+                trigger: "axis",
+                backgroundColor: "rgba(30, 41, 59, 0.95)",
+                borderColor: "rgba(255,255,255,0.1)",
+                borderRadius: 12,
+                textStyle: { color: "#e2e8f0", fontSize: 12 },
+                formatter: (params: unknown[]) => {
+                    const p = params as Array<{ axisValue: string; value: number; marker: string }>
+                    return `${p[0]?.axisValue}<br/>${p[0]?.marker} 收入: ¥${p[0]?.value.toFixed(2)}`
+                },
+            },
+            grid: { top: 20, right: 20, bottom: 30, left: 60 },
+            xAxis: {
+                type: "category",
+                data: chartData.map((d) => d.date),
+                axisLabel: {
+                    color: "#94a3b8",
+                    fontSize: 11,
+                    rotate: chartData.length > 15 ? 45 : 0,
+                },
+                axisLine: { lineStyle: { color: "rgba(255,255,255,0.1)" } },
+                axisTick: { show: false },
+            },
+            yAxis: {
+                type: "value",
+                axisLabel: {
+                    color: "#94a3b8",
+                    fontSize: 11,
+                    formatter: (v: number) => `¥${v}`,
+                },
+                splitLine: { lineStyle: { color: "rgba(255,255,255,0.05)" } },
+            },
+            series: [{
+                type: "line",
+                data: chartData.map((d) => d.amount),
+                smooth: true,
+                lineStyle: { width: 2.5, color: "#a855f7" },
+                itemStyle: { color: "#a855f7" },
+                showSymbol: chartData.length <= 30,
+                symbolSize: 6,
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: "rgba(168, 85, 247, 0.3)" },
+                        { offset: 1, color: "rgba(168, 85, 247, 0)" },
+                    ]),
+                },
+                emphasis: {
+                    itemStyle: { borderWidth: 2, borderColor: "#fff" },
+                },
+            }],
+        })
+
+        const handleResize = () => chart.resize()
+        window.addEventListener("resize", handleResize)
+        return () => window.removeEventListener("resize", handleResize)
+    }, [chartData])
 
     return (
         <div className="flex h-screen bg-slate-950">
@@ -387,34 +492,35 @@ export default function AdminOrdersPage() {
 
                             {/* Chart */}
                             <div className="p-6 rounded-2xl border border-white/10 bg-slate-900/40 mb-6">
-                                <div className="flex items-center gap-2 mb-4">
-                                    <TrendingUp className="w-4 h-4 text-purple-400" />
-                                    <span className="text-white font-medium text-sm">近 7 天收入趋势</span>
-                                    <span className="text-slate-500 text-xs">（单位：元）</span>
+                                <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <TrendingUp className="w-4 h-4 text-purple-400" />
+                                        <span className="text-white font-medium text-sm">收入趋势</span>
+                                        <span className="text-slate-500 text-xs">（单位：元）</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <CalendarRange className="w-4 h-4 text-slate-400" />
+                                        <input type="date" value={chartStart} onChange={(e) => setChartStart(e.target.value)}
+                                            className="h-8 px-2 rounded-lg border border-white/10 bg-slate-900/60 text-xs text-white focus:outline-none focus:border-purple-500 transition-colors" />
+                                        <span className="text-slate-500 text-xs">至</span>
+                                        <input type="date" value={chartEnd} onChange={(e) => setChartEnd(e.target.value)}
+                                            className="h-8 px-2 rounded-lg border border-white/10 bg-slate-900/60 text-xs text-white focus:outline-none focus:border-purple-500 transition-colors" />
+                                        <Button
+                                            onClick={handleChartDateApply}
+                                            disabled={!chartStart || !chartEnd}
+                                            className="h-8 px-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs cursor-pointer disabled:opacity-40"
+                                        >
+                                            查询
+                                        </Button>
+                                        {(chartStart || chartEnd) && (
+                                            <button onClick={handleChartDateClear}
+                                                className="flex items-center gap-1 text-xs text-slate-400 hover:text-white px-2 py-1 rounded-lg hover:bg-white/5 transition-colors cursor-pointer">
+                                                <X className="w-3 h-3" />重置
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
-                                <div className="h-80">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                                            <defs>
-                                                <linearGradient id="revenueGradient" x1="0" y1="0" x2="0" y2="1">
-                                                    <stop offset="0%" stopColor="#a855f7" stopOpacity={0.3} />
-                                                    <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-                                                </linearGradient>
-                                            </defs>
-                                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                                            <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} dy={8} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 12 }} tickFormatter={(v: number) => `¥${v}`} width={60} />
-                                            <Tooltip
-                                                contentStyle={{ backgroundColor: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '12px', boxShadow: '0 8px 24px rgba(0,0,0,0.4)', padding: '10px 14px' }}
-                                                labelStyle={{ color: '#94a3b8', fontSize: 12, marginBottom: 4 }}
-                                                itemStyle={{ color: '#e2e8f0', fontSize: 13, fontWeight: 600 }}
-                                                formatter={(value: number) => [`¥${value.toFixed(2)}`, '收入']}
-                                                cursor={{ stroke: 'rgba(168,85,247,0.3)', strokeWidth: 1 }}
-                                            />
-                                            <Area type="monotone" dataKey="amount" stroke="#a855f7" strokeWidth={2.5} fill="url(#revenueGradient)" dot={{ r: 3, fill: '#a855f7', stroke: '#1e293b', strokeWidth: 2 }} activeDot={{ r: 5, fill: '#a855f7', stroke: '#fff', strokeWidth: 2 }} />
-                                        </AreaChart>
-                                    </ResponsiveContainer>
-                                </div>
+                                <div ref={chartRef} style={{ width: "100%", height: 320 }} />
                             </div>
 
                             {/* 收入查询面板 */}

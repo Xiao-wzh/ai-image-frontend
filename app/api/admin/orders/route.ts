@@ -217,23 +217,40 @@ export async function GET(req: NextRequest) {
             amount: s._sum.amount || 0,
         }));
 
-        // ========== 近7天收入趋势（单次DB查询 + JS聚合 + 零填充） ==========
-        const CHART_DAYS = 7;
-        const chartStartDate = new Date(todayStart.getTime() - (CHART_DAYS - 1) * 24 * 60 * 60 * 1000);
+        // ========== 收入趋势图（支持自定义日期范围） ==========
+        const chartStartParam = searchParams.get('chartStart');
+        const chartEndParam = searchParams.get('chartEnd');
 
-        // 1) 单次查询：获取近7天所有已支付订单的 paidAt 和 amount
+        let chartStartDate: Date;
+        let chartEndDate: Date;
+
+        if (chartStartParam && chartEndParam) {
+            // 自定义日期范围
+            chartStartDate = utc8DayToUTC(chartStartParam);
+            chartEndDate = new Date(utc8DayToUTC(chartEndParam).getTime() + DAY_MS);
+        } else {
+            // 默认近7天
+            const CHART_DAYS = 7;
+            chartStartDate = new Date(todayStart.getTime() - (CHART_DAYS - 1) * 24 * 60 * 60 * 1000);
+            chartEndDate = tomorrowStart;
+        }
+
+        // 计算天数
+        const chartDays = Math.max(1, Math.ceil((chartEndDate.getTime() - chartStartDate.getTime()) / DAY_MS));
+
+        // 1) 单次查询：获取范围内所有已支付订单的 paidAt 和 amount
         const recentPaidOrders = await prisma.order.findMany({
             where: {
                 status: 'PAID',
-                paidAt: { gte: chartStartDate, lt: tomorrowStart },
+                paidAt: { gte: chartStartDate, lt: chartEndDate },
             },
             select: { paidAt: true, amount: true },
         });
 
-        // 2) 生成完整7天日期数组，金额默认为 0
+        // 2) 生成完整日期数组，金额默认为 0
         const chartMap = new Map<string, number>();
         const chartDates: { key: string; year: number; month: number; day: number }[] = [];
-        for (let i = 0; i < CHART_DAYS; i++) {
+        for (let i = 0; i < chartDays; i++) {
             const dayTs = chartStartDate.getTime() + i * 24 * 60 * 60 * 1000;
             // 将 UTC 时间转回东八区日期
             const d = new Date(dayTs + UTC8_MS);
@@ -250,9 +267,9 @@ export async function GET(req: NextRequest) {
             chartMap.set(key, (chartMap.get(key) || 0) + o.amount);
         }
 
-        // 4) 组装结果：date 为 MM/DD，amount 为元（分转元，保留两位小数）
-        const chartData = chartDates.map(({ key, month, day }) => ({
-            date: formatMMDD(0, month, day),
+        // 4) 组装结果：date 为 YYYY-MM-DD，amount 为元（分转元，保留两位小数）
+        const chartData = chartDates.map(({ key, year, month, day }) => ({
+            date: `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`,
             amount: Number(((chartMap.get(key) || 0) / 100).toFixed(2)),
         }));
 
