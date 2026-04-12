@@ -148,12 +148,12 @@ export function StandardForm(props: CockpitFormProps) {
                     transition={{ delay: 0.1 }}
                     className="md:col-span-1"
                 >
-                    <label className="block text-sm font-medium text-slate-300 mb-2">商品名称</label>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">产品标题</label>
                     <input
                         type="text"
                         value={productName}
                         onChange={(e) => setProductName(e.target.value)}
-                        placeholder="例如：银河猫咪贴纸"
+                        placeholder="例如：泡茶杯 三件式泡茶杯 玻璃泡茶杯 泡茶 玻璃杯 耐熱玻璃杯 可過濾茶杯 玻璃茶杯 過濾杯 茶具 花茶杯 茶杯"
                         className="w-full h-11 rounded-xl border border-white/10 bg-white/5 px-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-blue-500 focus:bg-white/10 focus:ring-2 focus:ring-blue-500/20 transition-all backdrop-blur-sm"
                     />
                 </motion.div>

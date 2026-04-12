@@ -347,12 +347,12 @@ export function ProForm(props: CockpitFormProps) {
 
                 {/* 商品名称 */}
                 <div className={isCloneOnlyPage ? '' : 'md:col-span-1'}>
-                    <label className="block text-xs font-medium text-amber-300/80 mb-2">商品名称</label>
+                    <label className="block text-xs font-medium text-amber-300/80 mb-2">产品标题</label>
                     <input
                         type="text"
                         value={productName}
                         onChange={(e) => setProductName(e.target.value)}
-                        placeholder="例如：银河猫咪贴纸"
+                        placeholder="例如：泡茶杯 三件式泡茶杯 玻璃泡茶杯 泡茶 玻璃杯 耐熱玻璃杯 可過濾茶杯 玻璃茶杯 過濾杯 茶具 花茶杯 茶杯"
                         className="w-full h-11 rounded-xl border border-amber-500/15 bg-white/5 px-4 text-sm text-white placeholder:text-slate-500 outline-none focus:border-amber-500 focus:bg-white/10 focus:ring-2 focus:ring-amber-500/20 transition-all backdrop-blur-sm"
                     />
                 </div>
