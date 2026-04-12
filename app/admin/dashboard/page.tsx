@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Sparkles, Droplets, Stamp, TrendingUp, Calendar, RefreshCw, FileText, RotateCcw, Layout } from "lucide-react"
+import { Sparkles, Droplets, Stamp, TrendingUp, Calendar, RefreshCw, FileText, RotateCcw, Layout, Video } from "lucide-react"
 import { toast } from "sonner"
 
 type SummaryData = {
@@ -20,6 +20,9 @@ type SummaryData = {
     copywriting: number
     removeWatermark: number
     addWatermark: number
+    video: number
+    videoRefund: number
+    videoTotal: number
     appealRefund: number
     failureRefund: number
     refundTotal: number
@@ -36,8 +39,10 @@ type DailyData = {
     copywriting: number
     removeWatermark: number
     addWatermark: number
+    video: number
     appealRefund: number
     failureRefund: number
+    videoRefund: number
 }
 
 export default function AdminDashboardPage() {
@@ -119,6 +124,14 @@ export default function AdminDashboardPage() {
             bgColor: "bg-orange-500/10",
         },
         {
+            title: "视频生成",
+            value: summary?.videoTotal ?? 0,
+            subtitle: `消耗: ${summary?.video ?? 0} | 退款: ${summary?.videoRefund ?? 0}`,
+            icon: Video,
+            color: "from-rose-500 to-pink-500",
+            bgColor: "bg-rose-500/10",
+        },
+        {
             title: "净收入",
             value: summary?.total ?? 0,
             subtitle: `总收入: ${summary?.totalRevenue ?? 0}`,
@@ -130,7 +143,7 @@ export default function AdminDashboardPage() {
 
     // 计算最大值用于柱状图
     const maxValue = Math.max(
-        ...dailyData.map(d => d.mainImage + d.mainImageRetry + d.detailPage + d.detailPageRetry + d.copywriting + d.removeWatermark + d.addWatermark),
+        ...dailyData.map(d => d.mainImage + d.mainImageRetry + d.detailPage + d.detailPageRetry + d.copywriting + d.removeWatermark + d.addWatermark + d.video),
         1
     )
 
@@ -184,7 +197,7 @@ export default function AdminDashboardPage() {
                     </div>
 
                     {/* Stat Cards - 7 columns on large screens */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
                         {statCards.map((card, i) => (
                             <motion.div
                                 key={card.title}
@@ -226,7 +239,7 @@ export default function AdminDashboardPage() {
                             ) : (
                                 <div className="space-y-4">
                                     {dailyData.map((day) => {
-                                        const total = day.mainImage + day.mainImageRetry + day.detailPage + day.detailPageRetry + day.copywriting + day.removeWatermark + day.addWatermark
+                                        const total = day.mainImage + day.mainImageRetry + day.detailPage + day.detailPageRetry + day.copywriting + day.removeWatermark + day.addWatermark + day.video
                                         return (
                                             <div key={day.date} className="space-y-2">
                                                 <div className="flex justify-between text-sm">
@@ -283,6 +296,13 @@ export default function AdminDashboardPage() {
                                                             title={`加水印: ${day.addWatermark}`}
                                                         />
                                                     )}
+                                                    {day.video > 0 && (
+                                                        <div
+                                                            className="h-full bg-gradient-to-r from-rose-500 to-pink-500"
+                                                            style={{ width: `${(day.video / maxValue) * 100}%` }}
+                                                            title={`视频: ${day.video}`}
+                                                        />
+                                                    )}
                                                 </div>
                                             </div>
                                         )
@@ -308,6 +328,10 @@ export default function AdminDashboardPage() {
                                         <div className="flex items-center gap-1.5">
                                             <div className="w-3 h-3 rounded-full bg-gradient-to-r from-orange-500 to-yellow-500" />
                                             <span className="text-slate-400">加水印</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="w-3 h-3 rounded-full bg-gradient-to-r from-rose-500 to-pink-500" />
+                                            <span className="text-slate-400">视频</span>
                                         </div>
                                     </div>
                                 </div>

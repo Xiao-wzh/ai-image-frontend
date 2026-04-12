@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
     Search, RefreshCw, ChevronLeft, ChevronRight, User, Loader2, X, ZoomIn, Crown,
     Image, Sparkles, TrendingUp, CheckCircle, Zap, Filter, LayoutGrid, Layers, Palette, Calendar,
-    ChevronDown, ChevronUp, RotateCcw, DollarSign, AlertCircle
+    ChevronDown, ChevronUp, RotateCcw, DollarSign, AlertCircle, Video, Play, Clock
 } from "lucide-react"
 import { format } from "date-fns"
 
@@ -22,6 +22,7 @@ import { ProductTypeLabel } from "@/lib/constants"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
 import { getThumbnailUrl } from "@/lib/cdnUrl"
 import { LazyImage } from "@/components/lazy-image"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
 type UserOption = {
     id: string
@@ -84,6 +85,35 @@ type Stats = {
     refundRate: number
 }
 
+type VideoGenerationItem = {
+    id: string
+    taskId: string
+    model: string
+    prompt: string
+    seconds: number
+    size: string
+    status: string
+    progress: number
+    videoUrl: string | null
+    cost: number
+    costPerSecond: number
+    hasRefunded: boolean
+    errorMsg: string | null
+    referenceImage: string | null
+    createdAt: string
+    completedAt: string | null
+    user: UserOption | null
+}
+
+type VideoStats = {
+    todayCount: number
+    totalCost: number
+    totalRefund: number
+    completedCount: number
+    successRate: number
+    refundRate: number
+}
+
 export default function AdminGenerationsPage() {
     // Filter states
     const [selectedUser, setSelectedUser] = useState<UserOption | null>(null)
@@ -131,6 +161,22 @@ export default function AdminGenerationsPage() {
     const closePreview = useCallback(() => setPreviewImages([]), [])
     const prevImage = useCallback(() => setPreviewImageIndex(i => Math.max(0, i - 1)), [])
     const nextImage = useCallback(() => setPreviewImageIndex(i => Math.min(previewImages.length - 1, i + 1)), [previewImages.length])
+
+    // 视频 Tab 状态
+    const [activeTab, setActiveTab] = useState("image")
+    const [videoData, setVideoData] = useState<VideoGenerationItem[]>([])
+    const [videoStats, setVideoStats] = useState<VideoStats | null>(null)
+    const [videoLoading, setVideoLoading] = useState(false)
+    const [videoPage, setVideoPage] = useState(1)
+    const [videoTotal, setVideoTotal] = useState(0)
+    const [videoTotalPages, setVideoTotalPages] = useState(0)
+    const [videoStatus, setVideoStatus] = useState<string>("all")
+    const [videoModel] = useState<string>("all")
+    const [videoHasRefund, setVideoHasRefund] = useState<string>("all")
+    const [videoStartDate, setVideoStartDate] = useState("")
+    const [videoEndDate, setVideoEndDate] = useState("")
+    const [previewVideo, setPreviewVideo] = useState<string | null>(null)
+    const [videoExpandedRows, setVideoExpandedRows] = useState<Set<string>>(new Set())
 
     // Keyboard navigation
     useEffect(() => {
@@ -289,6 +335,67 @@ export default function AdminGenerationsPage() {
         setExpandedRows(new Set())
     }
 
+    // 视频 Tab：获取视频列表
+    const fetchVideoData = useCallback(async () => {
+        setVideoLoading(true)
+        try {
+            const params = new URLSearchParams()
+            params.set("page", String(videoPage))
+            params.set("limit", String(limit))
+            if (selectedUser) params.set("userId", selectedUser.id)
+            if (videoStatus && videoStatus !== "all") params.set("status", videoStatus)
+            if (videoModel && videoModel !== "all") params.set("model", videoModel)
+            if (videoHasRefund && videoHasRefund !== "all") params.set("hasRefund", videoHasRefund)
+            if (videoStartDate) params.set("startDate", videoStartDate)
+            if (videoEndDate) params.set("endDate", videoEndDate)
+
+            const res = await fetch(`/api/admin/generations/video-list?${params}`)
+            if (res.ok) {
+                const result = await res.json()
+                setVideoData(result.data)
+                setVideoTotal(result.total)
+                setVideoTotalPages(result.totalPages)
+                setVideoStats(result.stats)
+            }
+        } catch (err) {
+            console.error("获取视频数据失败:", err)
+        } finally {
+            setVideoLoading(false)
+        }
+    }, [videoPage, selectedUser, videoStatus, videoModel, videoHasRefund, videoStartDate, videoEndDate])
+
+    useEffect(() => {
+        if (activeTab === "video") {
+            fetchVideoData()
+        }
+    }, [activeTab, videoPage])
+
+    const handleVideoSearch = () => {
+        setVideoPage(1)
+        fetchVideoData()
+    }
+
+    const handleVideoReset = () => {
+        setVideoStatus("all")
+        setVideoHasRefund("all")
+        setVideoStartDate("")
+        setVideoEndDate("")
+        setVideoPage(1)
+        setVideoExpandedRows(new Set())
+    }
+
+    const toggleVideoRow = (id: string) => {
+        setVideoExpandedRows(prev => {
+            const next = new Set(prev)
+            if (next.has(id)) {
+                next.delete(id)
+            } else {
+                next.add(id)
+            }
+            return next
+        })
+    }
+
     // 切换展开行
     const toggleRow = (id: string) => {
         setExpandedRows(prev => {
@@ -363,6 +470,20 @@ export default function AdminGenerationsPage() {
                     </h1>
                     <p className="text-slate-400 mt-1">查看和管理所有用户的生成记录</p>
                 </motion.div>
+
+                {/* Tabs */}
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <TabsList className="mb-6">
+                        <TabsTrigger value="image" className="gap-2">
+                            <Image className="w-4 h-4" /> 图片生成
+                        </TabsTrigger>
+                        <TabsTrigger value="video" className="gap-2">
+                            <Video className="w-4 h-4" /> 视频生成
+                        </TabsTrigger>
+                    </TabsList>
+
+                    {/* 图片生成 Tab */}
+                    <TabsContent value="image">
 
                 {/* Stats Cards */}
                 {stats && (
@@ -917,6 +1038,437 @@ export default function AdminGenerationsPage() {
                         </div>
                     )}
                 </motion.div>
+
+                    </TabsContent>
+
+                    {/* 视频生成 Tab */}
+                    <TabsContent value="video">
+                        {/* 视频统计卡片 */}
+                        {videoStats && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.05 }}
+                                className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
+                            >
+                                <div className="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20 rounded-xl p-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-blue-500/20 rounded-lg">
+                                            <Video className="w-5 h-5 text-blue-400" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-slate-400">今日视频</p>
+                                            <p className="text-xl font-bold text-white">{videoStats.todayCount}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20 rounded-xl p-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-purple-500/20 rounded-lg">
+                                            <Sparkles className="w-5 h-5 text-purple-400" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-slate-400">视频消耗</p>
+                                            <p className="text-xl font-bold text-white">{videoStats.totalCost.toLocaleString()}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-xl p-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-emerald-500/20 rounded-lg">
+                                            <CheckCircle className="w-5 h-5 text-emerald-400" />
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-slate-400">成功率</p>
+                                            <p className="text-xl font-bold text-white">{videoStats.successRate}%</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                {videoStats.totalRefund > 0 && (
+                                    <div className="bg-gradient-to-br from-rose-500/10 to-rose-600/5 border border-rose-500/20 rounded-xl p-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2.5 bg-rose-500/20 rounded-lg">
+                                                <RotateCcw className="w-5 h-5 text-rose-400" />
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-slate-400">已退款</p>
+                                                <p className="text-xl font-bold text-white">{videoStats.totalRefund.toLocaleString()}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
+
+                        {/* 视频筛选栏 */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.1 }}
+                            className="bg-white/5 border border-white/10 rounded-2xl p-5 mb-6"
+                        >
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                                {/* 用户（复用） */}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
+                                        <User className="w-3 h-3" /> 用户
+                                    </label>
+                                    <Popover open={userSearchOpen} onOpenChange={setUserSearchOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                className="w-full justify-between h-9 bg-white/5 border-white/10 text-white hover:bg-white/10 text-sm"
+                                            >
+                                                {selectedUser ? (
+                                                    <div className="flex items-center gap-2 truncate">
+                                                        <Avatar className="w-4 h-4">
+                                                            <AvatarImage src={selectedUser.image || ""} />
+                                                            <AvatarFallback className="text-[10px] bg-blue-500">
+                                                                {(selectedUser.name || selectedUser.email)?.[0]?.toUpperCase()}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <span className="truncate">{selectedUser.username || selectedUser.email}</span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-slate-500">选择用户...</span>
+                                                )}
+                                                {selectedUser ? (
+                                                    <X className="w-3.5 h-3.5 text-slate-400 hover:text-white" onClick={(e) => { e.stopPropagation(); setSelectedUser(null) }} />
+                                                ) : (
+                                                    <User className="w-3.5 h-3.5 text-slate-500" />
+                                                )}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[280px] p-0 bg-slate-900 border-white/10">
+                                            <Command className="bg-transparent">
+                                                <CommandInput placeholder="搜索用户..." value={userSearchQuery} onValueChange={setUserSearchQuery} className="text-white" />
+                                                <CommandList>
+                                                    {userLoading ? (
+                                                        <div className="p-4 text-center"><Loader2 className="w-4 h-4 animate-spin mx-auto text-slate-400" /></div>
+                                                    ) : userOptions.length === 0 ? (
+                                                        <CommandEmpty className="text-slate-400 py-4">未找到用户</CommandEmpty>
+                                                    ) : (
+                                                        <CommandGroup>
+                                                            {userOptions.slice(0, 10).map((user) => (
+                                                                <CommandItem key={user.id} value={user.email} onSelect={() => { setSelectedUser(user); setUserSearchOpen(false) }} className="cursor-pointer text-white hover:bg-white/10">
+                                                                    <Avatar className="w-5 h-5 mr-2">
+                                                                        <AvatarImage src={user.image || ""} />
+                                                                        <AvatarFallback className="text-[10px] bg-blue-500">{(user.name || user.email)?.[0]?.toUpperCase()}</AvatarFallback>
+                                                                    </Avatar>
+                                                                    <div className="flex flex-col">
+                                                                        <span className="font-medium text-sm">{user.username || user.name || "无名称"}</span>
+                                                                        <span className="text-xs text-slate-500">{user.email}</span>
+                                                                    </div>
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    )}
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+
+                                {/* 状态 */}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs text-slate-400 font-medium">状态</label>
+                                    <Select value={videoStatus} onValueChange={setVideoStatus}>
+                                        <SelectTrigger className="h-9 bg-white/5 border-white/10 text-white text-sm"><SelectValue placeholder="全部" /></SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-white/10">
+                                            <SelectItem value="all" className="text-white">全部</SelectItem>
+                                            <SelectItem value="PENDING" className="text-white">处理中</SelectItem>
+                                            <SelectItem value="PROCESSING" className="text-white">生成中</SelectItem>
+                                            <SelectItem value="COMPLETED" className="text-white">已完成</SelectItem>
+                                            <SelectItem value="FAILED" className="text-white">失败</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* 模型 */}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs text-slate-400 font-medium">模型</label>
+                                    <Select value={videoModel} disabled>
+                                        <SelectTrigger className="h-9 bg-white/5 border-white/10 text-white text-sm"><SelectValue placeholder="Sora-2" /></SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-white/10">
+                                            <SelectItem value="all" className="text-white">全部</SelectItem>
+                                            <SelectItem value="sora-2" className="text-white">Sora-2</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* 退款 */}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
+                                        <RotateCcw className="w-3 h-3" /> 退款
+                                    </label>
+                                    <Select value={videoHasRefund} onValueChange={setVideoHasRefund}>
+                                        <SelectTrigger className="h-9 bg-white/5 border-white/10 text-white text-sm"><SelectValue placeholder="全部" /></SelectTrigger>
+                                        <SelectContent className="bg-slate-900 border-white/10">
+                                            <SelectItem value="all" className="text-white">全部</SelectItem>
+                                            <SelectItem value="true" className="text-white">已退款</SelectItem>
+                                            <SelectItem value="false" className="text-white">未退款</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* 日期范围 */}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs text-slate-400 font-medium flex items-center gap-1.5">
+                                        <Calendar className="w-3 h-3" /> 日期范围
+                                    </label>
+                                    <DateRangePicker
+                                        value={{ startDate: videoStartDate, endDate: videoEndDate }}
+                                        onChange={({ startDate, endDate }) => {
+                                            setVideoStartDate(startDate)
+                                            setVideoEndDate(endDate)
+                                        }}
+                                        placeholder="选择日期..."
+                                        className="w-full"
+                                    />
+                                </div>
+
+                                {/* 按钮 */}
+                                <div className="flex gap-2 items-end">
+                                    <Button onClick={handleVideoSearch} className="h-9 bg-blue-600 hover:bg-blue-700 text-white text-sm px-3">
+                                        <Search className="w-3.5 h-3.5 mr-1" /> 搜索
+                                    </Button>
+                                    <Button onClick={handleVideoReset} variant="outline" className="h-9 bg-white/5 border-white/10 text-white hover:bg-white/10 px-3">
+                                        <RefreshCw className="w-3.5 h-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
+                        </motion.div>
+
+                        {/* 视频记录摘要 */}
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="text-sm text-slate-400">
+                                共 <span className="text-white font-medium">{videoTotal}</span> 条记录
+                                {videoStats && videoTotal > 0 && (
+                                    <>
+                                        <span className="ml-3 text-purple-400">
+                                            消耗 <span className="font-medium">{videoStats.totalCost.toLocaleString()}</span> 积分
+                                        </span>
+                                        {videoStats.totalRefund > 0 && (
+                                            <span className="ml-3 text-rose-400">
+                                                退款 <span className="font-medium">{videoStats.totalRefund.toLocaleString()}</span> 积分
+                                            </span>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* 视频表格 */}
+                        <motion.div
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.2 }}
+                            className="bg-white/5 border border-white/10 rounded-2xl overflow-hidden"
+                        >
+                            {/* 表头 */}
+                            <div className="hidden md:grid grid-cols-12 gap-3 p-3 border-b border-white/10 text-xs text-slate-500 font-medium bg-white/[0.02]">
+                                <div className="col-span-2">用户</div>
+                                <div className="col-span-3">提示词</div>
+                                <div className="col-span-1">模型/分辨率</div>
+                                <div className="col-span-1">时长</div>
+                                <div className="col-span-2">预览</div>
+                                <div className="col-span-1">费用</div>
+                                <div className="col-span-1">状态</div>
+                                <div className="col-span-1">时间</div>
+                            </div>
+
+                            {/* 表体 */}
+                            {videoLoading ? (
+                                <div className="space-y-3 p-4">
+                                    {[1, 2, 3, 4, 5].map((i) => (<Skeleton key={i} className="h-16 w-full bg-white/10 rounded-xl" />))}
+                                </div>
+                            ) : videoData.length === 0 ? (
+                                <div className="text-center py-16 text-slate-400">
+                                    <Video className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                                    <p>暂无视频数据</p>
+                                </div>
+                            ) : (
+                                <div className="divide-y divide-white/5">
+                                    {videoData.map((item) => {
+                                        const isExpanded = videoExpandedRows.has(item.id)
+                                        return (
+                                            <div key={item.id} className="border-b border-white/5 last:border-b-0">
+                                                <div
+                                                    className="grid grid-cols-1 md:grid-cols-12 gap-3 p-3 items-center hover:bg-white/[0.02] transition-colors cursor-pointer"
+                                                    onClick={() => toggleVideoRow(item.id)}
+                                                >
+                                                    {/* 用户 */}
+                                                    <div className="col-span-2 flex items-center gap-2">
+                                                        <Avatar className="w-7 h-7 flex-shrink-0">
+                                                            <AvatarImage src={item.user?.image || ""} />
+                                                            <AvatarFallback className="bg-blue-500 text-[10px] text-white">
+                                                                {(item.user?.name || item.user?.email)?.[0]?.toUpperCase() || "U"}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="min-w-0">
+                                                            <div className="text-sm text-white truncate">{item.user?.username || item.user?.name || "未知"}</div>
+                                                            <div className="text-xs text-slate-500 truncate">{item.user?.email?.split("@")[0]}</div>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 提示词 */}
+                                                    <div className="col-span-3">
+                                                        <div className="text-sm text-white truncate" title={item.prompt}>{item.prompt}</div>
+                                                    </div>
+
+                                                    {/* 模型/分辨率 */}
+                                                    <div className="col-span-1">
+                                                        <div className="text-xs text-slate-300">{item.model}</div>
+                                                        <div className="text-xs text-slate-500">{item.size}</div>
+                                                    </div>
+
+                                                    {/* 时长 */}
+                                                    <div className="col-span-1">
+                                                        <div className="text-sm text-white flex items-center gap-1">
+                                                            <Clock className="w-3 h-3 text-slate-400" />
+                                                            {item.seconds}秒
+                                                        </div>
+                                                    </div>
+
+                                                    {/* 预览 */}
+                                                    <div className="col-span-2">
+                                                        {item.status === "COMPLETED" && item.videoUrl ? (
+                                                            <div
+                                                                className="relative w-20 h-12 rounded-lg border border-emerald-500/30 overflow-hidden cursor-pointer hover:scale-105 transition-transform bg-black/50"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation()
+                                                                    setPreviewVideo(item.videoUrl)
+                                                                }}
+                                                            >
+                                                                <video
+                                                                    src={item.videoUrl}
+                                                                    preload="metadata"
+                                                                    className="w-full h-full object-cover"
+                                                                />
+                                                                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                                                    <Play className="w-4 h-4 text-white" />
+                                                                </div>
+                                                            </div>
+                                                        ) : item.status === "PROCESSING" ? (
+                                                            <div className="w-20 h-12 bg-white/5 rounded-lg flex items-center justify-center">
+                                                                <div className="w-full px-2">
+                                                                    <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                                                        <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${item.progress}%` }} />
+                                                                    </div>
+                                                                    <p className="text-[10px] text-slate-500 mt-1 text-center">{item.progress}%</p>
+                                                                </div>
+                                                            </div>
+                                                        ) : (
+                                                            <div className="w-20 h-12 bg-white/5 rounded-lg flex items-center justify-center">
+                                                                <span className="text-slate-500 text-[10px]">无</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* 费用 */}
+                                                    <div className="col-span-1">
+                                                        <span className={`text-sm font-medium ${item.hasRefunded ? "text-slate-500 line-through" : "text-purple-400"}`}>
+                                                            {item.cost}
+                                                        </span>
+                                                        {item.hasRefunded && (
+                                                            <div className="flex items-center gap-1 text-rose-400">
+                                                                <RotateCcw className="w-3 h-3" />
+                                                                <span className="text-xs">已退</span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* 状态 */}
+                                                    <div className="col-span-1">
+                                                        {(() => {
+                                                            const config: Record<string, { color: string; label: string }> = {
+                                                                PENDING: { color: "bg-amber-500/20 text-amber-400 border-amber-500/30", label: "处理中" },
+                                                                PROCESSING: { color: "bg-blue-500/20 text-blue-400 border-blue-500/30", label: "生成中" },
+                                                                COMPLETED: { color: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", label: "已完成" },
+                                                                FAILED: { color: "bg-red-500/20 text-red-400 border-red-500/30", label: "失败" },
+                                                            }
+                                                            const c = config[item.status] || { color: "bg-gray-500/20 text-gray-400", label: item.status }
+                                                            return <Badge className={`${c.color} border text-xs`}>{c.label}</Badge>
+                                                        })()}
+                                                    </div>
+
+                                                    {/* 时间 */}
+                                                    <div className="col-span-1 text-xs text-slate-400">{format(new Date(item.createdAt), "MM-dd HH:mm")}</div>
+                                                </div>
+
+                                                {/* 展开详情 */}
+                                                <AnimatePresence>
+                                                    {isExpanded && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: "auto", opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            className="overflow-hidden"
+                                                        >
+                                                            <div className="p-4 bg-white/[0.02] border-t border-white/5 grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                                                <div className="col-span-4 space-y-1">
+                                                                    <div className="text-slate-500">完整提示词</div>
+                                                                    <div className="text-white text-sm whitespace-pre-wrap">{item.prompt}</div>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <div className="text-slate-500">Task ID</div>
+                                                                    <div className="text-white break-all">{item.taskId}</div>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <div className="text-slate-500">单价</div>
+                                                                    <div className="text-white">{item.costPerSecond} 积分/秒</div>
+                                                                </div>
+                                                                {item.completedAt && (
+                                                                    <div className="space-y-1">
+                                                                        <div className="text-slate-500">完成时间</div>
+                                                                        <div className="text-white">{format(new Date(item.completedAt), "yyyy-MM-dd HH:mm:ss")}</div>
+                                                                    </div>
+                                                                )}
+                                                                {item.errorMsg && (
+                                                                    <div className="space-y-1">
+                                                                        <div className="text-slate-500">错误信息</div>
+                                                                        <div className="text-rose-400">{item.errorMsg}</div>
+                                                                    </div>
+                                                                )}
+                                                                {item.referenceImage && (
+                                                                    <div className="col-span-2 space-y-1">
+                                                                        <div className="text-slate-500">参考图</div>
+                                                                        <div className="flex gap-1.5 flex-wrap">
+                                                                            <div className="relative w-10 h-10 rounded-lg border border-cyan-500/30 overflow-hidden cursor-pointer hover:scale-105 transition-transform" onClick={() => openPreview([item.referenceImage!], 0)}>
+                                                                                <LazyImage src={getThumbnailUrl(item.referenceImage, 200) ?? item.referenceImage} alt="" className="object-cover" />
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            )}
+
+                            {/* 分页 */}
+                            {videoTotalPages > 1 && (
+                                <div className="flex items-center justify-between p-4 border-t border-white/10">
+                                    <div className="text-sm text-slate-400">第 {videoPage} / {videoTotalPages} 页</div>
+                                    <div className="flex gap-2">
+                                        <Button variant="outline" size="sm" disabled={videoPage <= 1} onClick={() => setVideoPage(videoPage - 1)} className="bg-white/5 border-white/10 text-white hover:bg-white/10">
+                                            <ChevronLeft className="w-4 h-4" />
+                                        </Button>
+                                        <Button variant="outline" size="sm" disabled={videoPage >= videoTotalPages} onClick={() => setVideoPage(videoPage + 1)} className="bg-white/5 border-white/10 text-white hover:bg-white/10">
+                                            <ChevronRight className="w-4 h-4" />
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </motion.div>
+                    </TabsContent>
+                </Tabs>
+
             </main>
 
             {/* Image Preview */}
@@ -941,6 +1493,25 @@ export default function AdminGenerationsPage() {
                                     </div>
                                 </>
                             )}
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* 视频预览 */}
+            <AnimatePresence>
+                {previewVideo && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setPreviewVideo(null)}>
+                        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }} className="relative max-w-4xl w-full" onClick={(e) => e.stopPropagation()}>
+                            <video
+                                src={previewVideo}
+                                controls
+                                autoPlay
+                                className="w-full max-h-[90vh] rounded-lg"
+                            />
+                            <Button variant="outline" size="icon" className="absolute top-2 right-2 bg-black/50 border-white/20 text-white hover:bg-black/70" onClick={() => setPreviewVideo(null)}>
+                                <X className="w-5 h-5" />
+                            </Button>
                         </motion.div>
                     </motion.div>
                 )}

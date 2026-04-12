@@ -47,8 +47,10 @@ export async function GET(req: NextRequest) {
         let copywriting = 0         // 智能商品描述
         let removeWatermark = 0     // 去水印
         let addWatermark = 0        // 加水印
+        let video = 0               // 视频生成
         let appealRefund = 0        // 申诉退款
         let failureRefund = 0       // 失败退款
+        let videoRefund = 0         // 视频退款
 
         type DailyStats = {
             mainImage: number
@@ -58,8 +60,10 @@ export async function GET(req: NextRequest) {
             copywriting: number
             removeWatermark: number
             addWatermark: number
+            video: number
             appealRefund: number
             failureRefund: number
+            videoRefund: number
         }
         const dailyStats: Record<string, DailyStats> = {}
 
@@ -77,8 +81,10 @@ export async function GET(req: NextRequest) {
             copywriting: 0,
             removeWatermark: 0,
             addWatermark: 0,
+            video: 0,
             appealRefund: 0,
             failureRefund: 0,
+            videoRefund: 0,
         })
 
         for (const record of records) {
@@ -91,10 +97,13 @@ export async function GET(req: NextRequest) {
             }
 
             if (record.type === "REFUND") {
-                // 区分申诉退款和失败退款
+                // 区分申诉退款、视频退款和失败退款
                 if (desc.startsWith("申诉退款")) {
                     appealRefund += cost
                     dailyStats[date].appealRefund += cost
+                } else if (desc.startsWith("Sora-2 视频生成失败退款")) {
+                    videoRefund += cost
+                    dailyStats[date].videoRefund += cost
                 } else {
                     // 其他退款都是失败退款 (生成失败退款、折扣重试失败退款、图片编辑失败退款、智能文案生成失败退款等)
                     failureRefund += cost
@@ -136,6 +145,9 @@ export async function GET(req: NextRequest) {
             } else if (desc === "解锁水印功能") {
                 addWatermark += cost
                 dailyStats[date].addWatermark += cost
+            } else if (desc.startsWith("Sora-2 视频生成")) {
+                video += cost
+                dailyStats[date].video += cost
             }
         }
 
@@ -159,12 +171,15 @@ export async function GET(req: NextRequest) {
                 copywriting,        // 智能商品描述
                 removeWatermark,    // 去水印
                 addWatermark,       // 加水印
+                video,              // 视频生成
+                videoRefund,        // 视频退款
+                videoTotal: video - videoRefund,
                 appealRefund,       // 申诉退款
                 failureRefund,      // 失败退款
-                refundTotal: appealRefund + failureRefund,
+                refundTotal: appealRefund + failureRefund + videoRefund,
                 // 总计
-                total: mainImage + mainImageRetry + detailPage + detailPageRetry + copywriting + removeWatermark + addWatermark - appealRefund - failureRefund,
-                totalRevenue: mainImage + mainImageRetry + detailPage + detailPageRetry + copywriting + removeWatermark + addWatermark,
+                total: mainImage + mainImageRetry + detailPage + detailPageRetry + copywriting + removeWatermark + addWatermark + video - appealRefund - failureRefund - videoRefund,
+                totalRevenue: mainImage + mainImageRetry + detailPage + detailPageRetry + copywriting + removeWatermark + addWatermark + video,
             },
 
             dailyData,
