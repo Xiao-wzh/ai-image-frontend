@@ -25,6 +25,12 @@ function getRetryCost(taskType: string, costs: SystemCostConfig): number {
   return taskType === "DETAIL_PAGE" ? costs.DETAIL_PAGE_RETRY_COST : costs.MAIN_IMAGE_RETRY_COST
 }
 
+/** 获取用户最大并发任务数，后续可按会员等级动态返回 */
+function getMaxConcurrent(_userId: string, _taskType: string): number {
+  // TODO: 接入会员体系后，根据用户会员等级返回不同并发数
+  return 99 // 现阶段不限制
+}
+
 // Helper: Fill prompt template with variables (legacy wrapper → delegates to compilePrompt)
 function fillPromptTemplate(
   template: string,
@@ -238,15 +244,17 @@ async function handleComboGeneration(
     }),
   ])
 
-  if (mainPendingCount >= 3) {
+  if (mainPendingCount >= getMaxConcurrent(userId, "MAIN_IMAGE")) {
+    const max = getMaxConcurrent(userId, "MAIN_IMAGE")
     return NextResponse.json(
-      { error: `您当前有 ${mainPendingCount} 个主图任务正在进行中，请等待完成后再提交（最多同时 3 个）` },
+      { error: `您当前有 ${mainPendingCount} 个主图任务正在进行中，请等待完成后再提交（最多同时 ${max} 个）` },
       { status: 429 }
     )
   }
-  if (detailPendingCount >= 3) {
+  if (detailPendingCount >= getMaxConcurrent(userId, "DETAIL_PAGE")) {
+    const max = getMaxConcurrent(userId, "DETAIL_PAGE")
     return NextResponse.json(
-      { error: `您当前有 ${detailPendingCount} 个详情页任务正在进行中，请等待完成后再提交（最多同时 3 个）` },
+      { error: `您当前有 ${detailPendingCount} 个详情页任务正在进行中，请等待完成后再提交（最多同时 ${max} 个）` },
       { status: 429 }
     )
   }
@@ -577,9 +585,7 @@ async function handleSingleGeneration(
   let deductedBonus = 0
   let deductedPaid = 0
 
-  // 并发限制设置：主图和详情页各最多 3 个
-  const MAX_CONCURRENT_MAIN_IMAGE = 3
-  const MAX_CONCURRENT_DETAIL_PAGE = 3
+  // 并发限制：通过配置函数获取，后续可按会员等级动态控制
 
   const preTaskType = String(body?.taskType || "MAIN_IMAGE").trim().toUpperCase()
 
@@ -602,7 +608,7 @@ async function handleSingleGeneration(
     },
   })
 
-  const maxConcurrent = checkTaskType === "DETAIL_PAGE" ? MAX_CONCURRENT_DETAIL_PAGE : MAX_CONCURRENT_MAIN_IMAGE
+  const maxConcurrent = getMaxConcurrent(userId, checkTaskType)
   const taskTypeName = checkTaskType === "DETAIL_PAGE" ? "详情页" : "主图"
 
   if (pendingCount >= maxConcurrent) {
