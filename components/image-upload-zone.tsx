@@ -39,11 +39,13 @@ export function ImageUploadZone({
       const err = fileRejections[0].errors[0]
       if (err?.code === "file-too-large") {
         toast.error("文件过大，请上传 4MB 以内的图片")
+      } else if (err?.code === "too-many-files") {
+        toast.error(`最多只能上传 ${maxFiles} 张图片`)
       } else {
         toast.error("不支持该格式文件，请上传 JPG、PNG、WebP 格式图片")
       }
     }
-  }, [])
+  }, [maxFiles])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,

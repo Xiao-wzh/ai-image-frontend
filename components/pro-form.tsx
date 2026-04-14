@@ -406,7 +406,7 @@ export function ProForm(props: CockpitFormProps) {
                     <div className="text-xs text-slate-500">图片越清晰、角度越完整，效果越好</div>
                 </div>
                 <div className="mt-3">
-                    <ImageUploadZone files={files} previewUrls={previewUrls} onFilesChange={onFilesChange} maxFiles={5} />
+                    <ImageUploadZone files={files} previewUrls={previewUrls} onFilesChange={onFilesChange} maxFiles={8} />
                 </div>
             </motion.div>
 
