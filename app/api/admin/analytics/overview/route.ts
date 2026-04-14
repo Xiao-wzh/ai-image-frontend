@@ -1,3 +1,9 @@
+/**
+ * Analytics 概览 — 改为查 DailyAnalytics 预计算小表
+ *
+ * 只查 2-3 行（今天 + 昨天 + 月累计聚合），毫秒级响应。
+ * 不再直接查 Generation / Order 等业务大表。
+ */
 import { NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { requireAdmin } from "@/lib/check-admin"
@@ -5,7 +11,8 @@ import { requireAdmin } from "@/lib/check-admin"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-// 今日/昨日概览指标
+const BEIJING_OFFSET = 8 * 60 * 60 * 1000
+
 export async function GET() {
   try {
     const guard = await requireAdmin()
@@ -13,140 +20,116 @@ export async function GET() {
       return NextResponse.json({ error: guard.error }, { status: guard.status })
     }
 
-    // 北京时间今天 00:00:00
-    const now = new Date()
-    const beijingOffset = 8 * 60 * 60 * 1000
-    const beijingNow = new Date(now.getTime() + beijingOffset)
+    // 北京时间日期
+    const beijingNow = new Date(Date.now() + BEIJING_OFFSET)
     const todayStr = beijingNow.toISOString().split("T")[0]
-    const todayStart = new Date(todayStr + "T00:00:00+08:00")
-    const todayEnd = new Date(todayStr + "T23:59:59+08:00")
+    const yesterdayStr = new Date(
+      beijingNow.getTime() - 24 * 60 * 60 * 1000
+    )
+      .toISOString()
+      .split("T")[0]
+    const monthStartStr = beijingNow.toISOString().slice(0, 7) + "-01"
 
-    // 昨天
-    const yesterdayStart = new Date(todayStart.getTime() - 24 * 60 * 60 * 1000)
-    const yesterdayEnd = new Date(todayEnd.getTime() - 24 * 60 * 60 * 1000)
-
-    // 当月开始
-    const monthStart = new Date(`${beijingNow.toISOString().slice(0, 7)}-01T00:00:00+08:00`)
-
-    // 并行查询
-    const [
-      todayOrders,
-      yesterdayOrders,
-      monthOrders,
-      todayNewUsers,
-      yesterdayNewUsers,
-      monthNewUsers,
-      todayActiveUsers,
-      yesterdayActiveUsers,
-      todayGenerations,
-      yesterdayGenerations,
-    ] = await Promise.all([
-      // 今日/昨日/当月 订单
-      prisma.order.findMany({
-        where: { status: "PAID", paidAt: { gte: todayStart, lte: todayEnd } },
-        select: { amount: true },
-      }),
-      prisma.order.findMany({
-        where: { status: "PAID", paidAt: { gte: yesterdayStart, lte: yesterdayEnd } },
-        select: { amount: true },
-      }),
-      prisma.order.findMany({
-        where: { status: "PAID", paidAt: { gte: monthStart } },
-        select: { amount: true, userId: true },
-      }),
-      // 今日/昨日/当月 新用户
-      prisma.user.count({ where: { role: "USER", createdAt: { gte: todayStart, lte: todayEnd } } }),
-      prisma.user.count({ where: { role: "USER", createdAt: { gte: yesterdayStart, lte: yesterdayEnd } } }),
-      prisma.user.count({ where: { role: "USER", createdAt: { gte: monthStart } } }),
-      // 今日/昨日 活跃用户（注册日期早于当日的 Generation 去重用户）
-      prisma.$queryRaw<Array<{ cnt: bigint }>>`
-        SELECT COUNT(DISTINCT "userId") as cnt FROM "Generation"
-        WHERE "createdAt" >= ${todayStart} AND "createdAt" <= ${todayEnd}
-          AND "userId" IS NOT NULL
-          AND "userId" NOT IN (
-            SELECT id FROM "User" WHERE "createdAt" >= ${todayStart}
-          )
-      `,
-      prisma.$queryRaw<Array<{ cnt: bigint }>>`
-        SELECT COUNT(DISTINCT "userId") as cnt FROM "Generation"
-        WHERE "createdAt" >= ${yesterdayStart} AND "createdAt" <= ${yesterdayEnd}
-          AND "userId" IS NOT NULL
-          AND "userId" NOT IN (
-            SELECT id FROM "User" WHERE "createdAt" >= ${yesterdayStart} AND "createdAt" <= ${yesterdayEnd}
-          )
-      `,
-      // 今日/昨日 生成任务
-      prisma.generation.groupBy({
-        by: ["status"],
-        where: { createdAt: { gte: todayStart, lte: todayEnd } },
-        _count: true,
-      }),
-      prisma.generation.groupBy({
-        by: ["status"],
-        where: { createdAt: { gte: yesterdayStart, lte: yesterdayEnd } },
-        _count: true,
-      }),
+    // 查今天 + 昨天的预计算行
+    const [todayRow, yesterdayRow] = await Promise.all([
+      prisma.dailyAnalytics.findUnique({ where: { date: todayStr } }),
+      prisma.dailyAnalytics.findUnique({ where: { date: yesterdayStr } }),
     ])
 
-    const sumAmount = (orders: { amount: number }[]) =>
-      orders.reduce((s, o) => s + o.amount, 0)
+    // 月累计聚合
+    const monthAgg = await prisma.dailyAnalytics.aggregate({
+      _sum: { revenue: true, newUsers: true, orderCount: true, paidUsers: true },
+      where: { date: { gte: monthStartStr, lte: todayStr } },
+    })
 
-    const todayRevenue = sumAmount(todayOrders)
-    const yesterdayRevenue = sumAmount(yesterdayOrders)
-    const monthRevenue = sumAmount(monthOrders)
+    const todayRevenue = todayRow?.revenue || 0
+    const yesterdayRevenue = yesterdayRow?.revenue || 0
+    const monthRevenue = monthAgg._sum.revenue || 0
 
-    const todayActive = Number(todayActiveUsers[0]?.cnt ?? 0)
-    const yesterdayActive = Number(yesterdayActiveUsers[0]?.cnt ?? 0)
+    const todayOrders = todayRow?.orderCount || 0
+    const yesterdayOrders = yesterdayRow?.orderCount || 0
+
+    const todayNewUsers = todayRow?.newUsers || 0
+    const yesterdayNewUsers = yesterdayRow?.newUsers || 0
+    const monthNewUsers = monthAgg._sum.newUsers || 0
+
+    const todayActive = todayRow?.activeUsers || 0
+    const yesterdayActive = yesterdayRow?.activeUsers || 0
 
     // 成功率
-    const todayTotal = todayGenerations.reduce((s, g) => s + g._count, 0)
-    const todaySuccess = todayGenerations
-      .filter((g) => g.status === "COMPLETED" || g.status === "PARTIAL_SUCCESS")
-      .reduce((s, g) => s + g._count, 0)
-    const yesterdayTotal = yesterdayGenerations.reduce((s, g) => s + g._count, 0)
-    const yesterdaySuccess = yesterdayGenerations
-      .filter((g) => g.status === "COMPLETED" || g.status === "PARTIAL_SUCCESS")
-      .reduce((s, g) => s + g._count, 0)
+    const todayTotal =
+      (todayRow?.genCompleted || 0) +
+      (todayRow?.genFailed || 0) +
+      (todayRow?.genPartial || 0) +
+      (todayRow?.genPending || 0)
+    const todaySuccess =
+      (todayRow?.genCompleted || 0) + (todayRow?.genPartial || 0)
+    const yesterdayTotal =
+      (yesterdayRow?.genCompleted || 0) +
+      (yesterdayRow?.genFailed || 0) +
+      (yesterdayRow?.genPartial || 0) +
+      (yesterdayRow?.genPending || 0)
+    const yesterdaySuccess =
+      (yesterdayRow?.genCompleted || 0) + (yesterdayRow?.genPartial || 0)
 
-    const successRate = todayTotal > 0 ? Math.round((todaySuccess / todayTotal) * 100) : 0
-    const yesterdaySuccessRate = yesterdayTotal > 0 ? Math.round((yesterdaySuccess / yesterdayTotal) * 100) : 0
+    const successRate =
+      todayTotal > 0 ? Math.round((todaySuccess / todayTotal) * 100) : 0
+    const yesterdaySuccessRate =
+      yesterdayTotal > 0
+        ? Math.round((yesterdaySuccess / yesterdayTotal) * 100)
+        : 0
 
-    // ARPU（当月收入/当月活跃用户数，简化为当月付费用户数）
-    const monthPaidUsers = new Set(monthOrders.map((o) => o.userId).filter(Boolean)).size
-    const arpu = monthPaidUsers > 0 ? (monthRevenue / 100 / monthPaidUsers) : 0
+    // ARPU（近似值：用日付费用户之和 ÷ 月收入）
+    const monthPaidUsers = monthAgg._sum.paidUsers || 0
+    const arpu = monthPaidUsers > 0 ? monthRevenue / 100 / monthPaidUsers : 0
 
     return NextResponse.json({
       success: true,
       data: {
         todayRevenue,
         yesterdayRevenue,
-        revenueChange: yesterdayRevenue > 0
-          ? Math.round(((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100)
-          : (todayRevenue > 0 ? 100 : 0),
+        revenueChange:
+          yesterdayRevenue > 0
+            ? Math.round(
+                ((todayRevenue - yesterdayRevenue) / yesterdayRevenue) * 100
+              )
+            : todayRevenue > 0
+              ? 100
+              : 0,
         monthRevenue,
-
-        todayOrders: todayOrders.length,
-        yesterdayOrders: yesterdayOrders.length,
-        ordersChange: yesterdayOrders.length > 0
-          ? Math.round(((todayOrders.length - yesterdayOrders.length) / yesterdayOrders.length) * 100)
-          : (todayOrders.length > 0 ? 100 : 0),
-
+        todayOrders,
+        yesterdayOrders,
+        ordersChange:
+          yesterdayOrders > 0
+            ? Math.round(
+                ((todayOrders - yesterdayOrders) / yesterdayOrders) * 100
+              )
+            : todayOrders > 0
+              ? 100
+              : 0,
         todayNewUsers,
         yesterdayNewUsers,
-        newUsersChange: yesterdayNewUsers > 0
-          ? Math.round(((todayNewUsers - yesterdayNewUsers) / yesterdayNewUsers) * 100)
-          : (todayNewUsers > 0 ? 100 : 0),
+        newUsersChange:
+          yesterdayNewUsers > 0
+            ? Math.round(
+                ((todayNewUsers - yesterdayNewUsers) / yesterdayNewUsers) * 100
+              )
+            : todayNewUsers > 0
+              ? 100
+              : 0,
         monthNewUsers,
-
         todayActive,
         yesterdayActive,
-        activeChange: yesterdayActive > 0
-          ? Math.round(((todayActive - yesterdayActive) / yesterdayActive) * 100)
-          : (todayActive > 0 ? 100 : 0),
-
+        activeChange:
+          yesterdayActive > 0
+            ? Math.round(
+                ((todayActive - yesterdayActive) / yesterdayActive) * 100
+              )
+            : todayActive > 0
+              ? 100
+              : 0,
         successRate,
         yesterdaySuccessRate,
-
         arpu: Math.round(arpu * 100) / 100,
       },
     })

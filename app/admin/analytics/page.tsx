@@ -18,41 +18,39 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState<Period>("30d")
+  const [refreshKey, setRefreshKey] = useState(0)
 
   // 概览数据
-  const { data: overviewData, mutate: mutateOverview } = useSWR(
-    "/api/admin/analytics/overview",
+  const { data: overviewData } = useSWR(
+    `/api/admin/analytics/overview?_r=${refreshKey}`,
     fetcher,
     { dedupingInterval: 60000 }
   )
 
   // 趋势数据
-  const { data: trendsData, mutate: mutateTrends } = useSWR(
-    `/api/admin/analytics/trends?period=${period}`,
+  const { data: trendsData } = useSWR(
+    `/api/admin/analytics/trends?period=${period}&_r=${refreshKey}`,
     fetcher,
     { dedupingInterval: 60000 }
   )
 
   // 留存数据
-  const { data: retentionData, mutate: mutateRetention } = useSWR(
-    "/api/admin/analytics/retention",
+  const { data: retentionData } = useSWR(
+    `/api/admin/analytics/retention?_r=${refreshKey}`,
     fetcher,
     { dedupingInterval: 60000 }
   )
 
   // 分布数据
-  const { data: distributionData, mutate: mutateDistribution } = useSWR(
-    `/api/admin/analytics/distribution?period=${period}`,
+  const { data: distributionData } = useSWR(
+    `/api/admin/analytics/distribution?period=${period}&_r=${refreshKey}`,
     fetcher,
     { dedupingInterval: 60000 }
   )
 
   const handleRefresh = useCallback(() => {
-    mutateOverview()
-    mutateTrends()
-    mutateRetention()
-    mutateDistribution()
-  }, [mutateOverview, mutateTrends, mutateRetention, mutateDistribution])
+    setRefreshKey((k) => k + 1)
+  }, [])
 
   return (
     <div className="flex h-screen bg-slate-950 text-white overflow-hidden">

@@ -1,3 +1,9 @@
+/**
+ * Analytics 趋势 — 改为查 DailyAnalytics 预计算小表
+ *
+ * 查 N 行（日期范围内），内存中做日/月聚合。
+ * 不再直接查 Generation / Order / User 大表。
+ */
 import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { requireAdmin } from "@/lib/check-admin"
@@ -5,7 +11,8 @@ import { requireAdmin } from "@/lib/check-admin"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-// 按日/月聚合趋势数据
+const BEIJING_OFFSET = 8 * 60 * 60 * 1000
+
 export async function GET(req: NextRequest) {
   try {
     const guard = await requireAdmin()
@@ -16,88 +23,122 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url)
     const period = searchParams.get("period") || "30d"
 
-    // 计算日期范围
-    const now = new Date()
-    const beijingOffset = 8 * 60 * 60 * 1000
-    const beijingNow = new Date(now.getTime() + beijingOffset)
+    // 北京时间日期
+    const beijingNow = new Date(Date.now() + BEIJING_OFFSET)
     const todayStr = beijingNow.toISOString().split("T")[0]
-
-    let startDate: Date
     const isMonthly = period === "12m"
 
+    // 计算起始日期
+    let startDateStr: string
     if (isMonthly) {
-      startDate = new Date(`${beijingNow.getFullYear() - 1}-${String(beijingNow.getMonth() + 1).padStart(2, "0")}-01T00:00:00+08:00`)
+      const year = beijingNow.getFullYear() - 1
+      const month = beijingNow.getMonth() + 1
+      startDateStr = `${year}-${String(month).padStart(2, "0")}-01`
     } else {
-      const days = parseInt(period) || 30
-      startDate = new Date(todayStr + "T00:00:00+08:00")
-      startDate = new Date(startDate.getTime() - (days - 1) * 24 * 60 * 60 * 1000)
+      const days = Math.min(parseInt(period) || 30, 90)
+      const startDate = new Date(
+        beijingNow.getTime() - (days - 1) * 24 * 60 * 60 * 1000
+      )
+      startDateStr = startDate.toISOString().split("T")[0]
     }
 
-    const endDate = new Date(todayStr + "T23:59:59+08:00")
+    // 查预计算数据（轻量：最多 90 行）
+    const rows = await prisma.dailyAnalytics.findMany({
+      where: { date: { gte: startDateStr, lte: todayStr } },
+      orderBy: { date: "asc" },
+    })
 
-    // 根据粒度选择分组方式
-    const dateFormat = isMonthly ? "YYYY-MM" : "YYYY-MM-DD"
-
-    // 并行查询：收入、用户增长、活跃用户、生成任务
-    const [revenue, userGrowth, activeUsers, generations] = await Promise.all([
-      // 收入趋势
-      prisma.$queryRawUnsafe<Array<{ date: string; revenue: bigint; order_count: bigint }>>(`
-        SELECT to_char(("paidAt" AT TIME ZONE '+08:00'), '${dateFormat}') as date,
-               SUM(amount) as revenue,
-               COUNT(*) as order_count
-        FROM "Order"
-        WHERE status = 'PAID' AND "paidAt" >= '${startDate.toISOString()}' AND "paidAt" <= '${endDate.toISOString()}'
-        GROUP BY date ORDER BY date
-      `),
-      // 用户增长
-      prisma.$queryRawUnsafe<Array<{ date: string; new_users: bigint }>>(`
-        SELECT to_char(("createdAt" AT TIME ZONE '+08:00'), '${dateFormat}') as date,
-               COUNT(*) as new_users
-        FROM "User"
-        WHERE role = 'USER' AND "createdAt" >= '${startDate.toISOString()}' AND "createdAt" <= '${endDate.toISOString()}'
-        GROUP BY date ORDER BY date
-      `),
-      // 活跃用户（有 Generation 记录的去重用户，排除当天注册的）
-      prisma.$queryRawUnsafe<Array<{ date: string; active_users: bigint }>>(`
-        SELECT to_char((g."createdAt" AT TIME ZONE '+08:00'), '${dateFormat}') as date,
-               COUNT(DISTINCT g."userId") as active_users
-        FROM "Generation" g
-        WHERE g."createdAt" >= '${startDate.toISOString()}' AND g."createdAt" <= '${endDate.toISOString()}'
-          AND g."userId" IS NOT NULL
-          AND g."userId" NOT IN (
-            SELECT u.id FROM "User" u
-            WHERE u."createdAt" >= (g."createdAt" AT TIME ZONE '+08:00')::date
-          )
-        GROUP BY date ORDER BY date
-      `),
-      // 生成任务状态分布
-      prisma.$queryRawUnsafe<Array<{ date: string; status: string; count: bigint }>>(`
-        SELECT to_char(("createdAt" AT TIME ZONE '+08:00'), '${dateFormat}') as date,
-               status,
-               COUNT(*) as count
-        FROM "Generation"
-        WHERE "createdAt" >= '${startDate.toISOString()}' AND "createdAt" <= '${endDate.toISOString()}'
-        GROUP BY date, status ORDER BY date, status
-      `),
-    ])
-
-    // 转换 bigint 为 number
-    const convertBigint = <T extends Record<string, unknown>>(rows: T[], fields: string[]): T[] =>
-      rows.map((row) => {
-        const converted = { ...row } as Record<string, unknown>
-        for (const f of fields) {
-          if (typeof converted[f] === "bigint") converted[f] = Number(converted[f])
+    if (isMonthly) {
+      // 按月聚合
+      const monthMap = new Map<
+        string,
+        {
+          revenue: number
+          orderCount: number
+          newUsers: number
+          activeUsers: number
+          genByStatus: Record<string, number>
         }
-        return converted as T
-      })
+      >()
 
+      for (const row of rows) {
+        const month = row.date.slice(0, 7) // YYYY-MM
+        const existing = monthMap.get(month) || {
+          revenue: 0,
+          orderCount: 0,
+          newUsers: 0,
+          activeUsers: 0,
+          genByStatus: {},
+        }
+        existing.revenue += row.revenue
+        existing.orderCount += row.orderCount
+        existing.newUsers += row.newUsers
+        existing.activeUsers += row.activeUsers
+        for (const [status, count] of Object.entries(
+          row.genByStatus as Record<string, number>
+        )) {
+          existing.genByStatus[status] =
+            (existing.genByStatus[status] || 0) + count
+        }
+        monthMap.set(month, existing)
+      }
+
+      const entries = Array.from(monthMap.entries()).sort(([a], [b]) =>
+        a.localeCompare(b)
+      )
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          revenue: entries.map(([date, d]) => ({
+            date,
+            revenue: d.revenue,
+            order_count: d.orderCount,
+          })),
+          userGrowth: entries.map(([date, d]) => ({
+            date,
+            new_users: d.newUsers,
+          })),
+          activeUsers: entries.map(([date, d]) => ({
+            date,
+            active_users: d.activeUsers,
+          })),
+          generations: entries.flatMap(([date, d]) =>
+            Object.entries(d.genByStatus).map(([status, count]) => ({
+              date,
+              status,
+              count,
+            }))
+          ),
+        },
+      })
+    }
+
+    // 日粒度：直接转换
     return NextResponse.json({
       success: true,
       data: {
-        revenue: convertBigint(revenue, ["revenue", "order_count"]),
-        userGrowth: convertBigint(userGrowth, ["new_users"]),
-        activeUsers: convertBigint(activeUsers, ["active_users"]),
-        generations: convertBigint(generations, ["count"]),
+        revenue: rows.map((r) => ({
+          date: r.date,
+          revenue: r.revenue,
+          order_count: r.orderCount,
+        })),
+        userGrowth: rows.map((r) => ({
+          date: r.date,
+          new_users: r.newUsers,
+        })),
+        activeUsers: rows.map((r) => ({
+          date: r.date,
+          active_users: r.activeUsers,
+        })),
+        generations: rows.flatMap((r) => {
+          const byStatus = r.genByStatus as Record<string, number>
+          return Object.entries(byStatus).map(([status, count]) => ({
+            date: r.date,
+            status,
+            count,
+          }))
+        }),
       },
     })
   } catch (error) {

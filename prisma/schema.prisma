@@ -587,6 +587,38 @@ model Order {
   @@index([planId])
 }
 
+/// 每日运营分析预计算表（cron 写入，analytics API 读取）
+model DailyAnalytics {
+  id             String   @id @default(cuid())
+  date           String   @unique             // YYYY-MM-DD 北京时间
+  newUsers       Int      @default(0)         // 新注册用户数
+  activeUsers    Int      @default(0)         // 活跃用户数（有生成记录的去重用户）
+  // 生成任务
+  genCompleted   Int      @default(0)
+  genFailed      Int      @default(0)
+  genPartial     Int      @default(0)
+  genPending     Int      @default(0)         // PENDING + PROCESSING
+  // 订单/收入
+  revenue        Int      @default(0)         // 支付金额（分）
+  orderCount     Int      @default(0)
+  paidUsers      Int      @default(0)         // 当日付费去重用户数
+  // 视频生成
+  videoCount     Int      @default(0)
+  videoCompleted Int      @default(0)
+  videoCost      Int      @default(0)         // 视频消耗积分
+  // 分布 JSON 字段
+  genByStatus    Json     @default("{}")      // { "COMPLETED": 10, "FAILED": 2, ... }
+  genByPlatform  Json     @default("{}")      // { "shopee": 10, "tiktok": 5, ... }
+  genByType      Json     @default("{}")      // { "electronics": 10, ... }
+  genByHour      Json     @default("{}")      // { "0": 1, "1": 0, ..., "23": 5 }
+  planSales      Json     @default("{}")      // { "套餐名": { count: 5, revenue: 1000 }, ... }
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([date])
+}
+
 /// 视频生成任务表
 model VideoGeneration {
   id              String    @id @default(cuid())
