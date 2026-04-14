@@ -73,11 +73,11 @@ export async function GET(req: NextRequest) {
               AND g."createdAt" >= '${dayStart.toISOString()}' AND g."createdAt" < '${activityEnd.toISOString()}'
           )
           SELECT cs.cohort_date::text, cs.cohort_size,
-            COALESCE(SUM(CASE WHEN ua.activity_date = cs.cohort_date + INTERVAL '1 day' THEN 1 END), 0) as d1,
-            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '3 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d3,
-            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '7 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d7,
-            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '14 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d14,
-            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '30 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d30
+            COUNT(DISTINCT CASE WHEN ua.activity_date = cs.cohort_date + INTERVAL '1 day' THEN c.user_id END) as d1,
+            COUNT(DISTINCT CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '3 days' AND ua.activity_date > cs.cohort_date THEN c.user_id END) as d3,
+            COUNT(DISTINCT CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '7 days' AND ua.activity_date > cs.cohort_date THEN c.user_id END) as d7,
+            COUNT(DISTINCT CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '14 days' AND ua.activity_date > cs.cohort_date THEN c.user_id END) as d14,
+            COUNT(DISTINCT CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '30 days' AND ua.activity_date > cs.cohort_date THEN c.user_id END) as d30
           FROM cohort_sizes cs
           LEFT JOIN cohorts c ON c.cohort_date = cs.cohort_date
           LEFT JOIN user_activity ua ON ua."userId" = c.user_id
@@ -100,11 +100,11 @@ export async function GET(req: NextRequest) {
               AND g."createdAt" >= (NOW() - INTERVAL '${activityDays} days') AT TIME ZONE '+08:00'
           )
           SELECT cs.cohort_date::text, cs.cohort_size,
-            COALESCE(SUM(CASE WHEN ua.activity_date = cs.cohort_date + INTERVAL '1 day' THEN 1 END), 0) as d1,
-            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '3 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d3,
-            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '7 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d7,
-            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '14 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d14,
-            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '30 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d30
+            COUNT(DISTINCT CASE WHEN ua.activity_date = cs.cohort_date + INTERVAL '1 day' THEN c.user_id END) as d1,
+            COUNT(DISTINCT CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '3 days' AND ua.activity_date > cs.cohort_date THEN c.user_id END) as d3,
+            COUNT(DISTINCT CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '7 days' AND ua.activity_date > cs.cohort_date THEN c.user_id END) as d7,
+            COUNT(DISTINCT CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '14 days' AND ua.activity_date > cs.cohort_date THEN c.user_id END) as d14,
+            COUNT(DISTINCT CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '30 days' AND ua.activity_date > cs.cohort_date THEN c.user_id END) as d30
           FROM cohort_sizes cs
           LEFT JOIN cohorts c ON c.cohort_date = cs.cohort_date
           LEFT JOIN user_activity ua ON ua."userId" = c.user_id
@@ -150,22 +150,24 @@ export async function GET(req: NextRequest) {
         FROM user_stats GROUP BY segment
       `)
 
-      // 充值转化漏斗
+      // 充值转化漏斗（带排序字段保证顺序）
       const funnel = await safeQuery<Array<{
         step: string
         count: bigint
       }>>(`
-        SELECT 'registered' as step, COUNT(*) as count FROM "User" WHERE role = 'USER'
-        UNION ALL
-        SELECT 'generated', COUNT(DISTINCT "userId") FROM "Generation" WHERE "userId" IS NOT NULL
-        UNION ALL
-        SELECT 'bonus_exhausted', COUNT(*) FROM "User" WHERE role = 'USER' AND "bonusCredits" <= 0
-        UNION ALL
-        SELECT 'first_paid', COUNT(DISTINCT "userId") FROM "Order" WHERE status = 'PAID' AND "userId" IS NOT NULL
-        UNION ALL
-        SELECT 'repeat_paid' as step, COUNT(*) as count FROM (
-          SELECT "userId" FROM "Order" WHERE status = 'PAID' AND "userId" IS NOT NULL GROUP BY "userId" HAVING COUNT(*) >= 2
-        ) sub
+        SELECT * FROM (
+          SELECT 1 as sort_order, 'registered' as step, COUNT(*) as count FROM "User" WHERE role = 'USER'
+          UNION ALL
+          SELECT 2, 'generated', COUNT(DISTINCT "userId") FROM "Generation" WHERE "userId" IS NOT NULL
+          UNION ALL
+          SELECT 3, 'bonus_exhausted', COUNT(*) FROM "User" WHERE role = 'USER' AND "bonusCredits" <= 0
+          UNION ALL
+          SELECT 4, 'first_paid', COUNT(DISTINCT "userId") FROM "Order" WHERE status = 'PAID' AND "userId" IS NOT NULL
+          UNION ALL
+          SELECT 5, 'repeat_paid', COUNT(*) FROM (
+            SELECT "userId" FROM "Order" WHERE status = 'PAID' AND "userId" IS NOT NULL GROUP BY "userId" HAVING COUNT(*) >= 2
+          ) sub
+        ) q ORDER BY sort_order
       `)
 
       return {
