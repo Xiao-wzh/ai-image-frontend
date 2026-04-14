@@ -1,4 +1,11 @@
-import { NextResponse } from "next/server"
+/**
+ * 留存分析 + 活跃分层 + 充值漏斗
+ *
+ * 查询参数：
+ * - ?days=60    最近 N 天的 cohort（默认 60，最大 90）
+ * - ?date=2026-04-01  查询指定日期的 cohort
+ */
+import { NextRequest, NextResponse } from "next/server"
 import prisma from "@/lib/prisma"
 import { requireAdmin } from "@/lib/check-admin"
 import { cachedQuery } from "@/lib/analytics-cache"
@@ -6,8 +13,9 @@ import { cachedQuery } from "@/lib/analytics-cache"
 export const runtime = "nodejs"
 export const dynamic = "force-dynamic"
 
-// 安全执行 raw query：在事务内设置 statement_timeout，超时自动终止
-async function safeQuery<T>(sql: string, timeoutMs = 8000): Promise<T[]> {
+const UTC8_MS = 8 * 60 * 60 * 1000
+
+async function safeQuery<T>(sql: string, timeoutMs = 15000): Promise<T[]> {
   const result: unknown = await prisma.$transaction(async (tx) => {
     await tx.$executeRawUnsafe(`SET LOCAL statement_timeout = '${timeoutMs}ms'`)
     return tx.$queryRawUnsafe(sql)
@@ -15,7 +23,6 @@ async function safeQuery<T>(sql: string, timeoutMs = 8000): Promise<T[]> {
   return result as T[]
 }
 
-// bigint → number
 const toNumber = (rows: any[], fields: string[]) =>
   rows.map((row) => {
     const converted = { ...row }
@@ -25,16 +32,86 @@ const toNumber = (rows: any[], fields: string[]) =>
     return converted
   })
 
-// 留存分析 + 活跃分层 + 充值漏斗
-export async function GET() {
+const RETENTION_FIELDS = ["cohort_size", "d1", "d3", "d7", "d14", "d30"]
+
+export async function GET(req: NextRequest) {
   try {
     const guard = await requireAdmin()
     if (!guard.ok) {
       return NextResponse.json({ error: guard.error }, { status: guard.status })
     }
 
-    const data = await cachedQuery("retention", async () => {
-      // 留存分析：最近 8 周的 cohort
+    const { searchParams } = new URL(req.url)
+    const dateParam = searchParams.get("date")
+    const days = Math.min(parseInt(searchParams.get("days") || "60"), 90)
+
+    const cacheKey = `retention:${dateParam || `${days}d`}`
+
+    const data = await cachedQuery(cacheKey, async () => {
+      // 留存 cohort SQL：按天聚合
+      let retentionSql: string
+
+      if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+        // 单日查询
+        const [y, m, d] = dateParam.split("-").map(Number)
+        const dayStart = new Date(Date.UTC(y, m - 1, d) - UTC8_MS)
+        const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000)
+        const activityEnd = new Date(dayStart.getTime() + 31 * 24 * 60 * 60 * 1000)
+
+        retentionSql = `
+          WITH cohorts AS (
+            SELECT DATE(u."createdAt" AT TIME ZONE '+08:00') as cohort_date, u.id as user_id
+            FROM "User" u WHERE u.role = 'USER'
+              AND u."createdAt" >= '${dayStart.toISOString()}' AND u."createdAt" < '${dayEnd.toISOString()}'
+          ),
+          cohort_sizes AS (
+            SELECT cohort_date, COUNT(*) as cohort_size FROM cohorts GROUP BY cohort_date
+          ),
+          user_activity AS (
+            SELECT DISTINCT g."userId", DATE(g."createdAt" AT TIME ZONE '+08:00') as activity_date
+            FROM "Generation" g WHERE g."userId" IS NOT NULL
+              AND g."createdAt" >= '${dayStart.toISOString()}' AND g."createdAt" < '${activityEnd.toISOString()}'
+          )
+          SELECT cs.cohort_date::text, cs.cohort_size,
+            COALESCE(SUM(CASE WHEN ua.activity_date = cs.cohort_date + INTERVAL '1 day' THEN 1 END), 0) as d1,
+            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '3 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d3,
+            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '7 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d7,
+            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '14 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d14,
+            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '30 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d30
+          FROM cohort_sizes cs
+          LEFT JOIN cohorts c ON c.cohort_date = cs.cohort_date
+          LEFT JOIN user_activity ua ON ua."userId" = c.user_id
+          GROUP BY cs.cohort_date, cs.cohort_size`
+      } else {
+        // 范围查询：最近 N 天
+        const activityDays = days + 30
+        retentionSql = `
+          WITH cohorts AS (
+            SELECT DATE(u."createdAt" AT TIME ZONE '+08:00') as cohort_date, u.id as user_id
+            FROM "User" u WHERE u.role = 'USER'
+              AND u."createdAt" >= (NOW() - INTERVAL '${days} days') AT TIME ZONE '+08:00'
+          ),
+          cohort_sizes AS (
+            SELECT cohort_date, COUNT(*) as cohort_size FROM cohorts GROUP BY cohort_date
+          ),
+          user_activity AS (
+            SELECT DISTINCT g."userId", DATE(g."createdAt" AT TIME ZONE '+08:00') as activity_date
+            FROM "Generation" g WHERE g."userId" IS NOT NULL
+              AND g."createdAt" >= (NOW() - INTERVAL '${activityDays} days') AT TIME ZONE '+08:00'
+          )
+          SELECT cs.cohort_date::text, cs.cohort_size,
+            COALESCE(SUM(CASE WHEN ua.activity_date = cs.cohort_date + INTERVAL '1 day' THEN 1 END), 0) as d1,
+            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '3 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d3,
+            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '7 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d7,
+            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '14 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d14,
+            COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '30 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d30
+          FROM cohort_sizes cs
+          LEFT JOIN cohorts c ON c.cohort_date = cs.cohort_date
+          LEFT JOIN user_activity ua ON ua."userId" = c.user_id
+          GROUP BY cs.cohort_date, cs.cohort_size
+          ORDER BY cs.cohort_date DESC`
+      }
+
       const retentionData = await safeQuery<Array<{
         cohort_date: string
         cohort_size: bigint
@@ -43,48 +120,15 @@ export async function GET() {
         d7: bigint
         d14: bigint
         d30: bigint
-      }>>(`
-        WITH cohorts AS (
-          SELECT DATE(u."createdAt" AT TIME ZONE '+08:00') as cohort_date,
-                 u.id as user_id
-          FROM "User" u
-          WHERE u.role = 'USER'
-            AND u."createdAt" >= (NOW() - INTERVAL '56 days') AT TIME ZONE '+08:00'
-        ),
-        cohort_sizes AS (
-          SELECT cohort_date, COUNT(*) as cohort_size
-          FROM cohorts GROUP BY cohort_date
-        ),
-        user_activity AS (
-          SELECT DISTINCT g."userId", DATE(g."createdAt" AT TIME ZONE '+08:00') as activity_date
-          FROM "Generation" g
-          WHERE g."userId" IS NOT NULL
-            AND g."createdAt" >= (NOW() - INTERVAL '86 days') AT TIME ZONE '+08:00'
-        )
-        SELECT
-          cs.cohort_date::text,
-          cs.cohort_size,
-          COALESCE(SUM(CASE WHEN ua.activity_date = cs.cohort_date + INTERVAL '1 day' THEN 1 END), 0) as d1,
-          COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '3 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d3,
-          COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '7 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d7,
-          COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '14 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d14,
-          COALESCE(SUM(CASE WHEN ua.activity_date <= cs.cohort_date + INTERVAL '30 days' AND ua.activity_date > cs.cohort_date THEN 1 END), 0) as d30
-        FROM cohort_sizes cs
-        LEFT JOIN cohorts c ON c.cohort_date = cs.cohort_date
-        LEFT JOIN user_activity ua ON ua."userId" = c.user_id
-        GROUP BY cs.cohort_date, cs.cohort_size
-        ORDER BY cs.cohort_date DESC
-        LIMIT 8
-      `)
+      }>>(retentionSql)
 
-      // 活跃用户分层（限制最近 90 天内的数据）
+      // 活跃用户分层
       const userSegments = await safeQuery<Array<{
         segment: string
         count: bigint
       }>>(`
         WITH user_stats AS (
-          SELECT u.id,
-                 u."createdAt",
+          SELECT u.id, u."createdAt",
                  COUNT(g.id) as total_gens,
                  COUNT(DISTINCT DATE(g."createdAt" AT TIME ZONE '+08:00')) as usage_days
           FROM "User" u
@@ -103,8 +147,7 @@ export async function GET() {
             ELSE '重度'
           END as segment,
           COUNT(*) as count
-        FROM user_stats
-        GROUP BY segment
+        FROM user_stats GROUP BY segment
       `)
 
       // 充值转化漏斗
@@ -120,11 +163,13 @@ export async function GET() {
         UNION ALL
         SELECT 'first_paid', COUNT(DISTINCT "userId") FROM "Order" WHERE status = 'PAID' AND "userId" IS NOT NULL
         UNION ALL
-        SELECT 'repeat_paid', COUNT(DISTINCT "userId") FROM "Order" WHERE status = 'PAID' AND "userId" IS NOT NULL GROUP BY "userId" HAVING COUNT(*) >= 2
+        SELECT 'repeat_paid' as step, COUNT(*) as count FROM (
+          SELECT "userId" FROM "Order" WHERE status = 'PAID' AND "userId" IS NOT NULL GROUP BY "userId" HAVING COUNT(*) >= 2
+        ) sub
       `)
 
       return {
-        retention: toNumber(retentionData, ["cohort_size", "d1", "d3", "d7", "d14", "d30"]),
+        retention: toNumber(retentionData, RETENTION_FIELDS),
         segments: toNumber(userSegments, ["count"]),
         funnel: toNumber(funnel, ["count"]),
       }

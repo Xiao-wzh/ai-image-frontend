@@ -19,6 +19,8 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json())
 export default function AnalyticsPage() {
   const [period, setPeriod] = useState<Period>("30d")
   const [refreshKey, setRefreshKey] = useState(0)
+  const [retentionDays, setRetentionDays] = useState(30)
+  const [retentionDate, setRetentionDate] = useState<string | null>(null)
 
   // 概览数据
   const { data: overviewData } = useSWR(
@@ -34,9 +36,12 @@ export default function AnalyticsPage() {
     { dedupingInterval: 60000 }
   )
 
-  // 留存数据
-  const { data: retentionData } = useSWR(
-    `/api/admin/analytics/retention?_r=${refreshKey}`,
+  // 留存数据（带日期搜索和天数控制）
+  const retentionUrl = retentionDate
+    ? `/api/admin/analytics/retention?date=${retentionDate}&_r=${refreshKey}`
+    : `/api/admin/analytics/retention?days=${retentionDays}&_r=${refreshKey}`
+  const { data: retentionData, isValidating: retentionLoading } = useSWR(
+    retentionUrl,
     fetcher,
     { dedupingInterval: 60000 }
   )
@@ -95,7 +100,14 @@ export default function AnalyticsPage() {
 
           {/* 留存 + 漏斗 */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <RetentionTable data={retentionData?.data?.retention || []} />
+            <RetentionTable
+              data={retentionData?.data?.retention || []}
+              onLoadMore={() => setRetentionDays((d) => Math.min(d + 30, 90))}
+              onDateSearch={setRetentionDate}
+              hasMore={retentionDays < 90}
+              isDateSearch={!!retentionDate}
+              loading={retentionLoading}
+            />
             <ConversionFunnel data={retentionData?.data?.funnel || []} />
           </div>
 
