@@ -254,8 +254,12 @@ export default function AdminGenerationsPage() {
         setProductType("all")
     }, [platform, platforms])
 
-    // User search
+    // User search（带防抖）
     const searchUsers = useCallback(async (query: string) => {
+        if (!query.trim()) {
+            setUserOptions([])
+            return
+        }
         setUserLoading(true)
         try {
             const res = await fetch(`/api/admin/users/search?q=${encodeURIComponent(query)}`)
@@ -604,17 +608,17 @@ export default function AdminGenerationsPage() {
                                     </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-[280px] p-0 bg-slate-900 border-white/10">
-                                    <Command className="bg-transparent">
-                                        <CommandInput placeholder="搜索用户..." value={userSearchQuery} onValueChange={setUserSearchQuery} className="text-white" />
+                                    <Command className="bg-transparent" shouldFilter={false}>
+                                        <CommandInput placeholder="搜索用户名/邮箱..." value={userSearchQuery} onValueChange={setUserSearchQuery} className="text-white" />
                                         <CommandList>
                                             {userLoading ? (
                                                 <div className="p-4 text-center"><Loader2 className="w-4 h-4 animate-spin mx-auto text-slate-400" /></div>
-                                            ) : userOptions.length === 0 ? (
+                                            ) : userSearchQuery && userOptions.length === 0 ? (
                                                 <CommandEmpty className="text-slate-400 py-4">未找到用户</CommandEmpty>
                                             ) : (
                                                 <CommandGroup>
                                                     {userOptions.slice(0, 10).map((user) => (
-                                                        <CommandItem key={user.id} value={user.email} onSelect={() => { setSelectedUser(user); setUserSearchOpen(false) }} className="cursor-pointer text-white hover:bg-white/10">
+                                                        <CommandItem key={user.id} value={`${user.email} ${user.username || ""} ${user.name || ""}`} onSelect={() => { setSelectedUser(user); setUserSearchOpen(false) }} className="cursor-pointer text-white hover:bg-white/10">
                                                             <Avatar className="w-5 h-5 mr-2">
                                                                 <AvatarImage src={user.image || ""} />
                                                                 <AvatarFallback className="text-[10px] bg-blue-500">{(user.name || user.email)?.[0]?.toUpperCase()}</AvatarFallback>

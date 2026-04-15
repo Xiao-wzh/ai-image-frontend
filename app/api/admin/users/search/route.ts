@@ -7,12 +7,12 @@ export const dynamic = "force-dynamic"
 
 export async function GET(req: NextRequest) {
     try {
-        // 验证管理员权限
+        // 验证管理员或审核员权限
         const session = await auth()
         if (!session?.user?.id) {
             return NextResponse.json({ error: "未登录" }, { status: 401 })
         }
-        if (session.user.role !== "ADMIN") {
+        if (session.user.role !== "ADMIN" && session.user.role !== "REVIEWER") {
             return NextResponse.json({ error: "无权限" }, { status: 403 })
         }
 
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
                 },
             })
         } else {
-            // 搜索用户名/邮箱/昵称
+            // 搜索用户名/邮箱/昵称（用 startsWith 提升匹配率）
             users = await prisma.user.findMany({
                 where: {
                     OR: [

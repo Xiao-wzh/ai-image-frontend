@@ -140,7 +140,7 @@ export async function GET(req: NextRequest) {
         SELECT
           CASE
             WHEN total_gens = 0 THEN '从未使用'
-            WHEN usage_days <= 1 AND "createdAt" < NOW() - INTERVAL '30 days' THEN '已流失'
+            WHEN usage_days <= 3 AND "createdAt" < NOW() - INTERVAL '30 days' THEN '已流失'
             WHEN usage_days = 1 THEN '仅1天'
             WHEN total_gens <= 5 THEN '轻度'
             WHEN total_gens <= 20 THEN '中度'
