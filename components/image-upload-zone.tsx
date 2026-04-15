@@ -42,7 +42,7 @@ export function ImageUploadZone({
       } else if (err?.code === "too-many-files") {
         toast.error(`最多只能上传 ${maxFiles} 张图片`)
       } else {
-        toast.error("不支持该格式文件，请上传 JPG、PNG、WebP 格式图片")
+        toast.error("不支持该格式文件，请上传 JPG、PNG 格式图片")
       }
     }
   }, [maxFiles])
@@ -53,7 +53,6 @@ export function ImageUploadZone({
     accept: {
       "image/png": [".png"],
       "image/jpeg": [".jpg", ".jpeg"],
-      "image/webp": [".webp"],
     },
     maxSize,
     maxFiles: maxFiles - files.length,

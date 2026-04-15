@@ -72,5 +72,8 @@
       "Bash(mv n8n-operator.zip n8n-operator.skill)",
       "WebSearch"
     ]
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true
   }
 }
