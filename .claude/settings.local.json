@@ -70,7 +70,8 @@
       "Bash(powershell Compress-Archive -Path \"n8n-operator\\\\*\" -DestinationPath \"n8n-operator.skill\" -Force)",
       "Bash(powershell Compress-Archive -Path \"n8n-operator\\\\*\" -DestinationPath \"n8n-operator.zip\" -Force)",
       "Bash(mv n8n-operator.zip n8n-operator.skill)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(ccb-ping gemini:*)"
     ]
   },
   "enabledPlugins": {
