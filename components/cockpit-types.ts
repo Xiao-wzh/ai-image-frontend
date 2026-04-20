@@ -2,7 +2,7 @@
 
 import type { ProductTypeKey, GenerationLanguage } from "@/lib/constants"
 import type { CascaderPlatformItem } from "@/components/cascader-panel"
-import type { SystemCostConfig } from "@/lib/types/config"
+import type { SystemCostConfig, ImageModelConfig } from "@/lib/types/config"
 
 /**
  * 驾驶舱子表单的共享 Props
@@ -61,6 +61,11 @@ export interface CockpitFormProps {
     // ── 费用 ──
     costs: SystemCostConfig
     totalCost: number
+
+    // ── 模型选择 ──
+    selectedModel: string
+    setSelectedModel: (v: string) => void
+    availableModels: ImageModelConfig[]
 
     // ── 提交 ──
     isSubmitting: boolean

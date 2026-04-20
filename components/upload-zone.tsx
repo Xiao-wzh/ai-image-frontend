@@ -15,6 +15,8 @@ import { useSession } from "next-auth/react"
 import { useLoginModal } from "@/hooks/use-login-modal"
 import { ProductTypeKey, GenerationLanguage, DEFAULT_OUTPUT_LANGUAGE } from "@/lib/constants"
 import { useCosts } from "@/hooks/use-costs"
+import { useImageModels } from "@/hooks/use-image-models"
+import type { ImageModelConfig } from "@/lib/types/config"
 import { PricingModal } from "./pricing-modal"
 import type { CockpitFormProps } from "./cockpit-types"
 
@@ -88,6 +90,10 @@ export function UploadZone({ isAuthenticated = false, pageMode = "default" }: Up
   const [proFeatures, setProFeatures] = useState("")
   const [proStyle, setProStyle] = useState("")
 
+  // 模型选择
+  const [selectedModel, setSelectedModel] = useState<string>("nano-banana-pro")
+  const { models: availableModels } = useImageModels(qualityMode, taskType)
+
   // 防抖
   const lastSubmitTimeRef = useRef<number>(0)
   const SUBMIT_DEBOUNCE_MS = 2000
@@ -158,6 +164,24 @@ export function UploadZone({ isAuthenticated = false, pageMode = "default" }: Up
   const totalCost = qualityMode === "PRO"
     ? proCost
     : (isComboMode && taskType === "MAIN_IMAGE" ? baseCost + comboAddOnCost : baseCost)
+
+  // 获取当前模型的费用乘数
+  const currentModelConfig = availableModels.find((m) => m.id === selectedModel)
+  const costMultiplier = currentModelConfig?.costMultiplier ?? 1.0
+
+  // 实际费用 = 基础费用 * 模型乘数
+  const effectiveTotalCost = costMultiplier === 1.0 ? totalCost : Math.floor(totalCost * costMultiplier)
+
+  /* ──────────────── 模型自动切换 ──────────────── */
+  useEffect(() => {
+    if (availableModels.length === 0) return
+    // 当前选中模型不在可用列表中时，切换到默认模型
+    const isAvailable = availableModels.some((m) => m.id === selectedModel)
+    if (!isAvailable) {
+      const defaultModel = availableModels.find((m) => m.isDefault) || availableModels[0]
+      setSelectedModel(defaultModel.id)
+    }
+  }, [availableModels])
 
   /* ──────────────── 平台配置加载 ──────────────── */
   useEffect(() => {
@@ -297,6 +321,7 @@ export function UploadZone({ isAuthenticated = false, pageMode = "default" }: Up
           setRefFiles([])
           setRefPreviewUrls([])
           setIsComboMode(false)
+          setSelectedModel("nano-banana-pro")
         } else if (!data.generatedImages || data.generatedImages.length === 0) {
           if (data.status === "PROCESSING" && data.qualityMode === "PRO" && data.id) {
             toast.success("PRO 任务已提交，正在生成中...")
@@ -401,6 +426,8 @@ export function UploadZone({ isAuthenticated = false, pageMode = "default" }: Up
           detailBatch: taskType === "DETAIL_PAGE" ? detailBatch : undefined,
           // 画质模式 — 始终传
           qualityMode,
+          // 模型选择
+          model: selectedModel,
           // PRO 专属参数：仅在 PRO 模式传递，STANDARD 时强制不传 (防止脏数据)
           ...(isPro
             ? {
@@ -416,7 +443,7 @@ export function UploadZone({ isAuthenticated = false, pageMode = "default" }: Up
             : {}
           ),
         },
-        totalCost,
+        effectiveTotalCost,
       )
     } catch (e) {
       // handled inside handleGeneration
@@ -425,22 +452,23 @@ export function UploadZone({ isAuthenticated = false, pageMode = "default" }: Up
     }
   }, [
     isAuthenticated, loginModal, productName, productType, files, refFiles,
-    platformKey, taskType, generationMode, features, isComboMode, totalCost,
+    platformKey, taskType, generationMode, features, isComboMode, effectiveTotalCost,
     outputLanguage, detailBatch, qualityMode, proImageCount, proAspectRatio,
-    handleGeneration,
+    handleGeneration, selectedModel,
   ])
 
   const handleDiscountRetry = useCallback(
     async (retryFromId: string) => {
       // PRO 按张计费，STANDARD 使用固定优惠价
-      const retryCost = qualityMode === "PRO"
+      const baseRetryCost = qualityMode === "PRO"
         ? costs.PRO_COST_PER_IMAGE * proImageCount
         : costs.MAIN_IMAGE_RETRY_COST
+      const retryCost = costMultiplier === 1.0 ? baseRetryCost : Math.floor(baseRetryCost * costMultiplier)
       try {
         await handleGeneration({ retryFromId }, retryCost)
       } catch (e) { /* handled */ }
     },
-    [handleGeneration, qualityMode, proImageCount, costs],
+    [handleGeneration, qualityMode, proImageCount, costs, costMultiplier],
   )
 
   const handleTryAnother = useCallback(() => {
@@ -459,6 +487,7 @@ export function UploadZone({ isAuthenticated = false, pageMode = "default" }: Up
     setProPollingId(null)
     setProFeatures("")
     setProStyle("")
+    setSelectedModel("nano-banana-pro")
   }, [])
 
   const typeSelectDisabled = !isCloneOnly && typeOptions.length === 0
@@ -482,7 +511,8 @@ export function UploadZone({ isAuthenticated = false, pageMode = "default" }: Up
     proAspectRatio, setProAspectRatio,
     proFeatures, setProFeatures,
     proStyle, setProStyle,
-    costs, totalCost,
+    costs, totalCost: effectiveTotalCost,
+    selectedModel, setSelectedModel, availableModels,
     isSubmitting, onSubmit,
     generatedImages, setGeneratedImages,
     setFullImageUrl, setCurrentGenerationId,
@@ -647,6 +677,57 @@ export function UploadZone({ isAuthenticated = false, pageMode = "default" }: Up
             </div>
           </motion.div>
         )}
+
+        {/* ── 模型选择（仅当可用模型 > 1 时显示） ── */}
+        {availableModels.length > 1 && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.12 }}
+            className="space-y-3"
+          >
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-widest">
+              {!isCloneOnly ? "② 选择模型" : "① 选择模型"}
+            </p>
+            <div className={`grid gap-3 ${availableModels.length <= 3 ? `grid-cols-${availableModels.length}` : "grid-cols-3"}`}
+              style={{ gridTemplateColumns: `repeat(${Math.min(availableModels.length, 4)}, minmax(0, 1fr))` }}
+            >
+              {availableModels.map((model) => (
+                <button
+                  key={model.id}
+                  type="button"
+                  onClick={() => setSelectedModel(model.id)}
+                  className={`relative flex flex-col gap-1.5 p-3 rounded-xl border text-left transition-all duration-200 cursor-pointer ${
+                    selectedModel === model.id
+                      ? "border-emerald-500/50 bg-emerald-950/20 shadow-lg shadow-emerald-500/10"
+                      : "border-white/10 bg-white/5 hover:bg-white/8 hover:border-white/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className={`text-xs font-bold transition-colors ${selectedModel === model.id ? "text-white" : "text-slate-400"}`}>
+                      {model.name}
+                    </span>
+                    {model.isDefault && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-medium">
+                        推荐
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-500 leading-relaxed">{model.description}</p>
+                  {model.costMultiplier !== 1.0 && (
+                    <div className={`text-[11px] font-semibold ${selectedModel === model.id ? "text-emerald-400" : "text-slate-600"}`}>
+                      费用 x{model.costMultiplier}
+                    </div>
+                  )}
+                  {selectedModel === model.id && (
+                    <div className="absolute inset-0 rounded-xl ring-1 ring-emerald-500/40 pointer-events-none" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
 
         {/* ── 第二步：内容类型选择 ── */}
         {/* 克隆专用页面隐藏此切换 */}

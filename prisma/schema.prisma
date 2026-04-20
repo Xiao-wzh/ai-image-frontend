@@ -255,6 +255,7 @@ model Generation {
   aspectRatio     String   @default("1:1")         /// PRO: 用户指定图片比例
   proFeatures     String?  @db.Text               /// PRO: 产品功能描述（可选）
   proStyle        String?  @db.Text               /// PRO: 画面风格描述（可选）
+  model           String   @default("nano-banana-pro") /// 使用的AI模型标识
 
   // 资金快照（用于退款防坏账）
   costPerImage    Int      @default(0)             /// 单张成本快照 (PRO: >0, STANDARD: 0=按次计费)

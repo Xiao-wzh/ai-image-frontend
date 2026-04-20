@@ -56,6 +56,7 @@ type Generation = {
     status: string
     qualityMode: string | null
     mode: string | null
+    model: string | null
     imageCount: number | null
     costPerImage: number | null
     totalCost: number | null
@@ -878,6 +879,9 @@ export default function AdminGenerationsPage() {
                                             <div className="col-span-1 flex flex-col gap-0.5">
                                                 <span className="text-xs text-slate-300">{getTaskTypeLabel(item.taskType)}</span>
                                                 <span className="text-xs">{getModeLabel(item.mode)}</span>
+                                                {item.model && item.model !== "nano-banana-pro" && (
+                                                    <span className="text-[10px] text-purple-400/70 truncate">{item.model}</span>
+                                                )}
                                             </div>
 
                                             {/* Generated Image */}

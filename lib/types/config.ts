@@ -62,3 +62,21 @@ export const SYSTEM_COST_DESCRIPTIONS: Record<SystemCostKey, string> = {
     PRO_COST_PER_IMAGE: "PRO模式每张图消耗积分",
     VIDEO_SORA2_COST_PER_SECOND: "Sora-2 视频每秒积分（默认50）",
 }
+
+// ── 模型配置类型 ──
+
+export type ImageModelConfig = {
+    id: string              // 内部标识，如 "nano-banana-pro"（DB 存储、前端传递用）
+    name: string            // 用户可见显示名，如 "Banana Pro"
+    n8nModelId: string      // 传给 n8n 的实际模型 ID，如 "gemini-3.1-flash-image-preview"
+    description: string     // 模型说明
+    isActive: boolean       // 是否启用
+    isDefault: boolean      // 是否默认模型
+    costMultiplier: number  // 费用乘数，1.0 = 原价
+    supportedModes: ("STANDARD" | "PRO")[]
+    supportedTaskTypes: ("MAIN_IMAGE" | "DETAIL_PAGE")[]
+}
+
+export type ImageModelsConfig = {
+    models: ImageModelConfig[]
+}

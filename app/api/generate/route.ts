@@ -7,6 +7,7 @@ import type { SystemCostConfig } from "@/lib/types/config"
 import { toCdnUrlArray, extractObjectKey, keyToCdnUrl } from "@/lib/cdnUrl"
 import { refundCredits } from "@/lib/credit-service"
 import { compilePrompt } from "@/lib/prompt-compiler"
+import { getModelById, getAvailableModels } from "@/lib/image-model-config"
 import "dotenv/config"
 
 
@@ -173,6 +174,7 @@ async function handleComboGeneration(
   const outputLanguage = String(body?.outputLanguage ?? "简体中文").trim()
   const rawImages = body?.images
   const comboRequestId = body?.requestId as string | undefined
+  const comboModel = String(body?.model ?? "nano-banana-pro").trim()
 
   // 幂等性检查：如果提供了 requestId，检查套餐记录是否已存在
   if (comboRequestId) {
@@ -322,6 +324,7 @@ async function handleComboGeneration(
         costPerImage: 0, // 套餐按次计费，不按张计费
         totalCost: mainImageCost,
         imageCount: 9, // 套餐固定生成9张，用于申诉退款计算
+        model: comboModel,
       },
     }),
     prisma.generation.create({
@@ -341,6 +344,7 @@ async function handleComboGeneration(
         costPerImage: 0, // 套餐按次计费，不按张计费
         totalCost: detailPageCost,
         imageCount: 9, // 套餐固定生成9张，用于申诉退款计算
+        model: comboModel,
       },
     }),
   ])
@@ -661,6 +665,8 @@ async function handleSingleGeneration(
     let totalCost: number = 0
     let proFeatures: string = ""
     let proStyle: string = ""
+    let model: string = "nano-banana-pro"
+    let modelN8nId: string = "gemini-3.1-flash-image-preview"  // 传给 n8n 的实际模型 ID
 
     if (retryFromId) {
       // --- 重试流程 ---
@@ -715,6 +721,18 @@ async function handleSingleGeneration(
       // PRO 专属：从原始记录恢复，避免重试时 AI 行为改变
       proFeatures = (originalGeneration as any).proFeatures || ""
       proStyle = (originalGeneration as any).proStyle || ""
+      // 重试时沿用原模型
+      model = (originalGeneration as any).model || "nano-banana-pro"
+      const retryModelConfig = await getModelById(model)
+      // 应用原模型的费用乘数
+      if (retryModelConfig && retryModelConfig.costMultiplier !== 1.0) {
+        totalCost = Math.floor(totalCost * retryModelConfig.costMultiplier)
+        actualCost = totalCost
+      }
+      // 设置 n8n 模型 ID
+      if (retryModelConfig) {
+        modelN8nId = retryModelConfig.n8nModelId
+      }
     } else {
       // --- 标准流程 ---
       productName = String(body?.productName ?? "").trim()
@@ -727,6 +745,27 @@ async function handleSingleGeneration(
       qualityMode = String(body?.qualityMode ?? "STANDARD").trim().toUpperCase()
       proFeatures = String(body?.proFeatures ?? "").trim()
       proStyle = String(body?.proStyle ?? "").trim()
+
+      // 解析模型 ID，校验可用性
+      const modelId = String(body?.model ?? "nano-banana-pro").trim()
+      const modelConfig = await getModelById(modelId)
+      if (!modelConfig || !modelConfig.isActive) {
+        throw new Error(`模型 ${modelId} 不可用`)
+      }
+      if (!modelConfig.supportedModes.includes(qualityMode as "STANDARD" | "PRO")) {
+        throw new Error(`模型 ${modelConfig.name} 不支持 ${qualityMode} 模式`)
+      }
+      if (!modelConfig.supportedTaskTypes.includes(taskType as "MAIN_IMAGE" | "DETAIL_PAGE")) {
+        throw new Error(`模型 ${modelConfig.name} 不支持 ${taskType} 任务类型`)
+      }
+
+      // 应用模型费用乘数
+      if (modelConfig.costMultiplier !== 1.0) {
+        totalCost = Math.floor(totalCost * modelConfig.costMultiplier)
+        actualCost = totalCost
+      }
+      model = modelConfig.id
+      modelN8nId = modelConfig.n8nModelId
 
       // PRO 计费逻辑
       if (qualityMode === "PRO") {
@@ -869,6 +908,7 @@ async function handleSingleGeneration(
         totalCost,
         proFeatures: proFeatures || null,  // PRO: 产品功能，供重试时恢复
         proStyle: proStyle || null,        // PRO: 画面风格，供重试时恢复
+        model,                             // AI 模型标识
       },
     })
     generationId = pending.id
@@ -1042,6 +1082,7 @@ async function handleSingleGeneration(
       output_language: outputLanguage,
       mode,
       quality_mode: qualityMode,
+      model: modelN8nId,  // 传给 n8n 的实际模型 ID
     }
 
     // Add Clone Mode specific fields
